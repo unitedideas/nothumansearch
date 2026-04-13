@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Not Human Search — The Search Engine for AI Agents</title>
+    <meta name="description" content="Find websites and APIs that AI agents can actually use. Ranked by agentic readiness — llms.txt, OpenAPI specs, AI plugins, and structured APIs.">
+    <meta property="og:title" content="Not Human Search">
+    <meta property="og:description" content="The search engine for AI agents. Find sites ranked by how well they serve non-human users.">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0d0e;
+            --surface: #141416;
+            --border: #1f1f23;
+            --text: #e0e0e0;
+            --text-muted: #888;
+            --accent: #d97757;
+            --accent-dim: #b8613e;
+            --green: #4ade80;
+            --yellow: #facc15;
+            --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+
+        .container { max-width:900px; margin:0 auto; padding:0 20px; }
+
+        /* Header */
+        header { padding:48px 0 32px; text-align:center; }
+        .logo { font-size:32px; font-weight:700; color:var(--text); letter-spacing:-1px; }
+        .logo span { color:var(--accent); }
+        .tagline { color:var(--text-muted); font-size:15px; margin-top:8px; }
+
+        /* Stats bar */
+        .stats { display:flex; justify-content:center; gap:32px; margin:24px 0; }
+        .stat-item { text-align:center; }
+        .stat-num { font-size:24px; font-weight:700; color:var(--accent); font-family:'IBM Plex Mono',monospace; }
+        .stat-label { font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; }
+
+        /* Search */
+        .search-box { position:relative; max-width:640px; margin:0 auto 40px; }
+        .search-box input {
+            width:100%; padding:16px 20px; padding-right:120px;
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; color:var(--text); font-size:16px;
+            font-family:'IBM Plex Mono',monospace;
+            outline:none; transition:border-color 0.2s;
+        }
+        .search-box input:focus { border-color:var(--accent); }
+        .search-box input::placeholder { color:#555; }
+        .search-box button {
+            position:absolute; right:6px; top:6px; bottom:6px;
+            padding:0 20px; background:var(--accent); color:var(--bg);
+            border:none; border-radius:6px; font-weight:600; font-size:14px;
+            cursor:pointer; transition:background 0.2s;
+        }
+        .search-box button:hover { background:var(--accent-dim); }
+
+        /* Filters */
+        .filters { display:flex; gap:8px; justify-content:center; margin-bottom:32px; flex-wrap:wrap; }
+        .filter-btn {
+            padding:6px 14px; background:var(--surface); border:1px solid var(--border);
+            border-radius:6px; color:var(--text-muted); font-size:13px;
+            text-decoration:none; transition:all 0.2s;
+        }
+        .filter-btn:hover, .filter-btn.active { border-color:var(--accent); color:var(--accent); }
+
+        /* Results */
+        .results-header { color:var(--text-muted); font-size:13px; margin-bottom:16px; }
+
+        .site-card {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; padding:20px; margin-bottom:12px;
+            transition:border-color 0.2s; display:flex; gap:16px; align-items:flex-start;
+        }
+        .site-card:hover { border-color:var(--accent); }
+        .site-card.featured { border-left:3px solid var(--accent); }
+
+        .site-favicon {
+            width:32px; height:32px; border-radius:4px; flex-shrink:0;
+            background:var(--border);
+        }
+        .site-info { flex:1; min-width:0; }
+        .site-name {
+            font-size:16px; font-weight:600; color:var(--text);
+            text-decoration:none; display:inline-block;
+        }
+        .site-name:hover { color:var(--accent); }
+        .site-domain { color:var(--text-muted); font-size:13px; font-family:'IBM Plex Mono',monospace; }
+        .site-desc { color:var(--text-muted); font-size:14px; margin-top:6px; line-height:1.5; }
+
+        .site-badges { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+        .badge {
+            padding:3px 8px; border-radius:4px; font-size:11px;
+            font-family:'IBM Plex Mono',monospace; font-weight:500;
+        }
+        .badge-signal { background:#1a2e1a; color:var(--green); }
+        .badge-category { background:#1a1a2e; color:#818cf8; }
+
+        .score-badge {
+            flex-shrink:0; width:48px; height:48px; border-radius:8px;
+            display:flex; align-items:center; justify-content:center;
+            font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:16px;
+        }
+        .score-badge.high { background:#1a2e1a; color:var(--green); }
+        .score-badge.medium { background:#2e2a1a; color:var(--yellow); }
+        .score-badge.low { background:#2e1a1a; color:var(--red); }
+
+        /* Pagination */
+        .pagination { text-align:center; margin:32px 0; }
+        .pagination a {
+            padding:8px 16px; background:var(--surface); border:1px solid var(--border);
+            border-radius:6px; color:var(--text-muted); text-decoration:none;
+            font-size:14px; margin:0 4px;
+        }
+        .pagination a:hover { border-color:var(--accent); color:var(--accent); }
+
+        /* Footer */
+        footer { padding:40px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
+        footer a { color:var(--accent); text-decoration:none; }
+        .footer-text { color:var(--text-muted); font-size:13px; }
+
+        /* CTA */
+        .cta-box {
+            background:var(--surface); border:1px solid var(--border); border-radius:8px;
+            padding:24px; text-align:center; margin:32px 0;
+        }
+        .cta-box h3 { color:var(--accent); font-size:16px; margin-bottom:8px; }
+        .cta-box p { color:var(--text-muted); font-size:14px; }
+        .cta-box code {
+            display:inline-block; background:var(--bg); padding:8px 16px;
+            border-radius:4px; font-family:'IBM Plex Mono',monospace;
+            font-size:13px; color:var(--green); margin-top:12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo"><span>&gt;_</span> Not Human Search</div>
+            <p class="tagline">The search engine for AI agents. Sites ranked by agentic readiness.</p>
+        </header>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-num">{{.TotalSites}}</div>
+                <div class="stat-label">Sites Indexed</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-num">{{.AvgScore}}</div>
+                <div class="stat-label">Avg Score</div>
+            </div>
+        </div>
+
+        <form class="search-box" method="GET" action="/">
+            <input type="text" name="q" value="{{.Query}}" placeholder="Search for agent-ready sites..." autofocus>
+            <button type="submit">Search</button>
+        </form>
+
+        <div class="filters">
+            <a href="/" class="filter-btn {{if eq .Category ""}}active{{end}}">All</a>
+            <a href="/?category=ai-tools" class="filter-btn {{if eq .Category "ai-tools"}}active{{end}}">AI Tools</a>
+            <a href="/?category=developer" class="filter-btn {{if eq .Category "developer"}}active{{end}}">Developer</a>
+            <a href="/?category=data" class="filter-btn {{if eq .Category "data"}}active{{end}}">Data</a>
+            <a href="/?category=jobs" class="filter-btn {{if eq .Category "jobs"}}active{{end}}">Jobs</a>
+            <a href="/?category=finance" class="filter-btn {{if eq .Category "finance"}}active{{end}}">Finance</a>
+            <a href="/?category=ecommerce" class="filter-btn {{if eq .Category "ecommerce"}}active{{end}}">E-Commerce</a>
+        </div>
+
+        {{if .Sites}}
+        <div class="results-header">{{.Total}} sites found{{if .Query}} for "{{.Query}}"{{end}}</div>
+
+        {{range .Sites}}
+        <div class="site-card {{if .IsFeatured}}featured{{end}}">
+            <img class="site-favicon" src="https://www.google.com/s2/favicons?domain={{.Domain}}&sz=64" alt="" loading="lazy">
+            <div class="site-info">
+                <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}}</a>
+                {{if .IsFeatured}} <span style="color:var(--accent);font-size:11px;font-weight:600;">FEATURED</span>{{end}}
+                <div class="site-domain">{{.Domain}}</div>
+                {{if .Description}}<div class="site-desc">{{.Description}}</div>{{end}}
+                <div class="site-badges">
+                    {{if .HasLLMsTxt}}<span class="badge badge-signal">llms.txt</span>{{end}}
+                    {{if .HasAIPlugin}}<span class="badge badge-signal">ai-plugin</span>{{end}}
+                    {{if .HasOpenAPI}}<span class="badge badge-signal">OpenAPI</span>{{end}}
+                    {{if .HasStructuredAPI}}<span class="badge badge-signal">API</span>{{end}}
+                    {{if .HasRobotsAI}}<span class="badge badge-signal">AI bots</span>{{end}}
+                    {{if .HasSchemaOrg}}<span class="badge badge-signal">Schema.org</span>{{end}}
+                    {{if .HasMCPServer}}<span class="badge badge-signal">MCP</span>{{end}}
+                    <span class="badge badge-category">{{.Category}}</span>
+                </div>
+            </div>
+            <div class="score-badge {{scoreClass .AgenticScore}}">{{.AgenticScore}}</div>
+        </div>
+        {{end}}
+
+        {{if .HasNext}}
+        <div class="pagination">
+            {{if gt .Page 1}}<a href="/?q={{.Query}}&category={{.Category}}&page={{sub .Page 1}}">&larr; Prev</a>{{end}}
+            <a href="/?q={{.Query}}&category={{.Category}}&page={{add .Page 1}}">Next &rarr;</a>
+        </div>
+        {{end}}
+
+        {{else}}
+        <div style="text-align:center;padding:60px 0;">
+            <div style="font-size:48px;margin-bottom:16px;">&#x1F50D;</div>
+            <h2 style="color:var(--text);margin-bottom:8px;">{{if .Query}}No results for "{{.Query}}"{{else}}Indexing in progress{{end}}</h2>
+            <p style="color:var(--text-muted);font-size:14px;">{{if .Query}}Try a different search term.{{else}}The crawler is building the index. Check back soon.{{end}}</p>
+        </div>
+        {{end}}
+
+        <div class="cta-box">
+            <h3>Make your site agent-ready</h3>
+            <p>Add these files to get indexed and ranked:</p>
+            <code>/.well-known/llms.txt &nbsp; /.well-known/ai-plugin.json &nbsp; /openapi.yaml</code>
+        </div>
+    </div>
+
+    <footer>
+        <p class="footer-text">
+            <a href="/api/v1/search?q=">API</a> &middot;
+            <a href="/submit">Submit a Site</a> &middot;
+            <a href="/about">About</a>
+        </p>
+        <p class="footer-text" style="margin-top:8px;">&copy; 2026 Not Human Search &middot; Built for agents, by agents.</p>
+    </footer>
+</body>
+</html>

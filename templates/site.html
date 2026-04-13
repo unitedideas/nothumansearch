@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}} — Not Human Search</title>
+    <meta name="description" content="Agentic readiness report for {{.Domain}}. Score: {{.AgenticScore}}/100.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0d0e; --surface: #141416; --border: #1f1f23;
+            --text: #e0e0e0; --text-muted: #888; --accent: #d97757;
+            --green: #4ade80; --yellow: #facc15; --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; }
+        .container { max-width:800px; margin:0 auto; padding:0 20px; }
+        a { color:var(--accent); text-decoration:none; }
+        a:hover { text-decoration:underline; }
+
+        header { padding:24px 0; }
+        .back { color:var(--text-muted); font-size:14px; }
+        .back:hover { color:var(--accent); }
+
+        .site-header { display:flex; gap:20px; align-items:flex-start; margin:24px 0; }
+        .site-header img { width:48px; height:48px; border-radius:8px; }
+        .site-header h1 { font-size:28px; font-weight:700; }
+        .site-header .domain { color:var(--text-muted); font-family:'IBM Plex Mono',monospace; font-size:14px; }
+
+        .score-box {
+            display:inline-flex; align-items:center; gap:12px;
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; padding:16px 24px; margin:16px 0;
+        }
+        .score-num { font-size:36px; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+        .score-num.high { color:var(--green); }
+        .score-num.medium { color:var(--yellow); }
+        .score-num.low { color:var(--red); }
+        .score-label { font-size:14px; color:var(--text-muted); }
+
+        .signals { margin:24px 0; }
+        .signal-row {
+            display:flex; align-items:center; gap:12px; padding:12px 16px;
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:6px; margin-bottom:8px;
+        }
+        .signal-icon { width:24px; text-align:center; font-size:18px; }
+        .signal-name { flex:1; font-weight:500; }
+        .signal-status { font-family:'IBM Plex Mono',monospace; font-size:13px; }
+        .signal-yes { color:var(--green); }
+        .signal-no { color:var(--red); }
+
+        .section { margin:32px 0; }
+        .section h2 { font-size:18px; font-weight:600; margin-bottom:12px; color:var(--accent); }
+        .content-box {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; padding:16px; font-family:'IBM Plex Mono',monospace;
+            font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word;
+            max-height:300px; overflow-y:auto; color:var(--text-muted);
+        }
+
+        footer { padding:32px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
+        .footer-text { color:var(--text-muted); font-size:13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="back">&larr; Back to search</a>
+        </header>
+
+        <div class="site-header">
+            <img src="https://www.google.com/s2/favicons?domain={{.Domain}}&sz=128" alt="">
+            <div>
+                <h1>{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}}</h1>
+                <div class="domain"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Domain}}</a></div>
+                {{if .Description}}<p style="color:var(--text-muted);margin-top:8px;font-size:14px;line-height:1.5;">{{.Description}}</p>{{end}}
+            </div>
+        </div>
+
+        <div class="score-box">
+            <div class="score-num {{scoreClass .AgenticScore}}">{{.AgenticScore}}</div>
+            <div>
+                <div style="font-weight:600;">{{scoreLabel .AgenticScore}}</div>
+                <div class="score-label">Agentic Readiness Score</div>
+            </div>
+        </div>
+
+        <div class="signals">
+            <h2 style="font-size:18px;font-weight:600;margin-bottom:12px;">Agentic Signals</h2>
+
+            <div class="signal-row">
+                <div class="signal-icon">&#x1F4C4;</div>
+                <div class="signal-name">llms.txt</div>
+                <div class="signal-status {{if .HasLLMsTxt}}signal-yes">Found{{else}}signal-no">Not found{{end}}</div>
+            </div>
+            <div class="signal-row">
+                <div class="signal-icon">&#x1F916;</div>
+                <div class="signal-name">ai-plugin.json</div>
+                <div class="signal-status {{if .HasAIPlugin}}signal-yes">Found{{else}}signal-no">Not found{{end}}</div>
+            </div>
+            <div class="signal-row">
+                <div class="signal-icon">&#x1F4D6;</div>
+                <div class="signal-name">OpenAPI Spec</div>
+                <div class="signal-status {{if .HasOpenAPI}}signal-yes">Found{{else}}signal-no">Not found{{end}}</div>
+            </div>
+            <div class="signal-row">
+                <div class="signal-icon">&#x1F517;</div>
+                <div class="signal-name">Structured API</div>
+                <div class="signal-status {{if .HasStructuredAPI}}signal-yes">Found{{else}}signal-no">Not found{{end}}</div>
+            </div>
+            <div class="signal-row">
+                <div class="signal-icon">&#x1F6E1;</div>
+                <div class="signal-name">AI Bot Access (robots.txt)</div>
+                <div class="signal-status {{if .HasRobotsAI}}signal-yes">Allowed{{else}}signal-no">Not specified{{end}}</div>
+            </div>
+            <div class="signal-row">
+                <div class="signal-icon">&#x1F3F7;</div>
+                <div class="signal-name">Schema.org Markup</div>
+                <div class="signal-status {{if .HasSchemaOrg}}signal-yes">Found{{else}}signal-no">Not found{{end}}</div>
+            </div>
+            <div class="signal-row">
+                <div class="signal-icon">&#x2699;</div>
+                <div class="signal-name">MCP Server</div>
+                <div class="signal-status {{if .HasMCPServer}}signal-yes">Found{{else}}signal-no">Not found{{end}}</div>
+            </div>
+        </div>
+
+        {{if .LLMsTxtContent}}
+        <div class="section">
+            <h2>llms.txt Content</h2>
+            <div class="content-box">{{.LLMsTxtContent}}</div>
+        </div>
+        {{end}}
+
+        {{if .OpenAPISummary}}
+        <div class="section">
+            <h2>OpenAPI Spec (preview)</h2>
+            <div class="content-box">{{.OpenAPISummary}}</div>
+        </div>
+        {{end}}
+    </div>
+
+    <footer>
+        <p class="footer-text"><a href="/">Not Human Search</a> &middot; Agentic readiness report for {{.Domain}}</p>
+    </footer>
+</body>
+</html>

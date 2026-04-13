@@ -1,0 +1,5 @@
+*.exe
+*.test
+*.out
+.env
+.claude/*.local.md
