@@ -9,6 +9,9 @@ import (
 )
 
 func UpsertSite(db *sql.DB, s *Site) error {
+	if s.Tags == nil {
+		s.Tags = pq.StringArray{}
+	}
 	_, err := db.Exec(`
 		INSERT INTO sites (domain, url, name, description,
 			has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai,
