@@ -240,4 +240,70 @@ var SeedSites = []struct {
 	{"https://onesignal.com", false},
 	{"https://pushover.net", false},
 	{"https://ntfy.sh", false},
+
+	// Education / Learning
+	{"https://coursera.org", false},
+	{"https://udemy.com", false},
+	{"https://edx.org", false},
+	{"https://khanacademy.org", false},
+	{"https://duolingo.com", false},
+
+	// Healthcare / Biotech (expanding thin category)
+	{"https://developer.apple.com/healthkit", false},
+	{"https://fhir.org", false},
+	{"https://openfda.gov", false},
+	{"https://medlineplus.gov", false},
+	{"https://rxnav.nlm.nih.gov", false},
+
+	// Security (expanding thin category)
+	{"https://letsencrypt.org", false},
+	{"https://vault.hashicorp.com", false},
+	{"https://virustotal.com", false},
+	{"https://haveibeenpwned.com", false},
+	{"https://cve.mitre.org", false},
+
+	// Jobs / HR (expanding thin category)
+	{"https://smartrecruiters.com", false},
+	{"https://breezy.hr", false},
+	{"https://recruitee.com", false},
+	{"https://bamboohr.com", false},
+	{"https://gusto.com", false},
+
+	// Ecommerce (expanding thin category)
+	{"https://stripe.com/payments", false},
+	{"https://paddle.com", false},
+	{"https://lemon.squeezy.com", false},
+	{"https://gumroad.com", false},
+	{"https://printful.com", false},
+
+	// Design / Creative
+	{"https://figma.com", false},
+	{"https://canva.com", false},
+	{"https://dribbble.com", false},
+
+	// Legal / Compliance
+	{"https://docuseal.co", false},
+	{"https://termly.io", false},
+
+	// Real Estate
+	{"https://developer.zillow.com", false},
+	{"https://www.realtor.com", false},
+
+	// Food / Restaurant
+	{"https://developer.doordash.com", false},
+	{"https://docs.yelp.com", false},
+
+	// IoT / Hardware
+	{"https://particle.io", false},
+	{"https://arduino.cc", false},
+
+	// Cryptocurrency / Web3
+	{"https://docs.etherscan.io", false},
+	{"https://alchemy.com", false},
+	{"https://moralis.io", false},
+
+	// Productivity (expanding)
+	{"https://clickup.com", false},
+	{"https://todoist.com", false},
+	{"https://jira.atlassian.com", false},
 }

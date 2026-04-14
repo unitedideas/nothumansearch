@@ -431,6 +431,72 @@ func categorize(site *models.Site) string {
 		"ai.google":        "ai-tools",
 		"openweathermap":   "data",
 		"exchangeratesapi": "finance",
+
+		// Education
+		"coursera":         "education",
+		"udemy":            "education",
+		"edx.org":          "education",
+		"khanacademy":      "education",
+		"duolingo":         "education",
+
+		// Healthcare (additional)
+		"healthkit":        "health",
+		"fhir.org":         "health",
+		"openfda":          "health",
+		"medlineplus":      "health",
+		"rxnav":            "health",
+
+		// Security (additional)
+		"letsencrypt":      "security",
+		"vault.hashicorp":  "security",
+		"virustotal":       "security",
+		"haveibeenpwned":   "security",
+		"cve.mitre":        "security",
+
+		// Jobs (additional)
+		"smartrecruiters":  "jobs",
+		"breezy.hr":        "jobs",
+		"recruitee":        "jobs",
+		"bamboohr":         "jobs",
+		"gusto.com":        "jobs",
+
+		// Ecommerce (additional)
+		"paddle.com":       "ecommerce",
+		"lemonsqueezy":     "ecommerce",
+		"lemon.squeezy":    "ecommerce",
+		"gumroad":          "ecommerce",
+		"printful":         "ecommerce",
+
+		// Design / Creative
+		"figma.com":        "developer",
+		"canva.com":        "productivity",
+		"dribbble":         "developer",
+
+		// Legal
+		"docuseal":         "productivity",
+		"termly":           "security",
+
+		// Real Estate
+		"zillow":           "data",
+		"realtor.com":      "data",
+
+		// Food
+		"doordash":         "ecommerce",
+		"yelp.com":         "data",
+
+		// IoT
+		"particle.io":      "developer",
+		"arduino":          "developer",
+
+		// Crypto / Web3
+		"etherscan":        "finance",
+		"alchemy.com":      "developer",
+		"moralis":          "developer",
+
+		// Productivity (additional)
+		"clickup":          "productivity",
+		"todoist":          "productivity",
+		"jira.atlassian":   "productivity",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
