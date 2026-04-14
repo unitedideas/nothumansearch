@@ -29,7 +29,10 @@ curl -s -X POST "https://api.indexnow.org/indexnow" \
     "urlList": [
       "https://nothumansearch.ai/",
       "https://nothumansearch.ai/about",
-      "https://nothumansearch.ai/sitemap.xml"
+      "https://nothumansearch.ai/sitemap.xml",
+      "https://nothumansearch.ai/llms.txt",
+      "https://nothumansearch.ai/llms-full.txt",
+      "https://nothumansearch.ai/openapi.yaml"
     ]
   }' >> /dev/null 2>&1 || true
 

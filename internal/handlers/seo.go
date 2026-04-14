@@ -164,6 +164,48 @@ func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"name":        "nothumansearch",
+		"version":     "1.0.0",
+		"description": "Search engine for AI agents. Find websites and APIs ranked by agentic readiness score (0-100). Query by keyword, category, or minimum score.",
+		"tools": []map[string]interface{}{
+			{
+				"name":        "search",
+				"description": "Search for agent-ready websites and APIs by keyword, category, or minimum agentic score.",
+				"endpoint":    h.BaseURL + "/api/v1/search",
+				"method":      "GET",
+				"parameters": map[string]interface{}{
+					"q":         map[string]string{"type": "string", "description": "Search query"},
+					"category":  map[string]string{"type": "string", "description": "Filter by category (ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity)"},
+					"min_score": map[string]string{"type": "integer", "description": "Minimum agentic readiness score (0-100)"},
+					"has_api":   map[string]string{"type": "boolean", "description": "Filter to sites with structured APIs"},
+					"page":      map[string]string{"type": "integer", "description": "Page number (default 1)"},
+				},
+			},
+			{
+				"name":        "get_site",
+				"description": "Get detailed agentic readiness report for a specific domain.",
+				"endpoint":    h.BaseURL + "/api/v1/site/{domain}",
+				"method":      "GET",
+			},
+			{
+				"name":        "submit_site",
+				"description": "Submit a new site for crawling and indexing.",
+				"endpoint":    h.BaseURL + "/api/v1/submit",
+				"method":      "POST",
+			},
+			{
+				"name":        "stats",
+				"description": "Get index statistics: total sites, average score, top category.",
+				"endpoint":    h.BaseURL + "/api/v1/stats",
+				"method":      "GET",
+			},
+		},
+	})
+}
+
 func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
