@@ -16,6 +16,7 @@ import (
 
 func main() {
 	seed := flag.Bool("seed", false, "Crawl seed sites")
+	recrawl := flag.Bool("recrawl", false, "Re-crawl all sites in the database")
 	url := flag.String("url", "", "Crawl a single URL")
 	dryRun := flag.Bool("dry-run", false, "Crawl but don't save to DB")
 	workers := flag.Int("workers", 5, "Number of concurrent crawlers")
@@ -47,8 +48,14 @@ func main() {
 		return
 	}
 
+	if *recrawl {
+		recrawlAll(*workers)
+		return
+	}
+
 	fmt.Println("Usage:")
 	fmt.Println("  crawler -seed              Crawl all seed sites")
+	fmt.Println("  crawler -recrawl           Re-crawl all DB sites")
 	fmt.Println("  crawler -url https://...   Crawl a single URL")
 	fmt.Println("  crawler -dry-run -seed     Crawl without saving")
 }
@@ -130,6 +137,100 @@ func crawlSeeds(numWorkers int, dryRun bool) {
 	wg.Wait()
 
 	log.Printf("Done. Success: %d, Failed: %d, Total: %d", success, failed, len(seeds))
+}
+
+func recrawlAll(numWorkers int) {
+	// First, process any pending submissions
+	rows, err := database.DB.Query("SELECT url FROM submissions WHERE status='pending' LIMIT 50")
+	if err == nil {
+		defer rows.Close()
+		var pendingURLs []string
+		for rows.Next() {
+			var u string
+			rows.Scan(&u)
+			pendingURLs = append(pendingURLs, u)
+		}
+		if len(pendingURLs) > 0 {
+			log.Printf("Processing %d pending submissions...", len(pendingURLs))
+			for _, u := range pendingURLs {
+				site, err := crawler.CrawlSite(u)
+				if err != nil {
+					log.Printf("FAIL submission %s: %v", u, err)
+					database.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", u)
+					continue
+				}
+				if err := models.UpsertSite(database.DB, site); err != nil {
+					log.Printf("SAVE FAIL %s: %v", u, err)
+					continue
+				}
+				database.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", u)
+				printSite(site)
+			}
+		}
+	}
+
+	// Then re-crawl all existing sites
+	siteRows, err := database.DB.Query("SELECT url, is_featured FROM sites ORDER BY last_crawled_at ASC NULLS FIRST")
+	if err != nil {
+		log.Fatalf("query sites: %v", err)
+	}
+	defer siteRows.Close()
+
+	type job struct {
+		url      string
+		featured bool
+	}
+
+	var sites []job
+	for siteRows.Next() {
+		var j job
+		siteRows.Scan(&j.url, &j.featured)
+		sites = append(sites, j)
+	}
+
+	log.Printf("Re-crawling %d sites with %d workers...", len(sites), numWorkers)
+
+	jobs := make(chan job, len(sites))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var success, failed int
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := range jobs {
+				site, err := crawler.CrawlSite(j.url)
+				if err != nil {
+					mu.Lock()
+					failed++
+					mu.Unlock()
+					log.Printf("FAIL: %s: %v", j.url, err)
+					continue
+				}
+				site.IsFeatured = j.featured
+				if err := models.UpsertSite(database.DB, site); err != nil {
+					log.Printf("SAVE FAIL: %s: %v", j.url, err)
+					mu.Lock()
+					failed++
+					mu.Unlock()
+					continue
+				}
+				mu.Lock()
+				success++
+				mu.Unlock()
+				printSite(site)
+			}
+		}()
+	}
+
+	for _, s := range sites {
+		jobs <- s
+	}
+	close(jobs)
+	wg.Wait()
+
+	log.Printf("Done. Success: %d, Failed: %d, Total: %d", success, failed, len(sites))
 }
 
 func printSite(s *models.Site) {

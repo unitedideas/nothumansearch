@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About — Not Human Search</title>
+    <meta name="description" content="How Not Human Search scores websites on agentic readiness. Our methodology checks 7 signals that determine how well a site serves AI agents.">
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0d0e; --surface: #141416; --border: #1f1f23;
+            --text: #e0e0e0; --text-muted: #888; --accent: #d97757;
+            --green: #4ade80; --yellow: #facc15; --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+        .container { max-width:700px; margin:0 auto; padding:0 20px; }
+        header { padding:48px 0 32px; }
+        .logo { font-size:24px; font-weight:700; color:var(--text); letter-spacing:-1px; text-decoration:none; }
+        .logo span { color:var(--accent); }
+        h1 { font-size:28px; margin:32px 0 16px; }
+        h2 { font-size:20px; margin:32px 0 12px; color:var(--accent); }
+        p { color:var(--text-muted); line-height:1.7; margin-bottom:16px; font-size:15px; }
+        .signal-table { width:100%; border-collapse:collapse; margin:16px 0 32px; }
+        .signal-table th, .signal-table td {
+            padding:12px 16px; text-align:left; border-bottom:1px solid var(--border);
+            font-size:14px;
+        }
+        .signal-table th { color:var(--text-muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+        .signal-table td:last-child { font-family:'IBM Plex Mono',monospace; color:var(--accent); text-align:right; }
+        .score-examples { display:flex; gap:12px; margin:16px 0 32px; flex-wrap:wrap; }
+        .score-example {
+            background:var(--surface); border:1px solid var(--border); border-radius:8px;
+            padding:16px; flex:1; min-width:180px; text-align:center;
+        }
+        .score-example .score { font-size:32px; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+        .score-example .label { font-size:13px; color:var(--text-muted); margin-top:4px; }
+        .score-example.high .score { color:var(--green); }
+        .score-example.medium .score { color:var(--yellow); }
+        .score-example.low .score { color:var(--red); }
+        code { background:var(--surface); padding:2px 6px; border-radius:4px; font-family:'IBM Plex Mono',monospace; font-size:13px; }
+        footer { padding:40px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
+        footer a { color:var(--accent); text-decoration:none; }
+        .footer-text { color:var(--text-muted); font-size:13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo"><span>&gt;_</span> Not Human Search</a>
+        </header>
+
+        <h1>About Not Human Search</h1>
+        <p>Not Human Search is a search engine that indexes websites and scores them on <strong style="color:var(--text);">agentic readiness</strong> — how well they serve AI agents, not just human users.</p>
+        <p>The web is changing. AI agents need to discover services, read documentation, call APIs, and interact with tools programmatically. We help agents find the sites that are ready for them.</p>
+
+        <h2>Scoring Methodology</h2>
+        <p>Every indexed site receives a score from 0 to 100 based on 7 agentic signals. Each signal indicates a different way the site supports programmatic access by AI agents.</p>
+
+        <table class="signal-table">
+            <thead>
+                <tr><th>Signal</th><th>What We Check</th><th>Points</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>llms.txt</code></td><td>Machine-readable site description at <code>/llms.txt</code> or <code>/.well-known/llms.txt</code></td><td>25</td></tr>
+                <tr><td><code>ai-plugin.json</code></td><td>ChatGPT/AI plugin manifest at <code>/.well-known/ai-plugin.json</code></td><td>20</td></tr>
+                <tr><td>OpenAPI Spec</td><td>API specification at <code>/openapi.yaml</code>, <code>/openapi.json</code>, or <code>/swagger.json</code></td><td>20</td></tr>
+                <tr><td>Structured API</td><td>Accessible API endpoints at <code>/api</code>, <code>/api/v1</code>, or <code>/docs</code></td><td>15</td></tr>
+                <tr><td>MCP Server</td><td>Model Context Protocol server endpoint</td><td>10</td></tr>
+                <tr><td>Robots.txt AI Rules</td><td>Explicit rules for AI crawlers (GPTBot, ClaudeBot, etc.) in <code>/robots.txt</code></td><td>5</td></tr>
+                <tr><td>Schema.org</td><td>Structured data markup on the homepage</td><td>5</td></tr>
+            </tbody>
+        </table>
+
+        <h2>Score Ranges</h2>
+        <div class="score-examples">
+            <div class="score-example high">
+                <div class="score">70-100</div>
+                <div class="label">Agent Ready</div>
+            </div>
+            <div class="score-example medium">
+                <div class="score">40-69</div>
+                <div class="label">Partial Support</div>
+            </div>
+            <div class="score-example low">
+                <div class="score">0-39</div>
+                <div class="label">Basic / None</div>
+            </div>
+        </div>
+
+        <h2>API Access</h2>
+        <p>Not Human Search has a full REST API that AI agents can use to discover agent-ready sites programmatically.</p>
+        <p>Endpoints: <code>GET /api/v1/search</code>, <code>GET /api/v1/site/{domain}</code>, <code>POST /api/v1/submit</code>, <code>GET /api/v1/stats</code></p>
+        <p>Full API documentation is available at <a href="/openapi.yaml" style="color:var(--accent);">/openapi.yaml</a> and <a href="/llms.txt" style="color:var(--accent);">/llms.txt</a>.</p>
+
+        <h2>Submit Your Site</h2>
+        <p>Want your site indexed and scored? <a href="/" style="color:var(--accent);">Submit it on the homepage</a> or POST to the API:</p>
+        <p><code>curl -X POST /api/v1/submit -d '{"url":"https://example.com"}'</code></p>
+
+        <h2>Contact</h2>
+        <p>Questions or feedback: <a href="mailto:hello@nothumansearch.com" style="color:var(--accent);">hello@nothumansearch.com</a></p>
+    </div>
+
+    <footer>
+        <p class="footer-text">
+            <a href="/">Search</a> &middot;
+            <a href="/api/v1/search?q=">API</a> &middot;
+            <a href="/llms.txt">llms.txt</a>
+        </p>
+        <p class="footer-text" style="margin-top:8px;">&copy; 2026 Not Human Search</p>
+    </footer>
+</body>
+</html>

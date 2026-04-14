@@ -9,6 +9,20 @@
     <meta property="og:description" content="The search engine for AI agents. Find sites ranked by how well they serve non-human users.">
     <meta property="og:type" content="website">
     <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Not Human Search",
+        "url": "https://nothumansearch.fly.dev",
+        "description": "The search engine for AI agents. Find websites ranked by agentic readiness.",
+        "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://nothumansearch.fly.dev/?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+        }
+    }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -170,6 +184,8 @@
             <a href="/?category=jobs" class="filter-btn {{if eq .Category "jobs"}}active{{end}}">Jobs</a>
             <a href="/?category=finance" class="filter-btn {{if eq .Category "finance"}}active{{end}}">Finance</a>
             <a href="/?category=ecommerce" class="filter-btn {{if eq .Category "ecommerce"}}active{{end}}">E-Commerce</a>
+            <a href="/?category=security" class="filter-btn {{if eq .Category "security"}}active{{end}}">Security</a>
+            <a href="/?category=health" class="filter-btn {{if eq .Category "health"}}active{{end}}">Health</a>
         </div>
 
         {{if .Sites}}

@@ -71,6 +71,7 @@ func main() {
 
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)
+	mux.HandleFunc("/about", webHandler.AboutPage)
 	mux.HandleFunc("/site/", webHandler.SitePage)
 
 	// API

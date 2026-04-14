@@ -94,6 +94,14 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "about.html", nil); err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+
 func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
 	domain := r.URL.Path[len("/site/"):]
 	if domain == "" {
