@@ -307,4 +307,159 @@ var SeedSites = []struct {
 	{"https://clickup.com", false},
 	{"https://todoist.com", false},
 	{"https://jira.atlassian.com", false},
+
+	// CI/CD / DevOps
+	{"https://circleci.com", false},
+	{"https://buildkite.com", false},
+	{"https://jenkins.io", false},
+	{"https://gitlab.com", false},
+	{"https://bitbucket.org", false},
+	{"https://travis-ci.com", false},
+	{"https://semaphoreci.com", false},
+	{"https://argo-cd.readthedocs.io", false},
+	{"https://terraform.io", false},
+	{"https://pulumi.com", false},
+
+	// Package / Registry
+	{"https://npmjs.com", false},
+	{"https://pypi.org", false},
+	{"https://crates.io", false},
+	{"https://pkg.go.dev", false},
+	{"https://rubygems.org", false},
+	{"https://hub.docker.com", false},
+
+	// Databases / Data stores
+	{"https://redis.io", false},
+	{"https://mongodb.com", false},
+	{"https://elastic.co", false},
+	{"https://cockroachlabs.com", false},
+	{"https://fauna.com", false},
+	{"https://timescale.com", false},
+	{"https://influxdata.com", false},
+	{"https://dgraph.io", false},
+
+	// AI Agents / Orchestration
+	{"https://fixie.ai", false},
+	{"https://superagent.sh", false},
+	{"https://relevanceai.com", false},
+	{"https://dust.tt", false},
+	{"https://retool.com", false},
+	{"https://n8n.io", false},
+	{"https://temporal.io", false},
+	{"https://inngest.com", false},
+	{"https://trigger.dev", false},
+
+	// Marketing / Email
+	{"https://mailchimp.com", false},
+	{"https://convertkit.com", false},
+	{"https://brevo.com", false},
+	{"https://activecampaign.com", false},
+	{"https://drip.com", false},
+	{"https://customer.io", false},
+	{"https://mailgun.com", false},
+
+	// SEO / Search marketing
+	{"https://ahrefs.com", false},
+	{"https://semrush.com", false},
+	{"https://moz.com", false},
+	{"https://screaminFrog.co.uk", false},
+	{"https://searchconsole.google.com", false},
+
+	// Payments / Billing (more)
+	{"https://chargebee.com", false},
+	{"https://recurly.com", false},
+	{"https://razorpay.com", false},
+	{"https://mollie.com", false},
+	{"https://paypal.com", false},
+
+	// News / Media APIs
+	{"https://developer.nytimes.com", false},
+	{"https://guardian.co.uk/open-platform", false},
+	{"https://mediastack.com", false},
+	{"https://gnews.io", false},
+	{"https://rss2json.com", false},
+
+	// Weather / Environment
+	{"https://weatherapi.com", false},
+	{"https://tomorrow.io", false},
+	{"https://visualcrossing.com", false},
+	{"https://developer.accuweather.com", false},
+
+	// Government / Open Data (intl)
+	{"https://api.worldbank.org", false},
+	{"https://api.nasa.gov", false},
+	{"https://usaspending.gov", false},
+	{"https://catalog.data.gov", false},
+	{"https://api.fda.gov", false},
+
+	// Legal / Compliance (more)
+	{"https://ironclad.com", false},
+	{"https://clio.com", false},
+	{"https://legalzoom.com", false},
+
+	// Customer Support / Chat
+	{"https://intercom.com", false},
+	{"https://zendesk.com", false},
+	{"https://freshdesk.com", false},
+	{"https://crisp.chat", false},
+	{"https://helpscout.com", false},
+	{"https://chatwoot.com", false},
+
+	// Accounting / Finance
+	{"https://quickbooks.intuit.com", false},
+	{"https://xero.com", false},
+	{"https://freshbooks.com", false},
+	{"https://wave.com", false},
+
+	// Automation / Integration (more)
+	{"https://pipedream.com", false},
+	{"https://tray.io", false},
+	{"https://workato.com", false},
+	{"https://ifttt.com", false},
+
+	// Image / Media processing
+	{"https://imgix.com", false},
+	{"https://tinypng.com", false},
+	{"https://remove.bg", false},
+	{"https://bannerbear.com", false},
+
+	// Geo / Location (more)
+	{"https://ipinfo.io", false},
+	{"https://ipgeolocation.io", false},
+	{"https://opencagedata.com", false},
+	{"https://positionstack.com", false},
+
+	// SMS / Messaging
+	{"https://vonage.com", false},
+	{"https://messagebird.com", false},
+	{"https://sinch.com", false},
+	{"https://plivo.com", false},
+
+	// Video / Conferencing
+	{"https://daily.co", false},
+	{"https://100ms.live", false},
+	{"https://livekit.io", false},
+	{"https://whereby.com", false},
+	{"https://zoom.us/developers", false},
+
+	// OCR / Document AI
+	{"https://ocr.space", false},
+	{"https://mindee.com", false},
+	{"https://nanonets.com", false},
+	{"https://rossum.ai", false},
+
+	// Scraping / Browser automation
+	{"https://scrapingbee.com", false},
+	{"https://apify.com", false},
+	{"https://crawlee.dev", false},
+	{"https://firecrawl.dev", false},
+	{"https://brightdata.com", false},
+
+	// Code / Development
+	{"https://replit.com", false},
+	{"https://codesandbox.io", false},
+	{"https://stackblitz.com", false},
+	{"https://sourcegraph.com", false},
+	{"https://codeium.com", false},
+	{"https://cursor.com", false},
 }

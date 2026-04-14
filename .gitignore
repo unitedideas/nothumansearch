@@ -3,3 +3,5 @@
 *.out
 .env
 .claude/*.local.md
+/crawler
+/server
