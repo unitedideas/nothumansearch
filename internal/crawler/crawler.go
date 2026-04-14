@@ -783,6 +783,15 @@ func categorize(site *models.Site) string {
 		// Security
 		"ipinfo.io":        "security",
 
+		// Final "other" cleanup
+		"razorpay.com":     "finance",
+		"moz.com":          "data",
+		"temporal.io":      "developer",
+		"rossum.ai":        "ai-tools",
+		"clio.com":         "productivity",
+		"mollie.com":       "finance",
+		"tinypng.com":      "developer",
+
 		// Batch 4: new seeds from research (2026-04-13)
 		"speakeasy.com":    "developer",
 		"scalar.com":       "developer",
