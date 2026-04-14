@@ -533,6 +533,157 @@ func categorize(site *models.Site) string {
 		"clickup":          "productivity",
 		"todoist":          "productivity",
 		"jira.atlassian":   "productivity",
+
+		// MCP Infrastructure
+		"mcpservers":       "developer",
+		"mcpmarket":        "developer",
+		"stagehand.dev":    "developer",
+
+		// AI Agent Observability / LLMOps
+		"agentops":         "ai-tools",
+		"langfuse":         "ai-tools",
+		"helicone":         "ai-tools",
+		"braintrust":       "ai-tools",
+		"arize.com":        "ai-tools",
+		"openpipe":         "ai-tools",
+		"galileo.ai":       "ai-tools",
+
+		// AI Agent Orchestration
+		"langflow":         "ai-tools",
+		"flowiseai":        "ai-tools",
+		"botpress":         "ai-tools",
+		"voiceflow":        "ai-tools",
+		"activepieces":     "developer",
+		"dify.ai":          "ai-tools",
+		"agno.ai":          "ai-tools",
+		"mastra.ai":        "developer",
+		"vellum.ai":        "ai-tools",
+
+		// Voice / Speech
+		"cartesia.ai":      "ai-tools",
+		"lmnt.com":         "ai-tools",
+
+		// Image / Video / 3D
+		"fal.ai":           "ai-tools",
+		"pika.art":         "ai-tools",
+		"tripo3d":          "ai-tools",
+
+		// Music
+		"loudly.com":       "ai-tools",
+		"lalal.ai":         "ai-tools",
+		"mubert.com":       "ai-tools",
+
+		// Vector DBs
+		"milvus.io":        "data",
+		"zilliz.com":       "data",
+
+		// Real Estate
+		"attomdata":        "data",
+		"rentcast":         "data",
+		"housecanary":      "data",
+		"estated.com":      "data",
+
+		// Legal Tech
+		"sec-api.io":       "data",
+		"courtlistener":    "data",
+
+		// Sports Data
+		"sportradar":       "data",
+		"sportsdata.io":    "data",
+		"api-sports":       "data",
+		"sportmonks":       "data",
+		"thesportsdb":      "data",
+
+		// Wearables / Fitness
+		"tryterra":         "health",
+		"sahha.ai":         "health",
+
+		// Food / Nutrition
+		"spoonacular":      "data",
+		"edamam.com":       "data",
+		"nutritionix":      "data",
+
+		// Climate / Environmental
+		"climatiq":         "data",
+		"open-meteo":       "data",
+		"getambee":         "data",
+
+		// Supply Chain
+		"flexport":         "ecommerce",
+		"shipengine":       "ecommerce",
+		"fleetbase":        "ecommerce",
+
+		// Bioinformatics
+		"uniprot":          "health",
+		"rcsb.org":         "health",
+
+		// Fintech Banking
+		"moderntreasury":   "finance",
+		"moov.io":          "finance",
+		"lithic.com":       "finance",
+		"column.com":       "finance",
+		"increase.com":     "finance",
+		"mangopay":         "finance",
+		"getlago":          "finance",
+		"tryfinch":         "finance",
+
+		// KYC / Identity
+		"withpersona":      "security",
+		"onfido.com":       "security",
+		"socure.com":       "security",
+		"alloy.com":        "security",
+
+		// B2B Data
+		"clay.com":         "data",
+		"apollo.io":        "data",
+		"peopledatalabs":   "data",
+		"proxycurl":        "data",
+
+		// Healthcare
+		"metriport":        "health",
+
+		// Cybersecurity
+		"shodan.io":        "security",
+		"greynoise":        "security",
+
+		// Geospatial
+		"protomaps":        "developer",
+		"overturemaps":     "developer",
+		"felt.com":         "developer",
+
+		// Travel
+		"duffel.com":       "data",
+		"kiwi.com":         "data",
+
+		// HR / Payroll
+		"merge.dev":        "developer",
+
+		// E-commerce data
+		"serpapi":           "data",
+
+		// Email (newer)
+		"loops.so":         "communication",
+
+		// Agentic infra
+		"browsercat":       "developer",
+
+		// llms.txt early adopters
+		"mintlify":         "developer",
+		"tinybird":         "data",
+		"flatfile":         "data",
+		"plain.com":        "communication",
+		"inkeep.com":       "ai-tools",
+		"axiom.co":         "developer",
+		"openphone":        "communication",
+		"smartcar.com":     "developer",
+		"stedi.com":        "developer",
+		"infisical":        "security",
+		"screenshotone":    "developer",
+		"buildwithfern":    "developer",
+		"tryvital":         "health",
+		"projectdiscovery": "security",
+		"conductor.is":     "developer",
+		"ionq.com":         "developer",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
@@ -558,6 +709,7 @@ func categorize(site *models.Site) string {
 		{"developer", []string{"developer platform", "devtool", "developer tool", "hosting platform", "deployment", "runtime", "infrastructure"}},
 		{"communication", []string{"messaging platform", "chat platform", "sms api", "email delivery", "push notification", "real-time communication", "notification service"}},
 		{"productivity", []string{"project management", "task management", "collaboration platform", "workflow automation", "no-code", "low-code", "scheduling platform", "form builder", "crm platform"}},
+		{"ai-tools", []string{"llm observability", "llmops", "agent framework", "agent platform", "ai orchestration", "prompt engineering", "model serving", "ai gateway"}},
 	}
 
 	for _, rule := range rules {

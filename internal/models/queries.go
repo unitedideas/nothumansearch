@@ -72,6 +72,9 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	argN := 1
 
 	conditions = append(conditions, "crawl_status = 'success'")
+	// Only show sites with at least one strong agent signal
+	// (API, llms.txt, OpenAPI, ai-plugin, or MCP — not just schema.org/robots.txt)
+	conditions = append(conditions, "(has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)")
 
 	useFTS := false
 	var tsQueryArg int
@@ -222,9 +225,11 @@ func GetSiteByDomain(db *sql.DB, domain string) (*Site, error) {
 	return &s, nil
 }
 
+const agentFirstFilter = "crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
+
 func GetStats(db *sql.DB) (totalSites, avgScore int, topCategory string) {
-	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE crawl_status='success'").Scan(&totalSites, &avgScore)
-	db.QueryRow("SELECT category FROM sites WHERE crawl_status='success' GROUP BY category ORDER BY count(*) DESC LIMIT 1").Scan(&topCategory)
+	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE " + agentFirstFilter).Scan(&totalSites, &avgScore)
+	db.QueryRow("SELECT category FROM sites WHERE " + agentFirstFilter + " GROUP BY category ORDER BY count(*) DESC LIMIT 1").Scan(&topCategory)
 	return
 }
 
@@ -237,7 +242,7 @@ func LogSearch(db *sql.DB, query string, resultsCount int, userAgent, ipHash str
 func GetCategories(db *sql.DB) ([]CategoryCount, error) {
 	rows, err := db.Query(`
 		SELECT category, count(*) as cnt
-		FROM sites WHERE crawl_status='success'
+		FROM sites WHERE ` + agentFirstFilter + `
 		GROUP BY category ORDER BY cnt DESC`)
 	if err != nil {
 		return nil, err

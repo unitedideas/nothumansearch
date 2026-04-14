@@ -1,0 +1,1 @@
+- [Expertise](expertise.md) — seed dedup list, confirmed APIs by category, MCP directories, anti-patterns for nothumansearch
