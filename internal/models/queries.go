@@ -29,6 +29,7 @@ func UpsertSite(db *sql.DB, s *Site) error {
 			has_schema_org=EXCLUDED.has_schema_org,
 			llms_txt_content=EXCLUDED.llms_txt_content, openapi_summary=EXCLUDED.openapi_summary,
 			agentic_score=EXCLUDED.agentic_score, category=EXCLUDED.category, tags=EXCLUDED.tags,
+			is_featured=(sites.is_featured OR EXCLUDED.is_featured),
 			last_crawled_at=EXCLUDED.last_crawled_at, crawl_status=EXCLUDED.crawl_status,
 			crawl_error=EXCLUDED.crawl_error, updated_at=NOW()`,
 		s.Domain, s.URL, s.Name, s.Description,
