@@ -85,10 +85,10 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 				wordConditions = append(wordConditions, fmt.Sprintf(
 					"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
 					argN, argN, argN, argN, argN))
-				// Count how many words match for relevance ranking
+				// Count how many words match for relevance ranking (include tags)
 				relevanceParts = append(relevanceParts, fmt.Sprintf(
-					"CASE WHEN (name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d) THEN 1 ELSE 0 END",
-					argN, argN, argN, argN))
+					"CASE WHEN (name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d) THEN 1 ELSE 0 END",
+					argN, argN, argN, argN, argN))
 				args = append(args, "%"+word+"%")
 				argN++
 			}

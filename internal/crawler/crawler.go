@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
@@ -146,6 +147,9 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 
 	// Auto-categorize
 	site.Category = categorize(site)
+
+	// Generate tags for search discoverability
+	site.Tags = generateTags(site)
 
 	log.Printf("Crawled %s: score=%d llms=%v plugin=%v openapi=%v robots=%v api=%v schema=%v",
 		site.Domain, site.AgenticScore,
@@ -340,4 +344,108 @@ func categorize(site *models.Site) string {
 		}
 	}
 	return "other"
+}
+
+// generateTags creates search-friendly tags from the site's signals, domain, and description.
+func generateTags(site *models.Site) pq.StringArray {
+	tagSet := make(map[string]bool)
+
+	// Signal-based tags
+	if site.HasLLMsTxt {
+		tagSet["llms-txt"] = true
+	}
+	if site.HasAIPlugin {
+		tagSet["ai-plugin"] = true
+	}
+	if site.HasOpenAPI {
+		tagSet["openapi"] = true
+		tagSet["api"] = true
+	}
+	if site.HasStructuredAPI {
+		tagSet["api"] = true
+	}
+	if site.HasMCPServer {
+		tagSet["mcp"] = true
+	}
+	if site.HasRobotsAI {
+		tagSet["ai-friendly"] = true
+	}
+
+	// Extract keywords from description and name
+	combined := strings.ToLower(site.Description + " " + site.Name)
+	keywordMap := map[string][]string{
+		"payment":        {"payment", "payments", "pay ", "checkout", "billing"},
+		"api":            {"api ", "apis", "rest api", "graphql", "endpoint"},
+		"database":       {"database", "postgres", "mysql", "sql", "nosql", "db "},
+		"authentication": {"auth", "login", "oauth", "sso", "identity"},
+		"email":          {"email", "smtp", "inbox", "mail"},
+		"messaging":      {"messaging", "chat", "sms", "notification"},
+		"hosting":        {"hosting", "deploy", "server", "cloud"},
+		"ai":             {"artificial intelligence", " ai ", "machine learning", "llm", "gpt", "neural"},
+		"ml":             {"machine learning", "deep learning", "training", "inference", "model"},
+		"search":         {"search engine", "search api", "search ", "discovery"},
+		"analytics":      {"analytics", "tracking", "metrics", "insights"},
+		"storage":        {"storage", "file", "blob", "upload", "cdn"},
+		"monitoring":     {"monitoring", "observability", "logging", "alerting", "apm"},
+		"ecommerce":      {"ecommerce", "e-commerce", "commerce", "storefront", "shopping", "cart"},
+		"fintech":        {"fintech", "financial", "banking", "trading", "investment"},
+		"security":       {"security", "encryption", "vulnerability", "penetration", "firewall"},
+		"devtools":       {"developer tool", "dev tool", "sdk", "cli", "framework"},
+		"automation":     {"automation", "workflow", "integration", "orchestration"},
+		"vector-db":      {"vector", "embeddings", "similarity", "semantic search"},
+		"healthcare":     {"health", "medical", "clinical", "biotech", "pharma"},
+		"jobs":           {"job board", "jobs", "hiring", "recruiting", "career"},
+		"cms":            {"content management", "headless cms", "cms"},
+		"data-pipeline":  {"etl", "data pipeline", "data integration", "ingestion"},
+	}
+
+	for tag, keywords := range keywordMap {
+		for _, kw := range keywords {
+			if strings.Contains(combined, kw) {
+				tagSet[tag] = true
+				break
+			}
+		}
+	}
+
+	// Domain-based tags for well-known services
+	domainTags := map[string][]string{
+		"stripe":     {"payment", "api", "fintech", "billing", "subscriptions"},
+		"plaid":      {"payment", "api", "fintech", "banking"},
+		"square":     {"payment", "ecommerce", "pos"},
+		"shopify":    {"ecommerce", "api", "storefront"},
+		"twilio":     {"messaging", "sms", "api", "voice"},
+		"sendgrid":   {"email", "api"},
+		"resend":     {"email", "api"},
+		"postmark":   {"email", "api"},
+		"github":     {"api", "devtools", "git", "code"},
+		"openai":     {"ai", "ml", "api", "llm"},
+		"anthropic":  {"ai", "ml", "api", "llm"},
+		"supabase":   {"database", "api", "auth", "realtime"},
+		"cloudflare": {"cdn", "security", "dns", "hosting"},
+		"vercel":     {"hosting", "devtools", "frontend"},
+		"sentry":     {"monitoring", "error-tracking", "devtools"},
+		"posthog":    {"analytics", "devtools"},
+		"datadog":    {"monitoring", "observability"},
+		"auth0":      {"authentication", "security", "api"},
+		"clerk":      {"authentication", "api"},
+		"pinecone":   {"vector-db", "ai", "api"},
+		"weaviate":   {"vector-db", "ai", "api"},
+		"zapier":     {"automation", "api", "integration"},
+	}
+	d := strings.ToLower(site.Domain)
+	for domainKey, tags := range domainTags {
+		if strings.Contains(d, domainKey) {
+			for _, t := range tags {
+				tagSet[t] = true
+			}
+			break
+		}
+	}
+
+	var tags []string
+	for t := range tagSet {
+		tags = append(tags, t)
+	}
+	return pq.StringArray(tags)
 }

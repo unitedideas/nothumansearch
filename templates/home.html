@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Human Search — The Search Engine for AI Agents</title>
-    <meta name="description" content="Find websites and APIs that AI agents can actually use. Ranked by agentic readiness — llms.txt, OpenAPI specs, AI plugins, and structured APIs.">
-    <meta property="og:title" content="Not Human Search">
-    <meta property="og:description" content="The search engine for AI agents. Find sites ranked by how well they serve non-human users.">
+    <title>Not Human Search — Google for AI Agents</title>
+    <meta name="description" content="The agentic-first search engine. AI agents search NHS to find services, APIs, and tools — ranked by how well they serve non-human users.">
+    <meta property="og:title" content="Not Human Search — Google for AI Agents">
+    <meta property="og:description" content="The agentic-first search engine. Your agent searches NHS to find services, APIs, and tools that actually work for non-human users.">
     <meta property="og:type" content="website">
     <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
     <script type="application/ld+json">
@@ -15,7 +15,7 @@
         "@type": "WebSite",
         "name": "Not Human Search",
         "url": "https://nothumansearch.fly.dev",
-        "description": "The search engine for AI agents. Find websites ranked by agentic readiness.",
+        "description": "The agentic-first search engine. AI agents search NHS to discover services, APIs, and tools ranked by how well they serve non-human users.",
         "potentialAction": {
             "@type": "SearchAction",
             "target": "https://nothumansearch.fly.dev/?q={search_term_string}",
@@ -74,6 +74,19 @@
             cursor:pointer; transition:background 0.2s;
         }
         .search-box button:hover { background:var(--accent-dim); }
+
+        /* Example queries */
+        .example-queries {
+            text-align:center; margin:-24px auto 32px; font-size:13px; color:var(--text-muted);
+            max-width:640px;
+        }
+        .example-queries a {
+            color:var(--accent); text-decoration:none; padding:3px 10px;
+            background:var(--surface); border:1px solid var(--border); border-radius:4px;
+            font-family:'IBM Plex Mono',monospace; font-size:12px;
+            margin:2px; display:inline-block; transition:border-color 0.2s;
+        }
+        .example-queries a:hover { border-color:var(--accent); }
 
         /* Filters */
         .filters { display:flex; gap:8px; justify-content:center; margin-bottom:32px; flex-wrap:wrap; }
@@ -157,7 +170,7 @@
     <div class="container">
         <header>
             <div class="logo"><span>&gt;_</span> Not Human Search</div>
-            <p class="tagline">The search engine for AI agents. Sites ranked by agentic readiness.</p>
+            <p class="tagline">The Google for AI agents. Find any service, API, or tool — ranked by agentic readiness.</p>
         </header>
 
         <div class="stats">
@@ -172,9 +185,13 @@
         </div>
 
         <form class="search-box" method="GET" action="/">
-            <input type="text" name="q" value="{{.Query}}" placeholder="Search for agent-ready sites..." autofocus>
+            <input type="text" name="q" value="{{.Query}}" placeholder="What does your agent need? e.g. payment API, AI jobs, weather data..." autofocus>
             <button type="submit">Search</button>
         </form>
+
+        <div class="example-queries">
+            Try: <a href="/?q=AI+jobs">AI jobs</a> <a href="/?q=payment+API">payment API</a> <a href="/?q=ecommerce">ecommerce</a> <a href="/?q=weather+data">weather data</a> <a href="/?q=authentication">authentication</a> <a href="/?q=code+hosting">code hosting</a>
+        </div>
 
         <div class="filters">
             <a href="/" class="filter-btn {{if eq .Category ""}}active{{end}}">All</a>
@@ -229,9 +246,28 @@
         </div>
         {{end}}
 
+        <div class="cta-box" style="text-align:left;">
+            <h3>Use NHS in Your Agent</h3>
+            <p>Give your AI agent access to the agentic web. One API call to find agent-ready services.</p>
+            <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:280px;">
+                    <div style="color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Search API</div>
+                    <code style="display:block;background:var(--bg);padding:12px 16px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);line-height:1.6;white-space:pre-wrap;">curl "https://nothumansearch.fly.dev/api/v1/search?q=payment+API"</code>
+                </div>
+                <div style="flex:1;min-width:280px;">
+                    <div style="color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Agent Docs</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <a href="/llms.txt" style="display:inline-block;padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:13px;font-family:'IBM Plex Mono',monospace;">llms.txt</a>
+                        <a href="/openapi.yaml" style="display:inline-block;padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:13px;font-family:'IBM Plex Mono',monospace;">OpenAPI spec</a>
+                        <a href="/.well-known/ai-plugin.json" style="display:inline-block;padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:13px;font-family:'IBM Plex Mono',monospace;">ai-plugin.json</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="cta-box">
             <h3>Submit Your Site</h3>
-            <p>We'll crawl it and score its agentic readiness (llms.txt, OpenAPI, ai-plugin.json, and more).</p>
+            <p>Get crawled and scored on agentic readiness. Appear in agent search results.</p>
             <form id="submit-form" style="display:flex;gap:8px;max-width:480px;margin:16px auto 0;align-items:center;">
                 <input id="submit-url" type="url" placeholder="https://example.com" required
                     style="flex:1;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:'IBM Plex Mono',monospace;outline:none;">
