@@ -113,7 +113,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 			"type": "openapi",
 			"url":  h.BaseURL + "/openapi.yaml",
 		},
-		"logo_url":        h.BaseURL + "/static/img/logo.png",
+		"logo_url":        h.BaseURL + "/static/img/logo.svg",
 		"contact_email":   "hello@nothumansearch.com",
 		"legal_info_url":  h.BaseURL + "/about",
 	})
