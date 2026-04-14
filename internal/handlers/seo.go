@@ -91,7 +91,7 @@ We crawl immediately and add it to the index.
 GET /stats
 
 ## Categories
-ai-tools, developer, data, finance, ecommerce, jobs, security, health, and more.
+ai-tools, developer, data, finance, ecommerce, jobs, security, health, communication, productivity.
 
 ## Scoring (0-100)
 - llms.txt: 25 pts
@@ -151,7 +151,7 @@ paths:
           description: Search query (matches name, description, domain)
         - name: category
           in: query
-          schema: { type: string, enum: [ai-tools, developer, data, jobs, finance, ecommerce, health, education, security, other] }
+          schema: { type: string, enum: [ai-tools, developer, data, jobs, finance, ecommerce, health, education, security, communication, productivity] }
         - name: min_score
           in: query
           schema: { type: integer, minimum: 0, maximum: 100 }
