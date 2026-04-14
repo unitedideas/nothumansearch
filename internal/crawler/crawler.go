@@ -190,18 +190,34 @@ func extractMetaDescription(html string) string {
 	if idx == -1 {
 		return ""
 	}
-	// Look for content= nearby
-	region := html[max(0, idx-200) : min(len(html), idx+300)]
-	contentIdx := strings.Index(strings.ToLower(region), `content="`)
+
+	// Find the enclosing <meta tag by scanning backwards for '<'
+	tagStart := strings.LastIndex(lower[:idx], "<")
+	if tagStart == -1 {
+		return ""
+	}
+	tagEnd := strings.Index(lower[tagStart:], ">")
+	if tagEnd == -1 {
+		return ""
+	}
+	tag := html[tagStart : tagStart+tagEnd+1]
+	tagLower := strings.ToLower(tag)
+
+	// Extract content="..." from within this specific meta tag
+	contentIdx := strings.Index(tagLower, `content="`)
+	if contentIdx == -1 {
+		contentIdx = strings.Index(tagLower, `content='`)
+	}
 	if contentIdx == -1 {
 		return ""
 	}
+	quote := tag[contentIdx+8]
 	start := contentIdx + 9
-	end := strings.Index(region[start:], `"`)
+	end := strings.Index(tag[start:], string(quote))
 	if end == -1 {
 		return ""
 	}
-	desc := region[start : start+end]
+	desc := tag[start : start+end]
 	if len(desc) > 500 {
 		desc = desc[:500]
 	}
@@ -212,24 +228,108 @@ func categorize(site *models.Site) string {
 	d := strings.ToLower(site.Domain)
 	desc := strings.ToLower(site.Description)
 	name := strings.ToLower(site.Name)
-	combined := d + " " + desc + " " + name
 
-	// Ordered by specificity — most specific categories first to avoid
-	// "developer" swallowing everything with "api" in the description.
+	// Pass 1: exact domain matches (highest confidence, avoids false positives
+	// from generic keywords like "learn" or "security" in descriptions)
+	domainRules := map[string]string{
+		"aidevboard":      "jobs",
+		"greenhouse.io":   "jobs",
+		"lever.co":        "jobs",
+		"ashbyhq.com":     "jobs",
+		"workable.com":    "jobs",
+		"stripe.com":      "finance",
+		"plaid.com":       "finance",
+		"mercury.com":     "finance",
+		"brex.com":        "finance",
+		"alpaca.markets":  "finance",
+		"polygon.io":      "finance",
+		"coinbase.com":    "finance",
+		"wise.com":        "finance",
+		"shopify":         "ecommerce",
+		"bigcommerce":     "ecommerce",
+		"woocommerce":     "ecommerce",
+		"snipcart":        "ecommerce",
+		"square.com":      "ecommerce",
+		"openai":          "ai-tools",
+		"anthropic":       "ai-tools",
+		"cohere":          "ai-tools",
+		"mistral":         "ai-tools",
+		"groq.com":        "ai-tools",
+		"together.ai":     "ai-tools",
+		"fireworks.ai":    "ai-tools",
+		"replicate.com":   "ai-tools",
+		"huggingface":     "ai-tools",
+		"deepgram":        "ai-tools",
+		"elevenlabs":      "ai-tools",
+		"stability.ai":    "ai-tools",
+		"perplexity.ai":   "ai-tools",
+		"assemblyai":      "ai-tools",
+		"pinecone":        "ai-tools",
+		"qdrant":          "ai-tools",
+		"supabase":        "data",
+		"neon.tech":       "data",
+		"planetscale":     "data",
+		"turso":           "data",
+		"upstash":         "data",
+		"weaviate":        "data",
+		"chroma":          "data",
+		"snowflake":       "data",
+		"databricks":      "data",
+		"fivetran":        "data",
+		"segment.com":     "data",
+		"mixpanel":        "data",
+		"amplitude":       "data",
+		"posthog":         "data",
+		"fly.io":          "developer",
+		"vercel.com":      "developer",
+		"render.com":      "developer",
+		"railway.app":     "developer",
+		"deno.com":        "developer",
+		"bun.sh":          "developer",
+		"modal.com":       "developer",
+		"cloudflare":      "developer",
+		"github.com":      "developer",
+		"sentry.io":       "developer",
+		"grafana":         "developer",
+		"datadog":         "developer",
+		"langchain":       "developer",
+		"llamaindex":      "developer",
+		"crewai":          "developer",
+		"autogen":         "developer",
+		"composio":        "developer",
+		"browserbase":     "developer",
+		"e2b.dev":         "developer",
+		"auth0.com":       "security",
+		"clerk.com":       "security",
+		"1password":       "security",
+		"snyk.io":         "security",
+		"workos.com":      "security",
+		"health.gov":      "health",
+		"pubmed":          "health",
+		"clinicaltrials":  "health",
+	}
+	for domainKey, cat := range domainRules {
+		if strings.Contains(d, domainKey) {
+			return cat
+		}
+	}
+
+	// Pass 2: keyword matches on description/name (lower confidence)
+	combined := desc + " " + name
 	type catRule struct {
 		name     string
 		keywords []string
 	}
 	rules := []catRule{
-		{"jobs", []string{"job board", "career", "hiring", "recruit", "talent", "aidevboard"}},
-		{"health", []string{"health", "medical", "clinical", "biotech", "pharma", "pubmed"}},
-		{"education", []string{"education", "learn", "course", "tutorial", "academy"}},
-		{"ecommerce", []string{"shop", "store", "ecommerce", "commerce", "retail", "shopify", "bigcommerce", "woocommerce", "snipcart", "square"}},
-		{"finance", []string{"finance", "fintech", "payment", "banking", "trading", "investment", "stripe.com", "plaid", "mercury", "brex", "alpaca", "polygon.io", "coinbase", "wise"}},
-		{"security", []string{"security", "auth0", "identity verification", "vulnerability", "penetration", "snyk", "1password", "workos", "clerk"}},
-		{"ai-tools", []string{"language model", "machine learning", "inference", "embeddings", "vector", "openai", "anthropic", "cohere", "mistral", "groq", "together.ai", "fireworks.ai", "replicate", "huggingface", "deepgram", "elevenlabs", "stability.ai", "perplexity", "assemblyai"}},
-		{"data", []string{"database", "dataset", "data warehouse", "analytics platform", "etl", "data integration", "snowflake", "databricks", "supabase", "neon.tech", "planetscale", "turso", "upstash", "pinecone", "weaviate", "qdrant", "chroma", "census", "fivetran", "segment", "mixpanel", "amplitude", "posthog"}},
-		{"developer", []string{"developer platform", "devtool", "sdk", "framework", "hosting", "deploy", "runtime", "infrastructure", "fly.io", "vercel", "render.com", "railway", "deno", "bun.sh", "modal.com", "cloudflare", "github", "sentry", "grafana", "datadog", "mcp", "agent framework", "langchain", "llamaindex", "crewai", "autogen", "composio", "browserbase", "e2b"}},
+		{"jobs", []string{"job board", "career board", "hiring platform", "recruiting platform"}},
+		{"health", []string{"healthcare", "medical", "clinical trial", "biotech", "pharmaceutical"}},
+		{"education", []string{"education platform", "online course", "learning platform", "tutorial platform"}},
+		{"ecommerce", []string{"ecommerce", "online store", "shopping", "retail platform"}},
+		{"finance", []string{"fintech", "payment processing", "banking", "trading platform", "investment"}},
+		{"security", []string{"cybersecurity", "identity verification", "vulnerability", "penetration testing"}},
+		{"ai-tools", []string{"language model", "machine learning", "inference", "embeddings", "text-to-speech", "speech-to-text", "generative ai"}},
+		{"data", []string{"database", "data warehouse", "analytics platform", "etl", "data integration", "data pipeline"}},
+		{"developer", []string{"developer platform", "devtool", "developer tool", "hosting platform", "deployment", "runtime", "infrastructure"}},
 	}
 
 	for _, rule := range rules {
