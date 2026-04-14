@@ -621,4 +621,39 @@ var SeedSites = []struct {
 	{"https://projectdiscovery.io", false},
 	{"https://conductor.is", false},
 	{"https://ionq.com", false},
+
+	// llms.txt confirmed (batch 2 — 2026-04-13)
+	{"https://speakeasy.com", false},
+	{"https://scalar.com", false},
+	{"https://readme.com", false},
+	{"https://dub.co", false},
+	{"https://writer.com", false},
+	{"https://frigade.com", false},
+	{"https://basehub.com", false},
+	{"https://openpipe.ai", false},
+	{"https://dotenvx.com", false},
+	{"https://datafold.com", false},
+	{"https://dynamic.xyz", false},
+	{"https://velt.dev", false},
+	{"https://salesbricks.com", false},
+	{"https://hyperline.co", false},
+	{"https://aporia.com", false},
+	{"https://pinata.cloud", false},
+	{"https://wordlift.io", false},
+	{"https://micro1.ai", false},
+	{"https://campsite.com", false},
+
+	// MCP server providers
+	{"https://mastra.ai", false},
+	{"https://portkey.ai", false},
+	{"https://context7.com", false},
+	{"https://stainlessapi.com", false},
+
+	// MCP directories and registries
+	{"https://pulsemcp.com", false},
+	{"https://mcp.so", false},
+	{"https://opentools.com", false},
+
+	// llms.txt directories
+	{"https://llmstxthub.com", false},
 }

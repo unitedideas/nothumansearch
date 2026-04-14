@@ -782,6 +782,34 @@ func categorize(site *models.Site) string {
 
 		// Security
 		"ipinfo.io":        "security",
+
+		// Batch 4: new seeds from research (2026-04-13)
+		"speakeasy.com":    "developer",
+		"scalar.com":       "developer",
+		"readme.com":       "developer",
+		"dub.co":           "data",
+		"writer.com":       "ai-tools",
+		"frigade.com":      "developer",
+		"basehub.com":      "data",
+		"openpipe.ai":      "ai-tools",
+		"dotenvx.com":      "developer",
+		"datafold.com":     "data",
+		"dynamic.xyz":      "developer",
+		"velt.dev":         "developer",
+		"salesbricks.com":  "ecommerce",
+		"hyperline.co":     "finance",
+		"aporia.com":       "ai-tools",
+		"pinata.cloud":     "developer",
+		"wordlift.io":      "ai-tools",
+		"micro1.ai":        "jobs",
+		"campsite.com":     "communication",
+		"portkey.ai":       "ai-tools",
+		"context7.com":     "developer",
+		"stainlessapi.com": "developer",
+		"pulsemcp.com":     "developer",
+		"mcp.so":           "developer",
+		"opentools.com":    "ai-tools",
+		"llmstxthub.com":   "data",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
