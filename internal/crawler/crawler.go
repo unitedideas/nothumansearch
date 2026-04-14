@@ -311,6 +311,120 @@ func categorize(site *models.Site) string {
 		"health.gov":      "health",
 		"pubmed":          "health",
 		"clinicaltrials":  "health",
+
+		// Communication
+		"slack.com":        "communication",
+		"discord.com":      "communication",
+		"twilio.com":       "communication",
+		"sendgrid.com":     "communication",
+		"postmark.com":     "communication",
+		"resend.com":       "communication",
+		"pusher.com":       "communication",
+		"onesignal":        "communication",
+		"pushover.net":     "communication",
+		"ntfy.sh":          "communication",
+
+		// Productivity / Collaboration
+		"zapier.com":       "productivity",
+		"make.com":         "productivity",
+		"notion.so":        "productivity",
+		"airtable.com":     "productivity",
+		"linear.app":       "productivity",
+		"asana.com":        "productivity",
+		"trello.com":       "productivity",
+		"monday.com":       "productivity",
+		"calendly":         "productivity",
+		"cal.com":          "productivity",
+		"cronofy":          "productivity",
+		"typeform":         "productivity",
+		"tally.so":         "productivity",
+		"buffer.com":       "productivity",
+		"hootsuite":        "productivity",
+
+		// AI-tools (additional)
+		"exa.ai":           "ai-tools",
+		"tavily.com":       "ai-tools",
+		"serper.dev":       "ai-tools",
+		"unstructured.io":  "ai-tools",
+		"leonardo.ai":      "ai-tools",
+		"ideogram.ai":      "ai-tools",
+		"runway.com":       "ai-tools",
+		"luma.ai":          "ai-tools",
+		"suno.com":         "ai-tools",
+		"cursor.com":       "ai-tools",
+
+		// Developer (additional)
+		"betterstack":      "developer",
+		"convex.dev":       "developer",
+		"dnsimple":         "developer",
+		"name.com":         "developer",
+		"browserstack":     "developer",
+		"lambdatest":       "developer",
+		"mux.com":          "developer",
+		"uploadthing":      "developer",
+		"cloudinary":       "developer",
+
+		// Data (additional)
+		"api.census.gov":   "data",
+		"data.gov":         "data",
+		"developer.nrel":   "data",
+		"contentful":       "data",
+		"sanity.io":        "data",
+		"storyblok":        "data",
+		"dbt.com":          "data",
+
+		// Ecommerce (additional)
+		"aftership":        "ecommerce",
+		"easypost":         "ecommerce",
+		"goshippo":         "ecommerce",
+		"shipstation":      "ecommerce",
+
+		// Social media
+		"developer.x":      "communication",
+		"developers.facebook": "communication",
+		"developers.reddit":   "communication",
+
+		// Search / Knowledge
+		"wikipedia.org":    "data",
+
+		// Agent infrastructure
+		"modelcontextprotocol": "developer",
+		"smithery.ai":     "developer",
+		"glama.ai":        "developer",
+		"phidata":         "developer",
+
+		// Finance (additional)
+		"close.com":       "finance",
+		"hubspot":         "productivity",
+		"pipedrive":       "productivity",
+
+		// Translation
+		"deepl.com":       "ai-tools",
+		"libretranslate":  "ai-tools",
+
+		// Document / PDF
+		"docusign.com":    "productivity",
+		"docparser.com":   "data",
+		"pdf.co":          "data",
+		"smallpdf.com":    "productivity",
+
+		// Foundry businesses
+		"agentcanary":     "security",
+		"8bitconcepts":    "ai-tools",
+		"nothumansearch":  "ai-tools",
+
+		// Cloud providers
+		"cloud.google":    "developer",
+		"travelport":      "data",
+		"amadeus":         "data",
+
+		// Music / Audio
+		"developer.spotify": "data",
+		"soundcloud.com":    "data",
+
+		// Maps
+		"mapbox.com":      "developer",
+		"here.com":        "developer",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
@@ -334,6 +448,8 @@ func categorize(site *models.Site) string {
 		{"ai-tools", []string{"language model", "machine learning", "inference", "embeddings", "text-to-speech", "speech-to-text", "generative ai"}},
 		{"data", []string{"database", "data warehouse", "analytics platform", "etl", "data integration", "data pipeline"}},
 		{"developer", []string{"developer platform", "devtool", "developer tool", "hosting platform", "deployment", "runtime", "infrastructure"}},
+		{"communication", []string{"messaging platform", "chat platform", "sms api", "email delivery", "push notification", "real-time communication", "notification service"}},
+		{"productivity", []string{"project management", "task management", "collaboration platform", "workflow automation", "no-code", "low-code", "scheduling platform", "form builder", "crm platform"}},
 	}
 
 	for _, rule := range rules {
