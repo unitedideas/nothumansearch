@@ -174,4 +174,70 @@ var SeedSites = []struct {
 	{"https://data.gov", false},
 	{"https://api.census.gov", false},
 	{"https://developer.nrel.gov", false},
+
+	// Translation / Language
+	{"https://deepl.com", false},
+	{"https://cloud.google.com/translate", false},
+	{"https://libretranslate.com", false},
+
+	// Shipping / Logistics
+	{"https://easypost.com", false},
+	{"https://goshippo.com", false},
+	{"https://shipstation.com", false},
+	{"https://aftership.com", false},
+
+	// Calendar / Scheduling
+	{"https://cal.com", false},
+	{"https://calendly.com", false},
+	{"https://cronofy.com", false},
+
+	// Travel / Flights
+	{"https://amadeus.com", false},
+	{"https://developers.amadeus.com", false},
+	{"https://travelport.com", false},
+
+	// Social Media APIs
+	{"https://developer.x.com", false},
+	{"https://developers.facebook.com", false},
+	{"https://developers.reddit.com", false},
+	{"https://buffer.com", false},
+	{"https://hootsuite.com", false},
+
+	// Image / Video Generation
+	{"https://leonardo.ai", false},
+	{"https://ideogram.ai", false},
+	{"https://runway.com", false},
+	{"https://luma.ai", false},
+
+	// Music / Audio
+	{"https://developer.spotify.com", false},
+	{"https://soundcloud.com", false},
+	{"https://suno.com", false},
+
+	// PDF / Document Processing
+	{"https://docparser.com", false},
+	{"https://pdf.co", false},
+	{"https://smallpdf.com", false},
+
+	// CRM / Sales
+	{"https://hubspot.com", false},
+	{"https://pipedrive.com", false},
+	{"https://close.com", false},
+
+	// Forms / Surveys
+	{"https://typeform.com", false},
+	{"https://tally.so", false},
+
+	// DNS / Domain
+	{"https://dnsimple.com", false},
+	{"https://name.com", false},
+
+	// Testing / QA
+	{"https://browserstack.com", false},
+	{"https://lambdatest.com", false},
+
+	// Notifications / Push
+	{"https://onesignal.com", false},
+	{"https://pushover.net", false},
+	{"https://ntfy.sh", false},
 }

@@ -397,6 +397,15 @@ func generateTags(site *models.Site) pq.StringArray {
 		"jobs":           {"job board", "jobs", "hiring", "recruiting", "career"},
 		"cms":            {"content management", "headless cms", "cms"},
 		"data-pipeline":  {"etl", "data pipeline", "data integration", "ingestion"},
+		"translation":    {"translat", "localization", "multilingual", "language translation"},
+		"shipping":       {"shipping", "shipment", "logistics", "delivery", "parcel", "freight"},
+		"calendar":       {"calendar", "scheduling", "appointment", "booking"},
+		"travel":         {"travel", "flight", "hotel", "booking", "airline", "reservation"},
+		"music":          {"music", "audio", "streaming", "playlist", "podcast"},
+		"crm":            {"crm", "customer relationship", "sales pipeline", "lead management"},
+		"notifications":  {"notification", "push notification", "alert", "webhook"},
+		"forms":          {"form builder", "survey", "questionnaire"},
+		"testing":        {"testing", "test automation", "qa", "browser testing"},
 	}
 
 	for tag, keywords := range keywordMap {
@@ -432,6 +441,18 @@ func generateTags(site *models.Site) pq.StringArray {
 		"pinecone":   {"vector-db", "ai", "api"},
 		"weaviate":   {"vector-db", "ai", "api"},
 		"zapier":     {"automation", "api", "integration"},
+		"deepl":      {"translation", "api", "nlp"},
+		"easypost":   {"shipping", "api", "logistics"},
+		"goshippo":   {"shipping", "api", "logistics"},
+		"shipstation": {"shipping", "api", "ecommerce"},
+		"cal.com":    {"calendar", "scheduling", "api"},
+		"calendly":   {"calendar", "scheduling", "api"},
+		"amadeus":    {"travel", "flights", "api"},
+		"hubspot":    {"crm", "marketing", "api"},
+		"spotify":    {"music", "audio", "api"},
+		"onesignal":  {"notifications", "push", "api"},
+		"typeform":   {"forms", "surveys", "api"},
+		"browserstack": {"testing", "qa", "api"},
 	}
 	d := strings.ToLower(site.Domain)
 	for domainKey, tags := range domainTags {
