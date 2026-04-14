@@ -656,4 +656,46 @@ var SeedSites = []struct {
 
 	// llms.txt directories
 	{"https://llmstxthub.com", false},
+
+	// llms.txt verified batch 3 (from directory.llmstxt.cloud, 2026-04-14)
+	{"https://play.ai", false},           // AI voice agents
+	{"https://svelte.dev", false},         // web framework
+	{"https://answer.ai", false},          // AI research
+	{"https://fastht.ml", false},          // Python web framework
+	{"https://ongoody.com", false},        // gifting API
+	{"https://embedchain.ai", false},      // RAG framework
+	{"https://argil.ai", false},           // AI video
+	{"https://axle.insure", false},        // insurance verification API
+	{"https://unifygtm.com", false},       // sales automation
+	{"https://fabric.inc", false},         // ecommerce platform
+	{"https://meshconnect.com", false},    // fintech aggregation
+	{"https://skip.build", false},         // dev tools
+	{"https://flowx.ai", false},           // workflow automation
+	{"https://solidfi.com", false},        // banking as a service API
+	{"https://cobo.com", false},           // crypto custody API
+	{"https://dopp.finance", false},       // DeFi API
+	{"https://sardine.ai", false},         // fraud detection API
+	{"https://oxla.com", false},           // analytics database
+	{"https://aptible.com", false},        // secure cloud hosting
+	{"https://rubric.com", false},         // AI evaluation
+	{"https://sitespeak.ai", false},       // accessibility API
+
+	// llms.txt verified batch 4 (from llmstxt.site, 2026-04-14)
+	{"https://docs.adyen.com", false},     // payments API
+	{"https://uploadcare.com", false},     // file upload API
+	{"https://configcat.com", false},      // feature flags API
+	{"https://mariadb.com", false},        // database
+	{"https://hydrolix.io", false},        // streaming analytics
+	{"https://printify.com", false},       // print-on-demand API
+	{"https://readwise.io", false},        // reading/highlights API
+	{"https://nuxt.com", false},           // web framework
+	{"https://nextjs.org", false},         // web framework
+	{"https://www.postman.com", false},    // API testing platform
+	{"https://developer.nvidia.com", false}, // GPU/AI platform
+	{"https://docs.retool.com", false},    // internal tools platform
+	{"https://www.dreamhost.com", false},  // hosting
+	{"https://vite.dev", false},           // build tool
+	{"https://www.nextiva.com", false},    // communications platform
+	{"https://claspo.io", false},          // widget builder API
+	{"https://brandefense.io", false},     // cybersecurity platform
 }
