@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/database"
@@ -89,8 +90,8 @@ func main() {
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 
-	// CORS middleware
-	handler := corsMiddleware(mux)
+	// Middleware chain: logging → CORS → handler
+	handler := loggingMiddleware(corsMiddleware(mux))
 
 	log.Printf("Not Human Search starting on :%s", *port)
 	srv := &http.Server{
@@ -102,6 +103,23 @@ func main() {
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server: %v", err)
 	}
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip health checks and static assets from logging
+		if r.URL.Path == "/" && r.Method == "GET" && r.Header.Get("Fly-Forwarded-Port") == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/static/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Printf("%s %s %s %s", r.Method, r.URL.RequestURI(), r.UserAgent(), time.Since(start).Round(time.Millisecond))
+	})
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
