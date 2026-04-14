@@ -64,10 +64,27 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	conditions = append(conditions, "crawl_status = 'success'")
 
 	if p.Query != "" {
-		conditions = append(conditions, fmt.Sprintf(
-			"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d)", argN, argN, argN))
-		args = append(args, "%"+p.Query+"%")
-		argN++
+		// Split query into words for broader matching (agent-style queries)
+		words := strings.Fields(p.Query)
+		if len(words) <= 1 {
+			// Single word: match name, description, domain, category, or tags
+			conditions = append(conditions, fmt.Sprintf(
+				"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
+				argN, argN, argN, argN, argN))
+			args = append(args, "%"+p.Query+"%")
+			argN++
+		} else {
+			// Multi-word: each word must match at least one field (AND logic)
+			var wordConditions []string
+			for _, word := range words {
+				wordConditions = append(wordConditions, fmt.Sprintf(
+					"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
+					argN, argN, argN, argN, argN))
+				args = append(args, "%"+word+"%")
+				argN++
+			}
+			conditions = append(conditions, "("+strings.Join(wordConditions, " OR ")+")")
+		}
 	}
 	if p.Category != "" {
 		conditions = append(conditions, fmt.Sprintf("category = $%d", argN))
