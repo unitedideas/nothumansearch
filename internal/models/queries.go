@@ -63,6 +63,10 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 
 	conditions = append(conditions, "crawl_status = 'success'")
 
+	// Track if we have a multi-word query for relevance ordering
+	hasMultiWordQuery := false
+	var relevanceExpr string
+
 	if p.Query != "" {
 		// Split query into words for broader matching (agent-style queries)
 		words := strings.Fields(p.Query)
@@ -74,16 +78,23 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			args = append(args, "%"+p.Query+"%")
 			argN++
 		} else {
-			// Multi-word: each word must match at least one field (AND logic)
+			// Multi-word: match sites containing ANY word (OR)
 			var wordConditions []string
+			var relevanceParts []string
 			for _, word := range words {
 				wordConditions = append(wordConditions, fmt.Sprintf(
 					"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
 					argN, argN, argN, argN, argN))
+				// Count how many words match for relevance ranking
+				relevanceParts = append(relevanceParts, fmt.Sprintf(
+					"CASE WHEN (name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d) THEN 1 ELSE 0 END",
+					argN, argN, argN, argN))
 				args = append(args, "%"+word+"%")
 				argN++
 			}
 			conditions = append(conditions, "("+strings.Join(wordConditions, " OR ")+")")
+			relevanceExpr = "(" + strings.Join(relevanceParts, " + ") + ")"
+			hasMultiWordQuery = true
 		}
 	}
 	if p.Category != "" {
@@ -109,6 +120,11 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 
 	// Fetch
 	offset := (p.Page - 1) * p.Limit
+	orderBy := "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
+	if hasMultiWordQuery {
+		// Rank by: relevance (word match count) first, then featured, then score
+		orderBy = fmt.Sprintf("ORDER BY %s DESC, is_featured DESC, agentic_score DESC", relevanceExpr)
+	}
 	query := fmt.Sprintf(`
 		SELECT id, domain, url, name, description,
 			has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai,
@@ -117,8 +133,8 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			is_verified, is_featured, last_crawled_at, crawl_status,
 			created_at, updated_at
 		FROM sites %s
-		ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC
-		LIMIT $%d OFFSET $%d`, where, argN, argN+1)
+		%s
+		LIMIT $%d OFFSET $%d`, where, orderBy, argN, argN+1)
 	args = append(args, p.Limit, offset)
 
 	rows, err := db.Query(query, args...)
