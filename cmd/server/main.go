@@ -61,6 +61,12 @@ func main() {
 		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 	})))
 
+	// IndexNow key verification
+	mux.HandleFunc("/bb1637af360f471ab2a1555d45d683ea.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("bb1637af360f471ab2a1555d45d683ea"))
+	})
+
 	// SEO / GEO
 	mux.HandleFunc("/robots.txt", seoHandler.Robots)
 	mux.HandleFunc("/llms.txt", seoHandler.LLMsTxt)
