@@ -40,11 +40,17 @@ func main() {
 	}
 
 	templatesDir := filepath.Join(projectRoot, "templates")
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://nothumansearch.fly.dev"
+	}
+
 	webHandler, err := handlers.NewWebHandler(database.DB, templatesDir)
 	if err != nil {
 		log.Fatalf("templates: %v", err)
 	}
 	apiHandler := handlers.NewAPIHandler(database.DB)
+	seoHandler := handlers.NewSEOHandler(database.DB, baseURL)
 
 	mux := http.NewServeMux()
 
@@ -54,6 +60,14 @@ func main() {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		http.FileServer(http.Dir(staticDir)).ServeHTTP(w, r)
 	})))
+
+	// SEO / GEO
+	mux.HandleFunc("/robots.txt", seoHandler.Robots)
+	mux.HandleFunc("/llms.txt", seoHandler.LLMsTxt)
+	mux.HandleFunc("/.well-known/llms.txt", seoHandler.LLMsTxt)
+	mux.HandleFunc("/.well-known/ai-plugin.json", seoHandler.AIPluginManifest)
+	mux.HandleFunc("/openapi.yaml", seoHandler.OpenAPISpec)
+	mux.HandleFunc("/sitemap.xml", seoHandler.Sitemap)
 
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)
