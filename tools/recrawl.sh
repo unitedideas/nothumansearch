@@ -13,7 +13,10 @@ echo "$(date '+%Y-%m-%d %H:%M:%S') NHS recrawl starting" >> "$LOG_FILE"
 
 cd "$APP_DIR"
 
-# Run recrawl on Fly with 10 workers
+# Seed new sites first (idempotent — existing sites just get upserted)
+fly ssh console -a nothumansearch -C "/app/crawler -seed -workers 10" >> "$LOG_FILE" 2>&1
+
+# Then recrawl all (updates scores, categories, tags for existing sites)
 fly ssh console -a nothumansearch -C "/app/crawler -recrawl -workers 10" >> "$LOG_FILE" 2>&1
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') NHS recrawl complete" >> "$LOG_FILE"
