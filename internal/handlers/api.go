@@ -3,9 +3,11 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
+	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
@@ -101,6 +103,21 @@ func (h *APIHandler) SubmitSite(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 500, map[string]string{"error": "submission failed"})
 		return
 	}
+
+	// Crawl immediately in background
+	go func() {
+		site, err := crawler.CrawlSite(req.URL)
+		if err != nil {
+			log.Printf("submit crawl failed for %s: %v", req.URL, err)
+			h.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", req.URL)
+			return
+		}
+		if err := models.UpsertSite(h.DB, site); err != nil {
+			log.Printf("submit upsert failed for %s: %v", req.URL, err)
+		}
+		h.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", req.URL)
+		log.Printf("submit crawl success: %s score=%d", site.Domain, site.AgenticScore)
+	}()
 
 	h.writeJSON(w, 201, map[string]string{"message": "submitted for crawling"})
 }
