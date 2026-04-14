@@ -405,7 +405,11 @@ func generateTags(site *models.Site) pq.StringArray {
 		"crm":            {"crm", "customer relationship", "sales pipeline", "lead management"},
 		"notifications":  {"notification", "push notification", "alert", "webhook"},
 		"forms":          {"form builder", "survey", "questionnaire"},
-		"testing":        {"testing", "test automation", "qa", "browser testing"},
+		"testing":          {"testing", "test automation", "qa", "browser testing"},
+		"social-media":     {"social media", "social network", "social platform"},
+		"image-generation": {"image generation", "text-to-image", "image synthesis", "generate images"},
+		"video-generation": {"video generation", "text-to-video", "video synthesis"},
+		"pdf":              {"pdf", "document conversion", "document processing"},
 	}
 
 	for tag, keywords := range keywordMap {
@@ -453,6 +457,17 @@ func generateTags(site *models.Site) pq.StringArray {
 		"onesignal":  {"notifications", "push", "api"},
 		"typeform":   {"forms", "surveys", "api"},
 		"browserstack": {"testing", "qa", "api"},
+		"developer.x":  {"social-media", "api", "twitter"},
+		"facebook.com":  {"social-media", "api"},
+		"reddit.com":    {"social-media", "api", "community"},
+		"buffer.com":    {"social-media", "scheduling", "api"},
+		"hootsuite":     {"social-media", "scheduling", "analytics"},
+		"leonardo.ai":   {"image-generation", "ai", "api"},
+		"runway.com":    {"video-generation", "ai", "api"},
+		"luma.ai":       {"video-generation", "3d", "ai"},
+		"pdf.co":        {"pdf", "document", "api"},
+		"smallpdf":      {"pdf", "document"},
+		"ntfy.sh":       {"notifications", "push", "api"},
 	}
 	d := strings.ToLower(site.Domain)
 	for domainKey, tags := range domainTags {
