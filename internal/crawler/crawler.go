@@ -169,11 +169,33 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 		}
 	}
 
-	// Check for structured API (look for /api/ or API docs)
-	for _, path := range []string{"/api", "/api/v1", "/docs", "/api-docs", "/developer"} {
+	// Check for structured API — high-confidence paths first, then content-verified paths
+	for _, path := range []string{"/api/v1", "/api/v2", "/api-docs", "/graphql"} {
 		if _, status, err := fetch(base + path); err == nil && (status == 200 || status == 301 || status == 302) {
 			site.HasStructuredAPI = true
 			break
+		}
+	}
+	if !site.HasStructuredAPI {
+		// These paths need content verification (many sites have generic /docs or /developer pages)
+		apiIndicators := []string{"api", "endpoint", "rest", "graphql", "sdk", "authentication",
+			"rate limit", "api key", "access token", "bearer", "curl", "request", "response",
+			"json", "webhook", "oauth", "api reference", "openapi", "swagger"}
+		for _, path := range []string{"/api", "/docs/api", "/developer", "/developers"} {
+			if body, status, err := fetch(base + path); err == nil && (status == 200 || status == 301 || status == 302) {
+				bodyLower := strings.ToLower(body)
+				matches := 0
+				for _, indicator := range apiIndicators {
+					if strings.Contains(bodyLower, indicator) {
+						matches++
+					}
+				}
+				// Need at least 3 API indicators to confirm this is actual API documentation
+				if matches >= 3 {
+					site.HasStructuredAPI = true
+					break
+				}
+			}
 		}
 	}
 
