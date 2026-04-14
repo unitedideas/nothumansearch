@@ -225,11 +225,11 @@ func GetSiteByDomain(db *sql.DB, domain string) (*Site, error) {
 	return &s, nil
 }
 
-const agentFirstFilter = "crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
+const AgentFirstFilter = "crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
 
 func GetStats(db *sql.DB) (totalSites, avgScore int, topCategory string) {
-	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE " + agentFirstFilter).Scan(&totalSites, &avgScore)
-	db.QueryRow("SELECT category FROM sites WHERE " + agentFirstFilter + " GROUP BY category ORDER BY count(*) DESC LIMIT 1").Scan(&topCategory)
+	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE " + AgentFirstFilter).Scan(&totalSites, &avgScore)
+	db.QueryRow("SELECT category FROM sites WHERE " + AgentFirstFilter + " GROUP BY category ORDER BY count(*) DESC LIMIT 1").Scan(&topCategory)
 	return
 }
 
@@ -242,7 +242,7 @@ func LogSearch(db *sql.DB, query string, resultsCount int, userAgent, ipHash str
 func GetCategories(db *sql.DB) ([]CategoryCount, error) {
 	rows, err := db.Query(`
 		SELECT category, count(*) as cnt
-		FROM sites WHERE ` + agentFirstFilter + `
+		FROM sites WHERE ` + AgentFirstFilter + `
 		GROUP BY category ORDER BY cnt DESC`)
 	if err != nil {
 		return nil, err

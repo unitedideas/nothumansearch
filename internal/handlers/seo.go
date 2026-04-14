@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 type SEOHandler struct {
@@ -104,9 +107,61 @@ ai-tools, developer, data, finance, ecommerce, jobs, security, health, education
 
 ## Links
 - Search: %s/api/v1/search?q=
+- Full Index: %s/llms-full.txt
 - OpenAPI: %s/openapi.yaml
 - Plugin: %s/.well-known/ai-plugin.json
-`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+}
+
+func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+
+	rows, err := h.DB.QueryContext(r.Context(), `
+		SELECT domain, name, description, agentic_score, category,
+			has_llms_txt, has_ai_plugin, has_openapi, has_structured_api, has_mcp_server
+		FROM sites WHERE `+models.AgentFirstFilter+`
+		ORDER BY agentic_score DESC`)
+	if err != nil {
+		http.Error(w, "internal error", 500)
+		return
+	}
+	defer rows.Close()
+
+	fmt.Fprintf(w, "# Not Human Search — Full Index\n")
+	fmt.Fprintf(w, "> %s/llms-full.txt\n", h.BaseURL)
+	fmt.Fprintf(w, "> Complete directory of agent-ready tools, ranked by agentic readiness.\n\n")
+
+	for rows.Next() {
+		var domain, name, desc, category string
+		var score int
+		var llms, plugin, openapi, api, mcp bool
+		if err := rows.Scan(&domain, &name, &desc, &score, &category, &llms, &plugin, &openapi, &api, &mcp); err != nil {
+			continue
+		}
+		var signals []string
+		if llms {
+			signals = append(signals, "llms.txt")
+		}
+		if plugin {
+			signals = append(signals, "ai-plugin")
+		}
+		if openapi {
+			signals = append(signals, "openapi")
+		}
+		if api {
+			signals = append(signals, "api")
+		}
+		if mcp {
+			signals = append(signals, "mcp")
+		}
+		fmt.Fprintf(w, "## %s [%d/100] (%s)\n", domain, score, category)
+		fmt.Fprintf(w, "%s\n", name)
+		if desc != "" {
+			fmt.Fprintf(w, "%s\n", desc)
+		}
+		fmt.Fprintf(w, "Signals: %s\n", strings.Join(signals, ", "))
+		fmt.Fprintf(w, "Details: %s/api/v1/site/%s\n\n", h.BaseURL, domain)
+	}
 }
 
 func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +178,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 			"url":  h.BaseURL + "/openapi.yaml",
 		},
 		"logo_url":        h.BaseURL + "/static/img/logo.svg",
-		"contact_email":   "hello@nothumansearch.com",
+		"contact_email":   "hello@nothumansearch.ai",
 		"legal_info_url":  h.BaseURL + "/about",
 	})
 }
@@ -136,7 +191,7 @@ info:
   description: Search engine for AI agents. Find websites ranked by agentic readiness.
   version: "1.0.0"
   contact:
-    email: hello@nothumansearch.com
+    email: hello@nothumansearch.ai
 servers:
   - url: %s/api/v1
 paths:
