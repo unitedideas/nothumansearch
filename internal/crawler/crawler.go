@@ -211,24 +211,31 @@ func extractMetaDescription(html string) string {
 func categorize(site *models.Site) string {
 	d := strings.ToLower(site.Domain)
 	desc := strings.ToLower(site.Description)
-	combined := d + " " + desc
+	name := strings.ToLower(site.Name)
+	combined := d + " " + desc + " " + name
 
-	categories := map[string][]string{
-		"jobs":       {"job", "career", "hiring", "recruit"},
-		"ai-tools":  {"ai tool", "machine learning", "llm", "gpt", "model"},
-		"developer": {"developer", "api", "sdk", "framework", "devtool"},
-		"data":      {"data", "analytics", "database", "dataset"},
-		"finance":   {"finance", "fintech", "payment", "banking"},
-		"health":    {"health", "medical", "clinical", "biotech"},
-		"education": {"education", "learn", "course", "tutorial"},
-		"ecommerce": {"shop", "store", "ecommerce", "commerce", "retail"},
-		"security":  {"security", "auth", "identity", "cyber"},
+	// Ordered by specificity — most specific categories first to avoid
+	// "developer" swallowing everything with "api" in the description.
+	type catRule struct {
+		name     string
+		keywords []string
+	}
+	rules := []catRule{
+		{"jobs", []string{"job board", "career", "hiring", "recruit", "talent", "aidevboard"}},
+		{"health", []string{"health", "medical", "clinical", "biotech", "pharma", "pubmed"}},
+		{"education", []string{"education", "learn", "course", "tutorial", "academy"}},
+		{"ecommerce", []string{"shop", "store", "ecommerce", "commerce", "retail", "shopify", "bigcommerce", "woocommerce", "snipcart", "square"}},
+		{"finance", []string{"finance", "fintech", "payment", "banking", "trading", "investment", "stripe.com", "plaid", "mercury", "brex", "alpaca", "polygon.io", "coinbase", "wise"}},
+		{"security", []string{"security", "auth0", "identity verification", "vulnerability", "penetration", "snyk", "1password", "workos", "clerk"}},
+		{"ai-tools", []string{"language model", "machine learning", "inference", "embeddings", "vector", "openai", "anthropic", "cohere", "mistral", "groq", "together.ai", "fireworks.ai", "replicate", "huggingface", "deepgram", "elevenlabs", "stability.ai", "perplexity", "assemblyai"}},
+		{"data", []string{"database", "dataset", "data warehouse", "analytics platform", "etl", "data integration", "snowflake", "databricks", "supabase", "neon.tech", "planetscale", "turso", "upstash", "pinecone", "weaviate", "qdrant", "chroma", "census", "fivetran", "segment", "mixpanel", "amplitude", "posthog"}},
+		{"developer", []string{"developer platform", "devtool", "sdk", "framework", "hosting", "deploy", "runtime", "infrastructure", "fly.io", "vercel", "render.com", "railway", "deno", "bun.sh", "modal.com", "cloudflare", "github", "sentry", "grafana", "datadog", "mcp", "agent framework", "langchain", "llamaindex", "crewai", "autogen", "composio", "browserbase", "e2b"}},
 	}
 
-	for cat, keywords := range categories {
-		for _, kw := range keywords {
+	for _, rule := range rules {
+		for _, kw := range rule.keywords {
 			if strings.Contains(combined, kw) {
-				return cat
+				return rule.name
 			}
 		}
 	}
