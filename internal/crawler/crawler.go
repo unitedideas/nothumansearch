@@ -684,6 +684,82 @@ func categorize(site *models.Site) string {
 		"projectdiscovery": "security",
 		"conductor.is":     "developer",
 		"ionq.com":         "developer",
+
+		// Batch 3: fix "other" category sites
+		// Communication / Email / Messaging
+		"mailchimp":        "communication",
+		"sinch.com":        "communication",
+		"messagebird":      "communication",
+		"zendesk":          "communication",
+		"intercom.com":     "communication",
+		"whereby.com":      "communication",
+		"zoom.us":          "communication",
+		"mailgun":          "communication",
+		"drip.com":         "communication",
+		"customer.io":      "communication",
+
+		// Developer / CI/CD / Infra
+		"crates.io":        "developer",
+		"trigger.dev":      "developer",
+		"circleci":         "developer",
+		"semaphoreci":      "developer",
+		"terraform.io":     "developer",
+		"codesandbox":      "developer",
+		"crawlee.dev":      "developer",
+		"apify.com":        "developer",
+		"buildkite":        "developer",
+		"hub.docker":       "developer",
+		"replit.com":       "developer",
+		"firecrawl":        "developer",
+		"pypi.org":         "developer",
+		"bitbucket.org":    "developer",
+		"gitlab.com":       "developer",
+		"stackblitz":       "developer",
+		"sourcegraph":      "developer",
+
+		// Data / Weather / News / Analytics
+		"opencagedata":     "data",
+		"tomorrow.io":      "data",
+		"usaspending":      "data",
+		"developer.nytimes": "data",
+		"brightdata":       "data",
+		"timescale.com":    "data",
+		"influxdata":       "data",
+		"visualcrossing":   "data",
+		"guardian.co":      "data",
+		"gnews.io":         "data",
+		"elastic.co":       "data",
+		"api.worldbank":    "data",
+		"rss2json":         "data",
+		"brave.com":        "data",
+
+		// Finance / Billing / Accounting
+		"chargebee":        "finance",
+		"paypal.com":       "finance",
+		"quickbooks.intuit": "finance",
+		"freshbooks":       "finance",
+		"recurly.com":      "finance",
+
+		// AI Tools / OCR / Image / Search
+		"codeium.com":      "ai-tools",
+		"reducto.ai":       "ai-tools",
+		"mindee.com":       "ai-tools",
+		"you.com":          "ai-tools",
+		"relevanceai":      "ai-tools",
+		"dust.tt":          "ai-tools",
+		"mathpix.com":      "ai-tools",
+		"ocr.space":        "ai-tools",
+		"remove.bg":        "ai-tools",
+		"imgix.com":        "ai-tools",
+
+		// Productivity / Automation / Integration
+		"ifttt.com":        "productivity",
+		"tray.io":          "productivity",
+		"workato.com":      "productivity",
+		"legalzoom":        "productivity",
+
+		// Security
+		"ipinfo.io":        "security",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
