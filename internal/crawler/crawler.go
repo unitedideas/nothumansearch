@@ -441,6 +441,7 @@ func categorize(site *models.Site) string {
 
 		// Healthcare (additional)
 		"healthkit":        "health",
+		"developer.apple":  "developer",
 		"fhir.org":         "health",
 		"openfda":          "health",
 		"medlineplus":      "health",
