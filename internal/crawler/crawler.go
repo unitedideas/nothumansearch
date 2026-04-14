@@ -425,6 +425,12 @@ func categorize(site *models.Site) string {
 		// Maps
 		"mapbox.com":      "developer",
 		"here.com":        "developer",
+
+		// Remaining catch-alls
+		"newsapi":          "data",
+		"ai.google":        "ai-tools",
+		"openweathermap":   "data",
+		"exchangeratesapi": "finance",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
