@@ -371,8 +371,8 @@ func generateTags(site *models.Site) pq.StringArray {
 		tagSet["ai-friendly"] = true
 	}
 
-	// Extract keywords from description and name
-	combined := strings.ToLower(site.Description + " " + site.Name)
+	// Extract keywords from description and name (pad with spaces for boundary matching)
+	combined := " " + strings.ToLower(site.Description+" "+site.Name) + " "
 	keywordMap := map[string][]string{
 		"payment":        {"payment", "payments", "pay ", "checkout", "billing"},
 		"api":            {"api ", "apis", "rest api", "graphql", "endpoint"},

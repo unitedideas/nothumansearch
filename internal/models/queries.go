@@ -116,7 +116,9 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	// Count
 	var total int
 	countQ := "SELECT count(*) FROM sites " + where
-	db.QueryRow(countQ, args...).Scan(&total)
+	if err := db.QueryRow(countQ, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count query: %w", err)
+	}
 
 	// Fetch
 	offset := (p.Page - 1) * p.Limit
@@ -160,6 +162,9 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 		}
 		s.Tags = tags
 		sites = append(sites, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("search rows: %w", err)
 	}
 	return sites, total, nil
 }
