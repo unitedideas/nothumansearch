@@ -54,8 +54,30 @@ func RunMigrations(dir string) error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", f, err)
 		}
-		if _, err := DB.Exec(string(data)); err != nil {
-			return fmt.Errorf("exec %s: %w", f, err)
+		// Execute each statement individually so one failure doesn't block the rest.
+		// Split on semicolons that end a statement (simple split, works for DDL).
+		stmts := strings.Split(string(data), ";")
+		for _, stmt := range stmts {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" || strings.HasPrefix(stmt, "--") {
+				continue
+			}
+			// Skip pure comment blocks
+			lines := strings.Split(stmt, "\n")
+			hasCode := false
+			for _, line := range lines {
+				trimmed := strings.TrimSpace(line)
+				if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
+					hasCode = true
+					break
+				}
+			}
+			if !hasCode {
+				continue
+			}
+			if _, err := DB.Exec(stmt); err != nil {
+				log.Printf("migration %s statement error (continuing): %v", f, err)
+			}
 		}
 		log.Printf("migration applied: %s", f)
 	}

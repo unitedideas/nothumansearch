@@ -250,6 +250,9 @@ func printSite(s *models.Site) {
 	if s.HasRobotsAI {
 		signals = append(signals, "AI-bots")
 	}
+	if s.HasMCPServer {
+		signals = append(signals, "MCP")
+	}
 	if s.HasSchemaOrg {
 		signals = append(signals, "schema.org")
 	}

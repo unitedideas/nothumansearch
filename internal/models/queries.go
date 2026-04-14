@@ -17,10 +17,16 @@ func UpsertSite(db *sql.DB, s *Site) error {
 		INSERT INTO sites (domain, url, name, description,
 			has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai,
 			has_structured_api, has_mcp_server, has_schema_org,
-			llms_txt_content, openapi_summary,
+			llms_txt_content, openapi_summary, mcp_endpoint,
 			agentic_score, category, tags,
-			is_featured, last_crawled_at, crawl_status, crawl_error)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+			is_featured, last_crawled_at, crawl_status, crawl_error,
+			search_vector)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+			setweight(to_tsvector('english', COALESCE($3, '')), 'A') ||
+			setweight(to_tsvector('english', COALESCE($1, '')), 'A') ||
+			setweight(to_tsvector('english', COALESCE($4, '')), 'B') ||
+			setweight(to_tsvector('english', COALESCE($16, '')), 'C') ||
+			setweight(to_tsvector('english', COALESCE(array_to_string($17::text[], ' '), '')), 'C'))
 		ON CONFLICT (domain) DO UPDATE SET
 			url=EXCLUDED.url, name=EXCLUDED.name, description=EXCLUDED.description,
 			has_llms_txt=EXCLUDED.has_llms_txt, has_ai_plugin=EXCLUDED.has_ai_plugin,
@@ -28,14 +34,16 @@ func UpsertSite(db *sql.DB, s *Site) error {
 			has_structured_api=EXCLUDED.has_structured_api, has_mcp_server=EXCLUDED.has_mcp_server,
 			has_schema_org=EXCLUDED.has_schema_org,
 			llms_txt_content=EXCLUDED.llms_txt_content, openapi_summary=EXCLUDED.openapi_summary,
+			mcp_endpoint=EXCLUDED.mcp_endpoint,
 			agentic_score=EXCLUDED.agentic_score, category=EXCLUDED.category, tags=EXCLUDED.tags,
 			is_featured=(sites.is_featured OR EXCLUDED.is_featured),
 			last_crawled_at=EXCLUDED.last_crawled_at, crawl_status=EXCLUDED.crawl_status,
-			crawl_error=EXCLUDED.crawl_error, updated_at=NOW()`,
+			crawl_error=EXCLUDED.crawl_error, updated_at=NOW(),
+			search_vector=EXCLUDED.search_vector`,
 		s.Domain, s.URL, s.Name, s.Description,
 		s.HasLLMsTxt, s.HasAIPlugin, s.HasOpenAPI, s.HasRobotsAI,
 		s.HasStructuredAPI, s.HasMCPServer, s.HasSchemaOrg,
-		s.LLMsTxtContent, s.OpenAPISummary,
+		s.LLMsTxtContent, s.OpenAPISummary, s.MCPEndpoint,
 		s.AgenticScore, s.Category, pq.Array(s.Tags),
 		s.IsFeatured, s.LastCrawledAt, s.CrawlStatus, s.CrawlError,
 	)
@@ -65,38 +73,48 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 
 	conditions = append(conditions, "crawl_status = 'success'")
 
-	// Track if we have a multi-word query for relevance ordering
-	hasMultiWordQuery := false
-	var relevanceExpr string
+	useFTS := false
+	var tsQueryArg int
 
 	if p.Query != "" {
-		// Split query into words for broader matching (agent-style queries)
+		// Build a tsquery from the user's input for full-text search
+		// Convert "payment api" → "payment & api" for AND matching,
+		// but also add an ILIKE fallback for short/partial terms
 		words := strings.Fields(p.Query)
-		if len(words) <= 1 {
-			// Single word: match name, description, domain, category, or tags
+		if len(words) == 1 && len(words[0]) <= 2 {
+			// Very short query: ILIKE only (FTS won't match partial 1-2 char terms)
 			conditions = append(conditions, fmt.Sprintf(
 				"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
 				argN, argN, argN, argN, argN))
 			args = append(args, "%"+p.Query+"%")
 			argN++
 		} else {
-			// Multi-word: match sites containing ANY word (OR)
-			var wordConditions []string
-			var relevanceParts []string
-			for _, word := range words {
-				wordConditions = append(wordConditions, fmt.Sprintf(
-					"(name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
-					argN, argN, argN, argN, argN))
-				// Count how many words match for relevance ranking (include tags)
-				relevanceParts = append(relevanceParts, fmt.Sprintf(
-					"CASE WHEN (name ILIKE $%d OR description ILIKE $%d OR domain ILIKE $%d OR category ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d) THEN 1 ELSE 0 END",
-					argN, argN, argN, argN, argN))
-				args = append(args, "%"+word+"%")
-				argN++
+			// Full-text search with ts_rank + ILIKE fallback for partial matches
+			// Build tsquery: each word joined with & (AND), with :* prefix matching
+			var tsTerms []string
+			for _, w := range words {
+				// Sanitize: remove non-alphanumeric except hyphens
+				clean := strings.Map(func(r rune) rune {
+					if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
+						return r
+					}
+					return -1
+				}, w)
+				if clean != "" {
+					tsTerms = append(tsTerms, clean+":*")
+				}
 			}
-			conditions = append(conditions, "("+strings.Join(wordConditions, " OR ")+")")
-			relevanceExpr = "(" + strings.Join(relevanceParts, " + ") + ")"
-			hasMultiWordQuery = true
+			if len(tsTerms) > 0 {
+				tsQueryStr := strings.Join(tsTerms, " & ")
+				// Match: FTS OR ILIKE (catches things FTS misses like domain substrings)
+				conditions = append(conditions, fmt.Sprintf(
+					"(search_vector @@ to_tsquery('english', $%d) OR name ILIKE $%d OR domain ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
+					argN, argN+1, argN+1, argN+1))
+				args = append(args, tsQueryStr, "%"+p.Query+"%")
+				tsQueryArg = argN
+				useFTS = true
+				argN += 2
+			}
 		}
 	}
 	if p.Category != "" {
@@ -122,13 +140,18 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 		return nil, 0, fmt.Errorf("count query: %w", err)
 	}
 
-	// Fetch
+	// Fetch with relevance ranking
 	offset := (p.Page - 1) * p.Limit
-	orderBy := "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
-	if hasMultiWordQuery {
-		// Rank by: relevance (word match count) first, then featured, then score
-		orderBy = fmt.Sprintf("ORDER BY %s DESC, is_featured DESC, agentic_score DESC", relevanceExpr)
+	var orderBy string
+	if useFTS {
+		// Rank by: FTS relevance * agentic_score weighting
+		orderBy = fmt.Sprintf(
+			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) DESC, is_featured DESC, agentic_score DESC",
+			tsQueryArg)
+	} else {
+		orderBy = "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
 	}
+
 	query := fmt.Sprintf(`
 		SELECT id, domain, url, name, description,
 			has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai,
@@ -203,4 +226,36 @@ func GetStats(db *sql.DB) (totalSites, avgScore int, topCategory string) {
 	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE crawl_status='success'").Scan(&totalSites, &avgScore)
 	db.QueryRow("SELECT category FROM sites WHERE crawl_status='success' GROUP BY category ORDER BY count(*) DESC LIMIT 1").Scan(&topCategory)
 	return
+}
+
+func LogSearch(db *sql.DB, query string, resultsCount int, userAgent, ipHash string) {
+	_, _ = db.Exec(`INSERT INTO search_queries (query, results_count, user_agent, ip_hash) VALUES ($1, $2, $3, $4)`,
+		query, resultsCount, userAgent, ipHash)
+}
+
+// GetCategories returns all categories with their site counts, ordered by count desc.
+func GetCategories(db *sql.DB) ([]CategoryCount, error) {
+	rows, err := db.Query(`
+		SELECT category, count(*) as cnt
+		FROM sites WHERE crawl_status='success'
+		GROUP BY category ORDER BY cnt DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var cats []CategoryCount
+	for rows.Next() {
+		var c CategoryCount
+		if err := rows.Scan(&c.Name, &c.Count); err != nil {
+			continue
+		}
+		cats = append(cats, c)
+	}
+	return cats, rows.Err()
+}
+
+type CategoryCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
 }

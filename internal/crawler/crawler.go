@@ -15,7 +15,7 @@ import (
 )
 
 var client = &http.Client{
-	Timeout: 10 * time.Second,
+	Timeout: 15 * time.Second,
 	CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 3 {
 			return fmt.Errorf("too many redirects")
@@ -24,7 +24,7 @@ var client = &http.Client{
 	},
 }
 
-const userAgent = "NotHumanSearch/1.0 (+https://nothumansearch.com/about)"
+const userAgent = "NotHumanSearch/1.0 (+https://nothumansearch.ai/about)"
 
 func fetch(rawURL string) (string, int, error) {
 	req, err := http.NewRequest("GET", rawURL, nil)
@@ -36,7 +36,11 @@ func fetch(rawURL string) (string, int, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", 0, err
+		// One retry on timeout
+		resp, err = client.Do(req)
+		if err != nil {
+			return "", 0, err
+		}
 	}
 	defer resp.Body.Close()
 
@@ -131,6 +135,37 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 				site.HasRobotsAI = true
 				break
 			}
+		}
+	}
+
+	// Check for MCP server support
+	for _, path := range []string{"/.well-known/mcp.json", "/mcp.json", "/.well-known/mcp-server.json"} {
+		if body, status, err := fetch(base + path); err == nil && status == 200 {
+			var mcpManifest map[string]interface{}
+			if json.Unmarshal([]byte(body), &mcpManifest) == nil {
+				// Valid JSON with MCP-like structure
+				if _, hasName := mcpManifest["name"]; hasName {
+					site.HasMCPServer = true
+					if endpoint, ok := mcpManifest["endpoint"].(string); ok {
+						site.MCPEndpoint = endpoint
+					} else if url, ok := mcpManifest["url"].(string); ok {
+						site.MCPEndpoint = url
+					}
+					break
+				}
+				if _, hasTools := mcpManifest["tools"]; hasTools {
+					site.HasMCPServer = true
+					break
+				}
+			}
+		}
+	}
+	// Also check if llms.txt or homepage mentions MCP
+	if !site.HasMCPServer {
+		contentToCheck := strings.ToLower(site.LLMsTxtContent + " " + site.Description)
+		if strings.Contains(contentToCheck, "mcp server") || strings.Contains(contentToCheck, "mcp endpoint") ||
+			strings.Contains(contentToCheck, "model context protocol") || strings.Contains(contentToCheck, "mcp-server") {
+			site.HasMCPServer = true
 		}
 	}
 

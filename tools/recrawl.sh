@@ -23,13 +23,13 @@ fly ssh console -a nothumansearch -C "/app/crawler -recrawl -workers 10" >> "$LO
 curl -s -X POST "https://api.indexnow.org/indexnow" \
   -H "Content-Type: application/json" \
   -d '{
-    "host": "nothumansearch.fly.dev",
+    "host": "nothumansearch.ai",
     "key": "bb1637af360f471ab2a1555d45d683ea",
-    "keyLocation": "https://nothumansearch.fly.dev/bb1637af360f471ab2a1555d45d683ea.txt",
+    "keyLocation": "https://nothumansearch.ai/bb1637af360f471ab2a1555d45d683ea.txt",
     "urlList": [
-      "https://nothumansearch.fly.dev/",
-      "https://nothumansearch.fly.dev/about",
-      "https://nothumansearch.fly.dev/sitemap.xml"
+      "https://nothumansearch.ai/",
+      "https://nothumansearch.ai/about",
+      "https://nothumansearch.ai/sitemap.xml"
     ]
   }' >> /dev/null 2>&1 || true
 

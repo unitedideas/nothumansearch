@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -54,6 +57,19 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.writeJSON(w, 500, map[string]string{"error": "search failed"})
 		return
+	}
+
+	// Log search query for analytics (non-blocking)
+	if params.Query != "" {
+		go func() {
+			ip := r.Header.Get("X-Forwarded-For")
+			if ip == "" {
+				ip = strings.Split(r.RemoteAddr, ":")[0]
+			}
+			hash := sha256.Sum256([]byte(ip))
+			ipHash := hex.EncodeToString(hash[:8])
+			models.LogSearch(h.DB, params.Query, total, r.UserAgent(), ipHash)
+		}()
 	}
 
 	h.writeJSON(w, 200, map[string]interface{}{
@@ -129,5 +145,17 @@ func (h *APIHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		"total_sites":  totalSites,
 		"avg_score":    avgScore,
 		"top_category": topCategory,
+	})
+}
+
+// GET /api/v1/categories
+func (h *APIHandler) Categories(w http.ResponseWriter, r *http.Request) {
+	cats, err := models.GetCategories(h.DB)
+	if err != nil {
+		h.writeJSON(w, 500, map[string]string{"error": "failed to get categories"})
+		return
+	}
+	h.writeJSON(w, 200, map[string]interface{}{
+		"categories": cats,
 	})
 }

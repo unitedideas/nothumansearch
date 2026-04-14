@@ -21,8 +21,9 @@ type Site struct {
 	HasMCPServer    bool `json:"has_mcp_server"`
 	HasSchemaOrg    bool `json:"has_schema_org"`
 
-	LLMsTxtContent string  `json:"llms_txt_content,omitempty"`
-	OpenAPISummary string  `json:"openapi_summary,omitempty"`
+	LLMsTxtContent string `json:"llms_txt_content,omitempty"`
+	OpenAPISummary string `json:"openapi_summary,omitempty"`
+	MCPEndpoint    string `json:"mcp_endpoint,omitempty"`
 
 	AgenticScore int            `json:"agentic_score"`
 	Category     string         `json:"category"`

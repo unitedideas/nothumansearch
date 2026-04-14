@@ -10,7 +10,7 @@ var SeedSites = []struct {
 	{"https://aidevboard.com", true},
 	{"https://8bitconcepts.com", true},
 	{"https://agentcanary.com", true},
-	{"https://nothumansearch.fly.dev", true},
+	{"https://nothumansearch.ai", true},
 
 	// Major AI platforms (known agent-ready)
 	{"https://platform.openai.com", false},
@@ -462,4 +462,163 @@ var SeedSites = []struct {
 	{"https://sourcegraph.com", false},
 	{"https://codeium.com", false},
 	{"https://cursor.com", false},
+
+	// MCP Infrastructure
+	{"https://mcpservers.org", false},
+	{"https://mcpmarket.com", false},
+	{"https://stagehand.dev", false},
+
+	// AI Agent Observability / LLMOps
+	{"https://agentops.ai", false},
+	{"https://langfuse.com", false},
+	{"https://helicone.ai", false},
+	{"https://braintrust.dev", false},
+	{"https://arize.com", false},
+	{"https://openpipe.ai", false},
+	{"https://galileo.ai", false},
+
+	// AI Agent Orchestration
+	{"https://langflow.org", false},
+	{"https://flowiseai.com", false},
+	{"https://botpress.com", false},
+	{"https://voiceflow.com", false},
+	{"https://activepieces.com", false},
+	{"https://dify.ai", false},
+	{"https://agno.ai", false},
+	{"https://mastra.ai", false},
+	{"https://vellum.ai", false},
+
+	// AI Search APIs
+	{"https://brave.com/search/api", false},
+	{"https://you.com", false},
+
+	// Document AI / OCR
+	{"https://reducto.ai", false},
+	{"https://mathpix.com", false},
+
+	// Voice / Speech APIs
+	{"https://cartesia.ai", false},
+	{"https://lmnt.com", false},
+
+	// Image / Video / 3D Generation
+	{"https://fal.ai", false},
+	{"https://pika.art", false},
+	{"https://tripo3d.ai", false},
+
+	// Music / Audio APIs
+	{"https://loudly.com", false},
+	{"https://lalal.ai", false},
+	{"https://mubert.com", false},
+
+	// Vector Databases
+	{"https://milvus.io", false},
+	{"https://zilliz.com", false},
+
+	// Real Estate APIs
+	{"https://attomdata.com", false},
+	{"https://rentcast.io", false},
+	{"https://housecanary.com", false},
+	{"https://estated.com", false},
+
+	// Legal Tech APIs
+	{"https://sec-api.io", false},
+	{"https://courtlistener.org", false},
+
+	// Sports Data APIs
+	{"https://sportradar.com", false},
+	{"https://sportsdata.io", false},
+	{"https://api-sports.io", false},
+	{"https://sportmonks.com", false},
+	{"https://thesportsdb.com", false},
+
+	// Wearables / Fitness APIs
+	{"https://tryterra.co", false},
+	{"https://sahha.ai", false},
+
+	// Food / Nutrition APIs
+	{"https://spoonacular.com", false},
+	{"https://edamam.com", false},
+	{"https://nutritionix.com", false},
+
+	// Environmental / Climate APIs
+	{"https://climatiq.io", false},
+	{"https://open-meteo.com", false},
+	{"https://getambee.com", false},
+
+	// Supply Chain / Freight APIs
+	{"https://flexport.com", false},
+	{"https://shipengine.com", false},
+	{"https://fleetbase.io", false},
+
+	// Bioinformatics APIs
+	{"https://uniprot.org", false},
+	{"https://rcsb.org", false},
+
+	// Fintech / Banking Infrastructure
+	{"https://moderntreasury.com", false},
+	{"https://moov.io", false},
+	{"https://lithic.com", false},
+	{"https://column.com", false},
+	{"https://increase.com", false},
+	{"https://mangopay.com", false},
+	{"https://getlago.com", false},
+	{"https://tryfinch.com", false},
+
+	// Identity / KYC / Fraud APIs
+	{"https://withpersona.com", false},
+	{"https://onfido.com", false},
+	{"https://socure.com", false},
+	{"https://alloy.com", false},
+
+	// Data Enrichment / B2B APIs
+	{"https://clay.com", false},
+	{"https://apollo.io", false},
+	{"https://peopledatalabs.com", false},
+	{"https://proxycurl.com", false},
+
+	// Healthcare APIs
+	{"https://www.metriport.com", false},
+
+	// Cybersecurity / Threat Intel
+	{"https://shodan.io", false},
+	{"https://greynoise.io", false},
+
+	// Maps / Geospatial
+	{"https://protomaps.com", false},
+	{"https://overturemaps.org", false},
+	{"https://felt.com", false},
+
+	// Travel APIs
+	{"https://duffel.com", false},
+	{"https://kiwi.com", false},
+
+	// HR / Payroll Unified APIs
+	{"https://merge.dev", false},
+
+	// E-commerce Product Data APIs
+	{"https://serpapi.com", false},
+
+	// Email (newer)
+	{"https://loops.so", false},
+
+	// Agentic Infra / Code Execution
+	{"https://www.browsercat.com", false},
+
+	// llms.txt early adopters
+	{"https://mintlify.com", false},
+	{"https://tinybird.co", false},
+	{"https://flatfile.com", false},
+	{"https://plain.com", false},
+	{"https://inkeep.com", false},
+	{"https://axiom.co", false},
+	{"https://openphone.com", false},
+	{"https://smartcar.com", false},
+	{"https://stedi.com", false},
+	{"https://infisical.com", false},
+	{"https://screenshotone.com", false},
+	{"https://buildwithfern.com", false},
+	{"https://tryvital.io", false},
+	{"https://projectdiscovery.io", false},
+	{"https://conductor.is", false},
+	{"https://ionq.com", false},
 }

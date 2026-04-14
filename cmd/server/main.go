@@ -43,7 +43,7 @@ func main() {
 	templatesDir := filepath.Join(projectRoot, "templates")
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://nothumansearch.fly.dev"
+		baseURL = "https://nothumansearch.ai"
 	}
 
 	webHandler, err := handlers.NewWebHandler(database.DB, templatesDir)
@@ -89,9 +89,10 @@ func main() {
 	mux.HandleFunc("/api/v1/site/", apiHandler.GetSite)
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
+	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
 
-	// Middleware chain: logging → CORS → handler
-	handler := loggingMiddleware(corsMiddleware(mux))
+	// Middleware chain: logging → domain redirect → CORS → handler
+	handler := loggingMiddleware(domainRedirectMiddleware(corsMiddleware(mux)))
 
 	log.Printf("Not Human Search starting on :%s", *port)
 	srv := &http.Server{
@@ -119,6 +120,30 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		log.Printf("%s %s %s %s", r.Method, r.URL.RequestURI(), r.UserAgent(), time.Since(start).Round(time.Millisecond))
+	})
+}
+
+// domainRedirectMiddleware redirects .com → .ai and www → apex
+func domainRedirectMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		// Strip port if present
+		if idx := strings.LastIndex(host, ":"); idx != -1 {
+			host = host[:idx]
+		}
+		// Redirect nothumansearch.com → nothumansearch.ai (canonical)
+		// Redirect www variants → apex
+		switch host {
+		case "nothumansearch.com", "www.nothumansearch.com":
+			target := "https://nothumansearch.ai" + r.URL.RequestURI()
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			return
+		case "www.nothumansearch.ai":
+			target := "https://nothumansearch.ai" + r.URL.RequestURI()
+			http.Redirect(w, r, target, http.StatusMovedPermanently)
+			return
+		}
+		next.ServeHTTP(w, r)
 	})
 }
 

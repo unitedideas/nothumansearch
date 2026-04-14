@@ -6,6 +6,7 @@ primary_region = 'sjc'
 [env]
   PORT = '8091'
   APP_ROOT = '/app'
+  BASE_URL = 'https://nothumansearch.ai'
 
 [http_service]
   internal_port = 8091
