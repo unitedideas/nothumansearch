@@ -59,45 +59,54 @@ func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, `# Not Human Search
-> The search engine for AI agents. Find websites ranked by agentic readiness.
+> The Google for AI agents. Find any service, API, or tool — ranked by agentic readiness.
 
-Not Human Search indexes websites and scores them on how well they serve AI agents.
-We check for: llms.txt, ai-plugin.json, OpenAPI specs, structured APIs, robots.txt AI bot rules, Schema.org markup, and MCP server endpoints.
+Not Human Search is an agentic-first search engine. When your AI agent needs to discover a payment API, a job board, an ecommerce platform, or any web service, NHS returns results ranked by how well each site serves non-human users.
 
-## Stats
-- %d sites indexed
-- Scores range 0-100 (higher = more agent-ready)
+We index %d+ sites and score them 0-100 based on 7 agentic signals: llms.txt, ai-plugin.json, OpenAPI specs, structured APIs, MCP servers, robots.txt AI rules, and Schema.org markup.
 
-## API
+## Quick Start — Search the Agentic Web
+GET %s/api/v1/search?q=payment+API
+GET %s/api/v1/search?q=AI+jobs
+GET %s/api/v1/search?q=ecommerce+api
+GET %s/api/v1/search?q=weather+data
+GET %s/api/v1/search?q=authentication
+
+## API Reference
 Base URL: %s/api/v1
 
-### Search for agent-ready sites
-GET /api/v1/search?q={query}&category={category}&min_score={0-100}&has_api=true&page={n}
+### Search
+GET /search?q={query}&category={cat}&min_score={0-100}&has_api=true&page={n}
+Returns: {results: [{domain, name, description, agentic_score, category, tags, signals...}], total, page, has_next}
 
-### Get site details
-GET /api/v1/site/{domain}
+### Site Details
+GET /site/{domain}
+Returns: full site profile with llms.txt content, OpenAPI summary, all signals
 
-### Submit a site for crawling
-POST /api/v1/submit
-Body: {"url": "https://example.com"}
+### Submit a Site
+POST /submit  Body: {"url": "https://example.com"}
+We crawl immediately and add it to the index.
 
-### Get index stats
-GET /api/v1/stats
+### Stats
+GET /stats
 
-## Agentic Signals We Check
-- llms.txt (/.well-known/llms.txt) — 25 points
-- ai-plugin.json (/.well-known/ai-plugin.json) — 20 points
-- OpenAPI spec (/openapi.yaml or /openapi.json) — 20 points
-- Structured API (/api, /docs) — 15 points
-- MCP server — 10 points
-- robots.txt AI bot rules — 5 points
-- Schema.org markup — 5 points
+## Categories
+ai-tools, developer, data, finance, ecommerce, jobs, security, health, and more.
+
+## Scoring (0-100)
+- llms.txt: 25 pts
+- ai-plugin.json: 20 pts
+- OpenAPI spec: 20 pts
+- Structured API: 15 pts
+- MCP server: 10 pts
+- robots.txt AI rules: 5 pts
+- Schema.org: 5 pts
 
 ## Links
-- Website: %s
-- API: %s/api/v1/search
-- Submit: %s/api/v1/submit
-`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+- Search: %s/api/v1/search?q=
+- OpenAPI: %s/openapi.yaml
+- Plugin: %s/.well-known/ai-plugin.json
+`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
