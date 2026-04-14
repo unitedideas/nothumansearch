@@ -3,8 +3,27 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}} — Not Human Search</title>
-    <meta name="description" content="Agentic readiness report for {{.Domain}}. Score: {{.AgenticScore}}/100.">
+    <title>{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}} — Agentic Readiness {{.AgenticScore}}/100 — Not Human Search</title>
+    <meta name="description" content="Agentic readiness report for {{.Domain}}. Score: {{.AgenticScore}}/100. {{if .Description}}{{.Description}}{{end}}">
+    <meta property="og:title" content="{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}} — Agentic Readiness {{.AgenticScore}}/100">
+    <meta property="og:description" content="{{if .Description}}{{.Description}}{{end}} Agentic readiness score: {{.AgenticScore}}/100.">
+    <meta property="og:type" content="article">
+    <meta name="twitter:card" content="summary">
+    <link rel="canonical" href="https://nothumansearch.fly.dev/site/{{.Domain}}">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "name": "{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}} — Agentic Readiness Report",
+        "description": "Agentic readiness score: {{.AgenticScore}}/100 for {{.Domain}}",
+        "url": "https://nothumansearch.fly.dev/site/{{.Domain}}",
+        "isPartOf": {
+            "@type": "WebSite",
+            "name": "Not Human Search",
+            "url": "https://nothumansearch.fly.dev"
+        }
+    }
+    </script>
     <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -88,6 +107,11 @@
                 <div class="score-label">Agentic Readiness Score</div>
             </div>
         </div>
+
+        {{if .Tags}}<div style="margin:16px 0;display:flex;gap:6px;flex-wrap:wrap;">
+            <span style="padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--accent);">{{.Category}}</span>
+            {{range .Tags}}<span style="padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--text-muted);">{{.}}</span>{{end}}
+        </div>{{end}}
 
         <div class="signals">
             <h2 style="font-size:18px;font-weight:600;margin-bottom:12px;">Agentic Signals</h2>
