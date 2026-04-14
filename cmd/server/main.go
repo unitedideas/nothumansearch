@@ -107,12 +107,12 @@ func main() {
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip health checks and static assets from logging
-		if r.URL.Path == "/" && r.Method == "GET" && r.Header.Get("Fly-Forwarded-Port") == "" {
+		// Skip static assets and Fly health checks from logging
+		if strings.HasPrefix(r.URL.Path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/static/") {
+		if r.UserAgent() == "Fly-HealthCheck" {
 			next.ServeHTTP(w, r)
 			return
 		}

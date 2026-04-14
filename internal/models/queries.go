@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/lib/pq"
@@ -158,6 +159,7 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			&s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
+			log.Printf("scan error: %v", err)
 			continue
 		}
 		s.Tags = tags
