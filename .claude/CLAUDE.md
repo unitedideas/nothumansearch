@@ -47,4 +47,7 @@ fly ssh console -a nothumansearch -C "/app/crawler -recrawl -workers 10"
 
 # Crawl single site
 fly ssh console -a nothumansearch -C "/app/crawler -url https://example.com"
+
+# Bulk crawl from file (one domain per line, skips comments/#)
+fly ssh console -a nothumansearch -C "/app/crawler -file /tmp/urls.txt -workers 10"
 ```

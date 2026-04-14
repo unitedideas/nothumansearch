@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -18,6 +19,7 @@ func main() {
 	seed := flag.Bool("seed", false, "Crawl seed sites")
 	recrawl := flag.Bool("recrawl", false, "Re-crawl all sites in the database")
 	url := flag.String("url", "", "Crawl a single URL")
+	file := flag.String("file", "", "Crawl URLs from a file (one per line)")
 	dryRun := flag.Bool("dry-run", false, "Crawl but don't save to DB")
 	workers := flag.Int("workers", 5, "Number of concurrent crawlers")
 	flag.Parse()
@@ -43,6 +45,11 @@ func main() {
 		return
 	}
 
+	if *file != "" {
+		crawlFile(*file, *workers, *dryRun)
+		return
+	}
+
 	if *seed {
 		crawlSeeds(*workers, *dryRun)
 		return
@@ -57,6 +64,7 @@ func main() {
 	fmt.Println("  crawler -seed              Crawl all seed sites")
 	fmt.Println("  crawler -recrawl           Re-crawl all DB sites")
 	fmt.Println("  crawler -url https://...   Crawl a single URL")
+	fmt.Println("  crawler -file urls.txt     Crawl URLs from file")
 	fmt.Println("  crawler -dry-run -seed     Crawl without saving")
 }
 
@@ -79,6 +87,75 @@ func crawlOne(rawURL string, dryRun bool) {
 		}
 		log.Println("Saved to database")
 	}
+}
+
+func crawlFile(path string, numWorkers int, dryRun bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Fatalf("open file: %v", err)
+	}
+	defer f.Close()
+
+	var urls []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if !strings.HasPrefix(line, "http") {
+			line = "https://" + line
+		}
+		urls = append(urls, line)
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("read file: %v", err)
+	}
+
+	log.Printf("Crawling %d URLs from %s with %d workers...", len(urls), path, numWorkers)
+
+	jobs := make(chan string, len(urls))
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var success, failed int
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for u := range jobs {
+				site, err := crawler.CrawlSite(u)
+				if err != nil {
+					mu.Lock()
+					failed++
+					mu.Unlock()
+					log.Printf("FAIL: %s: %v", u, err)
+					continue
+				}
+				if !dryRun {
+					if err := models.UpsertSite(database.DB, site); err != nil {
+						log.Printf("SAVE FAIL: %s: %v", u, err)
+						mu.Lock()
+						failed++
+						mu.Unlock()
+						continue
+					}
+				}
+				mu.Lock()
+				success++
+				mu.Unlock()
+				printSite(site)
+			}
+		}()
+	}
+
+	for _, u := range urls {
+		jobs <- u
+	}
+	close(jobs)
+	wg.Wait()
+
+	log.Printf("Done. Success: %d, Failed: %d, Total: %d", success, failed, len(urls))
 }
 
 func crawlSeeds(numWorkers int, dryRun bool) {

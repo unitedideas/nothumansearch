@@ -5,3 +5,12 @@
 .claude/*.local.md
 /crawler
 /server
+
+# Bulk seed data files — not tracked
+bulk_seeds.txt
+bulk_seeds_deduped.txt
+llmstxt_domains.txt
+new_domains.txt
+pulsemcp_domains.txt
+tools/*.log
+tools/*.err
