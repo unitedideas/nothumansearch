@@ -299,32 +299,47 @@ func crawlSeeds(numWorkers int, dryRun bool) {
 }
 
 func recrawlAll(numWorkers int) {
-	// First, process any pending submissions
+	// First, process any pending submissions — parallelized to match the recrawl
+	// worker count. Serial processing made 500 submissions take ~25 min at 3s/site,
+	// blocking the rest of the recrawl.
 	rows, err := database.DB.Query("SELECT url FROM submissions WHERE status='pending' LIMIT 500")
 	if err == nil {
-		defer rows.Close()
 		var pendingURLs []string
 		for rows.Next() {
 			var u string
 			rows.Scan(&u)
 			pendingURLs = append(pendingURLs, u)
 		}
+		rows.Close()
 		if len(pendingURLs) > 0 {
-			log.Printf("Processing %d pending submissions...", len(pendingURLs))
-			for _, u := range pendingURLs {
-				site, err := crawler.CrawlSite(u)
-				if err != nil {
-					log.Printf("FAIL submission %s: %v", u, err)
-					database.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", u)
-					continue
-				}
-				if err := models.UpsertSite(database.DB, site); err != nil {
-					log.Printf("SAVE FAIL %s: %v", u, err)
-					continue
-				}
-				database.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", u)
-				printSite(site)
+			log.Printf("Processing %d pending submissions with %d workers...", len(pendingURLs), numWorkers)
+			submitCh := make(chan string, len(pendingURLs))
+			var subWG sync.WaitGroup
+			for w := 0; w < numWorkers; w++ {
+				subWG.Add(1)
+				go func() {
+					defer subWG.Done()
+					for u := range submitCh {
+						site, err := crawler.CrawlSite(u)
+						if err != nil {
+							log.Printf("FAIL submission %s: %v", u, err)
+							database.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", u)
+							continue
+						}
+						if err := models.UpsertSite(database.DB, site); err != nil {
+							log.Printf("SAVE FAIL %s: %v", u, err)
+							continue
+						}
+						database.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", u)
+						printSite(site)
+					}
+				}()
 			}
+			for _, u := range pendingURLs {
+				submitCh <- u
+			}
+			close(submitCh)
+			subWG.Wait()
 		}
 	}
 

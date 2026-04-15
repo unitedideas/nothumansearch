@@ -107,6 +107,8 @@ func main() {
 	})
 	mux.HandleFunc("/site/", webHandler.SitePage)
 	mux.HandleFunc("/mcp-servers", webHandler.MCPServersPage)
+	mux.HandleFunc("/ai-tools", webHandler.AIToolsPage)
+	mux.HandleFunc("/developer-apis", webHandler.DeveloperPage)
 
 	// API
 	mux.HandleFunc("/api/v1/search", apiHandler.Search)

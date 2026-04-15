@@ -398,6 +398,8 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	// Static pages
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/", ChangeFreq: "daily", Priority: "1.0"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/mcp-servers", ChangeFreq: "daily", Priority: "0.9"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/ai-tools", ChangeFreq: "daily", Priority: "0.9"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/developer-apis", ChangeFreq: "daily", Priority: "0.9"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/about", ChangeFreq: "weekly", Priority: "0.5"})
 
 	// Site pages

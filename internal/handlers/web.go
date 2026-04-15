@@ -116,38 +116,83 @@ func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 // in the index. Canonical URL /mcp-servers — targets the "mcp server
 // directory" query class without the noise from /?q=mcp.
 func (h *WebHandler) MCPServersPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "mcp-servers",
+		Path:       "/mcp-servers",
+		Title:      "MCP Server Directory — Browse All Model Context Protocol Servers | Not Human Search",
+		Desc:       "Complete directory of MCP servers ranked by agentic readiness. Find Model Context Protocol endpoints for every AI agent use case — search, data, automation, commerce, and more.",
+		Heading:    "MCP Server Directory",
+		Subheading: "Every Model Context Protocol server in our index, ranked by agentic readiness score.",
+		Params:     models.SearchParams{HasMCP: true, Limit: 30},
+	})
+}
+
+// AIToolsPage: /ai-tools landing — targets "AI tools directory" / "ai agent tools" queries.
+func (h *WebHandler) AIToolsPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "ai-tools",
+		Path:       "/ai-tools",
+		Title:      "AI Tools Directory — Browse Agent-Ready AI Tools & APIs | Not Human Search",
+		Desc:       "Curated directory of AI tools that expose llms.txt, OpenAPI, or MCP endpoints — ranked by how well they serve AI agents. The agent-native alternative to generic AI tool lists.",
+		Heading:    "AI Tools Directory",
+		Subheading: "Every AI tool in our index, ranked by agentic readiness. These are the tools AI agents can actually use programmatically.",
+		Params:     models.SearchParams{Category: "ai-tools", Limit: 30},
+	})
+}
+
+// DeveloperPage: /developer-apis — targets "developer API directory" / "agent-ready APIs" queries.
+func (h *WebHandler) DeveloperPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "developer",
+		Path:       "/developer-apis",
+		Title:      "Developer API Directory — Agent-Ready APIs for AI Engineers | Not Human Search",
+		Desc:       "Every developer API in our index that AI agents can discover and call — ranked by agentic readiness. Find APIs with OpenAPI specs, llms.txt, ai-plugin.json, or MCP endpoints.",
+		Heading:    "Developer API Directory",
+		Subheading: "Every developer API in our index, ranked by agentic readiness. All entries expose at least one programmatic signal agents can discover at build time.",
+		Params:     models.SearchParams{Category: "developer", Limit: 30},
+	})
+}
+
+type categoryLanding struct {
+	Mode       string
+	Path       string
+	Title      string
+	Desc       string
+	Heading    string
+	Subheading string
+	Params     models.SearchParams
+}
+
+func (h *WebHandler) renderCategoryLanding(w http.ResponseWriter, r *http.Request, c categoryLanding) {
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
 			page = pn
 		}
 	}
+	c.Params.Page = page
 
-	params := models.SearchParams{
-		HasMCP: true,
-		Limit:  30,
-		Page:   page,
-	}
-	sites, total, err := models.SearchSites(h.DB, params)
+	sites, total, err := models.SearchSites(h.DB, c.Params)
 	if err != nil {
-		log.Printf("mcp-servers search: %v", err)
+		log.Printf("%s search: %v", c.Path, err)
 	}
 
 	totalSites, avgScore, _ := models.GetStats(h.DB)
 
 	data := map[string]interface{}{
-		"Mode":       "mcp-servers",
-		"PageTitle":  "MCP Server Directory — Browse All Model Context Protocol Servers | Not Human Search",
-		"PageDesc":   "Complete directory of MCP servers ranked by agentic readiness. Find Model Context Protocol endpoints for every AI agent use case — search, data, automation, commerce, and more.",
-		"Heading":    "MCP Server Directory",
-		"Subheading": "Every Model Context Protocol server in our index, ranked by agentic readiness score.",
+		"Mode":       c.Mode,
+		"PageTitle":  c.Title,
+		"PageDesc":   c.Desc,
+		"Heading":    c.Heading,
+		"Subheading": c.Subheading,
 		"Sites":      sites,
 		"Total":      total,
 		"Page":       page,
-		"HasNext":    page*30 < total,
+		"HasNext":    page*c.Params.Limit < total,
 		"TotalSites": totalSites,
 		"AvgScore":   avgScore,
-		"Canonical":  "https://nothumansearch.ai/mcp-servers",
+		"Canonical":  "https://nothumansearch.ai" + c.Path,
+		"BasePath":   c.Path,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
