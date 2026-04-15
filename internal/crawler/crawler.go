@@ -1088,6 +1088,86 @@ func categorize(site *models.Site) string {
 		"nextiva.com":      "communication",
 		"claspo.io":        "developer",
 		"brandefense.io":   "security",
+
+		// Batch 6: post-bulk-crawl "other" cleanup (2026-04-14)
+		// Developer / DevTools
+		"trunk.io":              "developer",
+		"semgrep.com":           "security",
+		"searchcode.com":        "developer",
+		"parseable.com":         "developer",
+		"donobu.com":            "developer",
+		"transloadit.com":       "developer",
+		"dalfox.hahwul.com":     "security",
+		"prisma.io":             "developer",
+		"tolgee.io":             "developer",
+		"scalekit.com":          "security",
+		"justrunmy.app":         "developer",
+		"better-auth.com":       "security",
+		"arcjet.com":            "security",
+		"skyvern.com":           "developer",
+		"gofastmcp.com":         "developer",
+		"control-plane.io":      "developer",
+		"fault-project.com":     "developer",
+		"webflow.com":           "developer",
+		"launchdarkly.com":      "developer",
+		"mcpserver.space":       "developer",
+		"dxt.services":          "developer",
+		"pipeboard.co":          "developer",
+		"docspring.com":         "developer",
+		"iplocate.io":           "data",
+		"webnode.com":           "developer",
+		"wordpress.com":         "developer",
+		"twittershots.com":      "developer",
+		"rhino-inquisitor.com":  "developer",
+		"rolalabs.in":           "developer",
+		"anytrack.io":           "developer",
+
+		// AI-Tools
+		"quicktranscript.app":   "ai-tools",
+		"necto.co":              "ai-tools",
+		"findmine.com":          "ai-tools",
+		"restorephoto.online":   "ai-tools",
+		"hypestudio.org":        "ai-tools",
+		"aipageready.com":       "ai-tools",
+		"promptpilot.online":    "ai-tools",
+		"blueshift.com":         "ai-tools",
+		"miro.com":              "ai-tools",
+		"rankability.com":       "ai-tools",
+
+		// Data
+		"lotsofcsvs.com":        "data",
+		"dataforseo.com":        "data",
+		"datastax.com":          "data",
+		"theirstack.com":        "data",
+		"builtwith.com":         "data",
+
+		// Ecommerce
+		"newnorm.shop":          "ecommerce",
+		"sweetandbrew.com":      "ecommerce",
+		"bwstays.com":           "ecommerce",
+		"greetwell.com":         "ecommerce",
+		"maplebridge.io":        "ecommerce",
+		"alleastbayproperties.com": "ecommerce",
+		"printify":              "ecommerce",
+
+		// Productivity
+		"waitlister.me":         "productivity",
+		"youropinion.is":        "productivity",
+		"thecrawltool.com":      "productivity",
+		"semalt.com":            "productivity",
+		"gravitywp.com":         "productivity",
+
+		// News
+		"informedclearly.com":   "news",
+		"zadar.tv":              "news",
+
+		// Jobs
+		"upstaff.com":           "jobs",
+		"unautomated.xyz":       "jobs",
+
+		// Finance
+		"govtribe.com":          "finance",
+		"tip.md":                "finance",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
