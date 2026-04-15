@@ -1459,6 +1459,15 @@ func categorize(site *models.Site) string {
 		"barevalue.com":          "productivity",
 		"open.bigmodel.cn":       "ai-tools",
 		"agentbazaar.tech":       "ai-tools",
+
+		// Batch 12: 2026-04-15 session end — remaining clear "other" wins
+		"ifr.spocont.com":              "finance",
+		"booboooking.com":               "productivity",
+		"doktor.mx":                     "health",
+		"cloudlatitude.io":              "developer",
+		"custom-icon-badges.demolab.com": "developer",
+		"agent.cryptopolitan.com":       "finance",
+		"theysaidso.com":                "data",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
