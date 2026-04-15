@@ -172,8 +172,8 @@ func main() {
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", mcpHandler)
 
-	// Middleware chain: logging → domain redirect → CORS → handler
-	handler := loggingMiddleware(domainRedirectMiddleware(corsMiddleware(mux)))
+	// Middleware chain: logging → domain redirect → security → CORS → handler
+	handler := loggingMiddleware(domainRedirectMiddleware(securityHeadersMiddleware(corsMiddleware(mux))))
 
 	log.Printf("Not Human Search starting on :%s", *port)
 	srv := &http.Server{
@@ -224,6 +224,20 @@ func domainRedirectMiddleware(next http.Handler) http.Handler {
 			http.Redirect(w, r, target, http.StatusMovedPermanently)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// securityHeadersMiddleware adds standard hardening headers to every response.
+// HSTS is 1yr with preload-eligible flags; NHS has been HTTPS-only since launch.
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 		next.ServeHTTP(w, r)
 	})
 }
