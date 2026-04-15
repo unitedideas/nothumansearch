@@ -1,5 +1,6 @@
--- Monitors: subscribers who want email alerts when a site's agentic readiness
--- drops. One email can watch many domains; one domain can have many watchers.
+-- Monitors: email subscribers who want alerts when a site's agentic
+-- readiness drops. Many-to-many between emails and domains, so one email
+-- can watch many domains and one domain can have many watchers.
 -- Each subscription gets an unguessable token for unsubscribe links.
 
 CREATE TABLE IF NOT EXISTS monitors (
