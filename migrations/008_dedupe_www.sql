@@ -3,8 +3,8 @@
 -- lowercased) so future UPSERTs stay unique automatically.
 
 -- Delete the www. duplicate when a non-www counterpart exists.
--- Keep the better of the two by preferring the higher agentic_score; if
--- scores tie, keep the non-www row (the canonical form).
+-- Keep the better of the two by preferring the higher agentic_score.
+-- On ties the non-www row wins (it is the canonical form).
 DELETE FROM sites w
 USING sites c
 WHERE w.domain LIKE 'www.%'
