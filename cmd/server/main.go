@@ -93,6 +93,20 @@ func main() {
 	})
 
 	// SEO / GEO
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		// Simple DB-reachability check. Returns 200 + body "ok" if Postgres
+		// responds to a trivial ping within 2s, else 503. Used by Fly
+		// machine checks + external uptime monitors.
+		w.Header().Set("Cache-Control", "no-store")
+		if err := database.DB.Ping(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(503)
+			w.Write([]byte(`{"status":"degraded","db":"unreachable"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok","db":"ok"}`))
+	})
 	mux.HandleFunc("/robots.txt", seoHandler.Robots)
 	mux.HandleFunc("/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/.well-known/llms.txt", seoHandler.LLMsTxt)
