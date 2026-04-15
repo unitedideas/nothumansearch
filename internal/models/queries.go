@@ -296,3 +296,38 @@ type CategoryCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
 }
+
+// TagCount is a single tag and the number of agent-first sites carrying it.
+type TagCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// TopTags returns the most popular tags across the index, filtered to
+// slug-safe tags with at least 2 sites (matches /tag/{name} landing gate).
+func TopTags(db *sql.DB, limit int) ([]TagCount, error) {
+	if limit <= 0 {
+		limit = 12
+	}
+	rows, err := db.Query(`
+		SELECT tag, COUNT(*) AS n
+		  FROM (SELECT unnest(tags) AS tag FROM sites
+		        WHERE `+AgentFirstFilter+`) t
+		 WHERE tag ~ '^[a-z0-9-]+$'
+		 GROUP BY tag HAVING COUNT(*) >= 2
+		 ORDER BY n DESC, tag ASC
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []TagCount
+	for rows.Next() {
+		var t TagCount
+		if err := rows.Scan(&t.Name, &t.Count); err != nil {
+			continue
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}

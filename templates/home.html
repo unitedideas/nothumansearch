@@ -268,6 +268,15 @@
         </div>
         {{end}}
 
+        {{if .PopularTags}}
+        <div class="popular-tags" style="margin: 18px 0 24px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+            <span style="color: var(--text-dim); font-size: 12px; margin-right: 4px;">Popular tags:</span>
+            {{range .PopularTags}}
+            <a href="/tag/{{.Name}}" class="tag-pill" style="font-size: 12px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 12px; color: var(--text-dim); text-decoration: none; transition: all .15s;">{{.Name}} <span style="opacity:.5;">{{.Count}}</span></a>
+            {{end}}
+        </div>
+        {{end}}
+
         {{if .Sites}}
         <div class="results-header">{{.Total}} {{if .Heading}}entries in this directory{{else}}sites found{{if .Query}} for "{{.Query}}"{{end}}{{end}}</div>
 
@@ -418,6 +427,7 @@
         </p>
         <p class="footer-text">
             <a href="/score">Score Your Site</a> &middot;
+            <a href="/guide">Agent-Ready Guide</a> &middot;
             <a href="/api/v1/search?q=">API</a> &middot;
             <a href="/feed.xml">RSS</a> &middot;
             <a href="/submit">Submit a Site</a> &middot;

@@ -122,13 +122,19 @@ ai-tools, developer, data, finance, ecommerce, jobs, security, health, education
 - robots.txt AI rules: 5 pts
 - Schema.org: 5 pts
 
+## Make Your Site Agent-Ready
+Step-by-step recipes for each of the 7 signals — copy-paste examples for llms.txt, ai-plugin.json, OpenAPI, MCP, and more.
+
+Guide: %s/guide
+Live scorer: %s/score
+
 ## Links
 - Search: %s/api/v1/search?q=
 - MCP Server Directory: %s/mcp-servers
 - Full Index: %s/llms-full.txt
 - OpenAPI: %s/openapi.yaml
 - Plugin: %s/.well-known/ai-plugin.json
-`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
@@ -432,6 +438,8 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/communication-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/jobs-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/about", ChangeFreq: "weekly", Priority: "0.5"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/guide", ChangeFreq: "weekly", Priority: "0.9"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/score", ChangeFreq: "weekly", Priority: "0.7"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed.xml", ChangeFreq: "hourly", Priority: "0.7"})
 	for _, cat := range []string{"ai-tools", "developer", "finance", "data", "ecommerce", "productivity", "security", "communication", "jobs"} {
 		sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed/" + cat + ".xml", ChangeFreq: "daily", Priority: "0.5"})

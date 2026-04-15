@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Make Your Site Agent-Ready — A Guide to llms.txt, OpenAPI, MCP & More | Not Human Search</title>
+    <meta name="description" content="Step-by-step guide to making your site discoverable by AI agents. Add llms.txt, expose an OpenAPI spec, ship an MCP server, and unlock the 7 signals NHS scores against.">
+    <meta property="og:title" content="How to Make Your Site Agent-Ready — A Guide to llms.txt, OpenAPI, MCP & More">
+    <meta property="og:description" content="Concrete recipes for the 7 agentic-readiness signals NHS scores against. Copy-paste examples for llms.txt, ai-plugin.json, OpenAPI, MCP, and robots.txt.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nothumansearch.ai/guide">
+    <meta property="og:site_name" content="Not Human Search">
+    <meta property="og:image" content="https://nothumansearch.ai/static/img/og-default.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="How to Make Your Site Agent-Ready">
+    <meta name="twitter:description" content="Step-by-step recipes for llms.txt, ai-plugin.json, OpenAPI, MCP, and the rest of the 7 NHS signals.">
+    <meta name="twitter:image" content="https://nothumansearch.ai/static/img/og-default.png">
+    <link rel="canonical" href="https://nothumansearch.ai/guide">
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "How to Make Your Site Agent-Ready",
+      "description": "Step-by-step recipes for llms.txt, ai-plugin.json, OpenAPI, MCP, and the rest of the 7 NHS agentic-readiness signals.",
+      "author": {"@type": "Organization", "name": "Not Human Search"},
+      "publisher": {"@type": "Organization", "name": "Not Human Search", "url": "https://nothumansearch.ai"},
+      "datePublished": "2026-04-15",
+      "dateModified": "2026-04-15",
+      "mainEntityOfPage": "https://nothumansearch.ai/guide",
+      "image": "https://nothumansearch.ai/static/img/og-default.png"
+    }
+    </script>
+    <style>
+        :root {
+            --bg: #0d0d0e; --surface: #141416; --border: #1f1f23;
+            --text: #e0e0e0; --text-muted: #888; --text-dim: #aaa; --accent: #d97757;
+            --green: #4ade80; --yellow: #facc15; --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+        .container { max-width:760px; margin:0 auto; padding:0 20px; }
+        header { padding:48px 0 32px; }
+        .logo { font-size:24px; font-weight:700; color:var(--text); letter-spacing:-1px; text-decoration:none; }
+        .logo span { color:var(--accent); }
+        h1 { font-size:32px; margin:24px 0 12px; line-height:1.25; }
+        .lede { font-size:17px; color:var(--text-dim); line-height:1.6; margin-bottom:32px; }
+        h2 { font-size:22px; margin:48px 0 8px; color:var(--accent); scroll-margin-top:24px; }
+        h2 .pts { font-size:13px; color:var(--text-muted); font-weight:500; margin-left:8px; }
+        h3 { font-size:15px; margin:20px 0 8px; color:var(--text); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+        p { color:var(--text-dim); line-height:1.7; margin-bottom:14px; font-size:15px; }
+        ul, ol { color:var(--text-dim); line-height:1.7; margin:0 0 16px 22px; font-size:15px; }
+        li { margin-bottom:6px; }
+        a { color:var(--accent); }
+        code { background:var(--surface); padding:2px 6px; border-radius:4px; font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--text); }
+        pre { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; overflow-x:auto; margin:12px 0 20px; font-size:13px; line-height:1.5; }
+        pre code { background:none; padding:0; color:var(--text); font-size:13px; }
+        .toc { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px 20px; margin:0 0 32px; }
+        .toc-title { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); margin-bottom:10px; }
+        .toc ol { margin:0 0 0 20px; font-size:14px; }
+        .toc a { text-decoration:none; }
+        .toc a:hover { text-decoration:underline; }
+        .signal-meta { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-muted); margin-bottom:8px; }
+        .callout { background:var(--surface); border-left:3px solid var(--accent); padding:14px 18px; margin:16px 0 24px; border-radius:0 8px 8px 0; font-size:14px; color:var(--text-dim); line-height:1.6; }
+        .callout strong { color:var(--text); }
+        .cta { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; margin:48px 0 32px; text-align:center; }
+        .cta h3 { color:var(--text); margin-bottom:8px; text-transform:none; letter-spacing:0; font-size:18px; }
+        .cta p { font-size:14px; margin-bottom:16px; }
+        .cta .btn { display:inline-block; background:var(--accent); color:#0d0d0e; padding:10px 20px; border-radius:6px; font-weight:600; text-decoration:none; font-size:14px; }
+        .cta .btn:hover { opacity:0.9; }
+        footer { padding:40px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; color:var(--text-muted); font-size:13px; }
+        footer a { color:var(--accent); text-decoration:none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo"><span>&gt;_</span> Not Human Search</a>
+        </header>
+
+        <h1>How to make your site agent-ready</h1>
+        <p class="lede">A practical guide to the 7 signals AI agents use to discover, understand, and call your site &mdash; with copy-paste examples you can ship today. Score yourself anytime at <a href="/score">/score</a>.</p>
+
+        <div class="toc">
+            <div class="toc-title">In this guide</div>
+            <ol>
+                <li><a href="#why">Why agent-readiness matters</a></li>
+                <li><a href="#llms-txt">llms.txt &mdash; the agent welcome mat</a></li>
+                <li><a href="#ai-plugin">ai-plugin.json &mdash; ChatGPT &amp; plugin manifests</a></li>
+                <li><a href="#openapi">OpenAPI spec &mdash; the machine-readable contract</a></li>
+                <li><a href="#api">Structured API endpoints</a></li>
+                <li><a href="#mcp">MCP server &mdash; the live tool surface</a></li>
+                <li><a href="#robots-ai">robots.txt rules for AI crawlers</a></li>
+                <li><a href="#schema">Schema.org structured data</a></li>
+                <li><a href="#submit">Submit &amp; verify</a></li>
+            </ol>
+        </div>
+
+        <h2 id="why">Why agent-readiness matters</h2>
+        <p>The web was designed for humans pointing browsers at HTML. AI agents &mdash; coding copilots, research assistants, autonomous shoppers &mdash; need a different surface: machine-readable manifests, typed API contracts, and live tool endpoints they can call without a DOM.</p>
+        <p>An agent-ready site shows up when an agent searches for its category. A site without these signals is invisible to the fastest-growing slice of inbound traffic on the web. The 7 signals below are what NHS scores against, and they map 1:1 to what every major agent runtime (Claude, ChatGPT, Cursor, etc.) actually looks for.</p>
+
+        <h2 id="llms-txt">1. llms.txt <span class="pts">25 pts</span></h2>
+        <div class="signal-meta">/llms.txt &nbsp;or&nbsp; /.well-known/llms.txt</div>
+        <p>The single highest-value signal. <code>llms.txt</code> is a markdown file at the root of your site that tells AI agents what your service does, where the docs are, and which URLs matter most. Think of it as <code>robots.txt</code>, but written for understanding instead of crawling permission.</p>
+        <h3>Minimal example</h3>
+<pre><code># Acme Payments
+
+&gt; Stripe-compatible payment API. Charge cards, issue refunds, manage subscriptions.
+
+## Docs
+- [API reference](https://acme.com/docs/api): all endpoints with parameters
+- [Webhooks guide](https://acme.com/docs/webhooks): event payloads
+- [SDKs](https://acme.com/sdks): official Node, Python, Go libraries
+
+## Endpoints
+- [OpenAPI spec](https://acme.com/openapi.yaml)
+- [MCP server](https://acme.com/mcp)
+
+## Optional
+- [Pricing](https://acme.com/pricing)
+- [Status page](https://status.acme.com)
+</code></pre>
+        <div class="callout"><strong>Ship it:</strong> drop the file at <code>https://yoursite.com/llms.txt</code> and serve it as <code>text/plain</code>. That&rsquo;s the entire spec. The <a href="/.well-known/llms.txt">well-known/</a> path also works as a fallback.</div>
+
+        <h2 id="ai-plugin">2. ai-plugin.json <span class="pts">20 pts</span></h2>
+        <div class="signal-meta">/.well-known/ai-plugin.json</div>
+        <p>The original ChatGPT-plugin manifest. Even though plugins were sunset in their original form, the manifest is now broadly recognized by agent runtimes as a canonical &ldquo;here&rsquo;s how to call me&rdquo; document. It&rsquo;s a small JSON file that points at your OpenAPI spec and gives agents a description, contact info, and auth model.</p>
+        <h3>Minimal example</h3>
+<pre><code>{
+  "schema_version": "v1",
+  "name_for_human": "Acme Payments",
+  "name_for_model": "acme_payments",
+  "description_for_human": "Charge cards and manage subscriptions.",
+  "description_for_model": "Use this to charge cards, refund payments, and manage subscriptions via the Acme API.",
+  "auth": { "type": "user_http", "authorization_type": "bearer" },
+  "api": {
+    "type": "openapi",
+    "url": "https://acme.com/openapi.yaml"
+  },
+  "logo_url": "https://acme.com/static/logo.png",
+  "contact_email": "support@acme.com",
+  "legal_info_url": "https://acme.com/legal"
+}
+</code></pre>
+
+        <h2 id="openapi">3. OpenAPI spec <span class="pts">20 pts</span></h2>
+        <div class="signal-meta">/openapi.yaml &nbsp;|&nbsp; /openapi.json &nbsp;|&nbsp; /swagger.json</div>
+        <p>The machine-readable contract for your API. Agents use OpenAPI to know which endpoints exist, what parameters they take, and what they return &mdash; without scraping HTML docs or guessing.</p>
+        <p>If your API is built with FastAPI, NestJS, Hono, ASP.NET, or anything modern, you almost certainly already have an OpenAPI document being generated &mdash; you just need to publish it at a stable URL. For hand-written APIs, generate one with <a href="https://github.com/swagger-api/swagger-codegen" rel="noopener">swagger-codegen</a> or write it directly.</p>
+        <h3>Minimal example</h3>
+<pre><code>openapi: 3.0.3
+info:
+  title: Acme Payments API
+  version: "1.0"
+servers:
+  - url: https://api.acme.com/v1
+paths:
+  /charges:
+    post:
+      summary: Create a charge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount: { type: integer, description: "Amount in cents" }
+                currency: { type: string, example: "usd" }
+                source: { type: string, description: "Card token" }
+      responses:
+        "200":
+          description: Charge succeeded
+</code></pre>
+        <div class="callout"><strong>Pitfall:</strong> OpenAPI 2.0 (Swagger) still works but reduces agent compatibility. Prefer 3.0 or 3.1.</div>
+
+        <h2 id="api">4. Structured API endpoints <span class="pts">15 pts</span></h2>
+        <div class="signal-meta">/api &nbsp;|&nbsp; /api/v1 &nbsp;|&nbsp; /docs</div>
+        <p>NHS gives 15 points just for having a discoverable, browseable API surface &mdash; even without OpenAPI. The crawler verifies content (3+ structural indicators like JSON responses, route docs, version paths) before crediting this signal. A docs page with embedded code examples qualifies; a marketing page that just mentions &ldquo;we have an API&rdquo; does not.</p>
+        <p>If you have an OpenAPI spec, you almost always pick up this signal automatically. If not: stand up a <code>/api/v1/</code> route that returns a JSON index of available endpoints.</p>
+
+        <h2 id="mcp">5. MCP server <span class="pts">10 pts</span></h2>
+        <div class="signal-meta">Streamable-HTTP JSON-RPC endpoint, typically at /mcp</div>
+        <p>The Model Context Protocol is the open standard agent runtimes use to invoke remote tools at runtime. Where OpenAPI describes your API at build time, MCP is the live socket agents call when they need to <em>do</em> something. Shipping an MCP server is the difference between &ldquo;agents can read about your API&rdquo; and &ldquo;agents can use your API right now.&rdquo;</p>
+        <p>NHS itself runs an MCP server at <a href="/mcp"><code>/mcp</code></a>. Wire it up in Claude Code with:</p>
+<pre><code>claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp</code></pre>
+        <h3>Build your own</h3>
+        <p>Use the official SDK in your stack (<a href="https://github.com/modelcontextprotocol/typescript-sdk" rel="noopener">TypeScript</a>, <a href="https://github.com/modelcontextprotocol/python-sdk" rel="noopener">Python</a>, Go, etc.). At minimum you expose <code>tools/list</code> and <code>tools/call</code> over JSON-RPC 2.0. Once live, register at the <a href="https://registry.modelcontextprotocol.io" rel="noopener">official MCP registry</a> for cross-runtime discovery.</p>
+        <div class="callout"><strong>Why so few points?</strong> MCP is high signal but high cost &mdash; it requires actually running a service. The other signals only require static files. NHS weights signals so a small site can hit &ldquo;Agent Ready&rdquo; without running a custom server.</div>
+
+        <h2 id="robots-ai">6. robots.txt rules for AI crawlers <span class="pts">5 pts</span></h2>
+        <div class="signal-meta">/robots.txt</div>
+        <p>You probably already have a <code>robots.txt</code>. NHS gives 5 points if it explicitly addresses the major AI crawler user-agents &mdash; even just to allow them. The signal is &ldquo;this site has thought about AI traffic,&rdquo; whether you opt in or out.</p>
+<pre><code>User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+</code></pre>
+
+        <h2 id="schema">7. Schema.org structured data <span class="pts">5 pts</span></h2>
+        <p>JSON-LD blocks on your homepage that describe your organization, product, or service in a typed vocabulary. Schema.org markup is the oldest agent-ready signal &mdash; search engines have used it for over a decade &mdash; and modern agents still parse it for entity disambiguation.</p>
+<pre><code>&lt;script type="application/ld+json"&gt;
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Acme Payments",
+  "url": "https://acme.com",
+  "logo": "https://acme.com/static/logo.png",
+  "sameAs": [
+    "https://github.com/acme",
+    "https://twitter.com/acme"
+  ]
+}
+&lt;/script&gt;</code></pre>
+
+        <h2 id="submit">Submit &amp; verify</h2>
+        <p>Once you&rsquo;ve shipped at least one hard signal (OpenAPI, MCP, ai-plugin, or a structured API), submit your site to NHS:</p>
+<pre><code>curl -X POST https://nothumansearch.ai/api/v1/submit \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://yoursite.com"}'</code></pre>
+        <p>Or paste your URL on the <a href="/">homepage</a>. The crawler runs immediately, scores all 7 signals, and your site appears in the index within seconds. Re-submitting after fixing signals re-scores in place.</p>
+        <p>You can also embed your live score badge anywhere with <code>&lt;img src="https://nothumansearch.ai/badge/yoursite.com.svg"&gt;</code>.</p>
+
+        <div class="cta">
+            <h3>Score your site right now</h3>
+            <p>The <a href="/score">/score</a> tool runs the full 7-signal check live &mdash; no submission required.</p>
+            <a href="/score" class="btn">Run a free check &rarr;</a>
+        </div>
+    </div>
+
+    <footer>
+        <p>
+            <a href="/">Search</a> &middot;
+            <a href="/about">About</a> &middot;
+            <a href="/score">Score your site</a> &middot;
+            <a href="/llms.txt">llms.txt</a> &middot;
+            <a href="/openapi.yaml">API</a>
+        </p>
+        <p style="margin-top:12px;">
+            <strong style="color:var(--text-dim);">Also from the Foundry:</strong>
+            <a href="https://aidevboard.com">AI Dev Jobs</a> &middot;
+            <a href="https://agentcanary.com">AgentCanary</a> &middot;
+            <a href="https://passdown.io">PassDown</a> &middot;
+            <a href="https://8bitconcepts.com">8bitconcepts</a>
+        </p>
+        <p style="margin-top:12px;">&copy; 2026 Not Human Search</p>
+    </footer>
+</body>
+</html>

@@ -86,16 +86,18 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	totalSites, avgScore, _ := models.GetStats(h.DB)
+	popularTags, _ := models.TopTags(h.DB, 12)
 
 	data := map[string]interface{}{
-		"Query":      q,
-		"Category":   category,
-		"Sites":      sites,
-		"Total":      total,
-		"Page":       page,
-		"HasNext":    page*20 < total,
-		"TotalSites": totalSites,
-		"AvgScore":   avgScore,
+		"Query":       q,
+		"Category":    category,
+		"Sites":       sites,
+		"Total":       total,
+		"Page":        page,
+		"HasNext":     page*20 < total,
+		"TotalSites":  totalSites,
+		"AvgScore":    avgScore,
+		"PopularTags": popularTags,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -108,6 +110,17 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "about.html", nil); err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+
+// GuidePage renders /guide — evergreen long-form content covering the 7 signals.
+// Primary SEO surface for "how to add llms.txt" / "make site agent-ready" queries
+// and the canonical link target for badge + outreach CTAs.
+func (h *WebHandler) GuidePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "guide.html", nil); err != nil {
 		log.Printf("template error: %v", err)
 		http.Error(w, "internal error", 500)
 	}
