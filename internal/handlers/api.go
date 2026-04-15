@@ -51,12 +51,16 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := models.SearchParams{
-		Query:    q.Get("q"),
-		Category: q.Get("category"),
-		MinScore: minScore,
-		HasAPI:   q.Get("has_api") == "true",
-		Limit:    20,
-		Page:     page,
+		Query:      q.Get("q"),
+		Category:   q.Get("category"),
+		Tag:        q.Get("tag"),
+		MinScore:   minScore,
+		HasAPI:     q.Get("has_api") == "true",
+		HasMCP:     q.Get("has_mcp") == "true",
+		HasOpenAPI: q.Get("has_openapi") == "true",
+		HasLLMsTxt: q.Get("has_llms_txt") == "true",
+		Limit:      20,
+		Page:       page,
 	}
 
 	sites, total, err := models.SearchSites(h.DB, params)

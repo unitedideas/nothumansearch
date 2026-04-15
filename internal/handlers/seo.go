@@ -90,7 +90,7 @@ GET %s/api/v1/search?q=authentication
 Base URL: %s/api/v1
 
 ### Search
-GET /search?q={query}&category={cat}&min_score={0-100}&has_api=true&page={n}
+GET /search?q={query}&category={cat}&tag={tag}&min_score={0-100}&has_api=true&has_mcp=true&has_openapi=true&has_llms_txt=true&page={n}
 Returns: {results: [{domain, name, description, agentic_score, category, tags, signals...}], total, page, has_next}
 
 ### Site Details
@@ -200,11 +200,15 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"endpoint":    h.BaseURL + "/api/v1/search",
 				"method":      "GET",
 				"parameters": map[string]interface{}{
-					"q":         map[string]string{"type": "string", "description": "Search query"},
-					"category":  map[string]string{"type": "string", "description": "Filter by category (ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity)"},
-					"min_score": map[string]string{"type": "integer", "description": "Minimum agentic readiness score (0-100)"},
-					"has_api":   map[string]string{"type": "boolean", "description": "Filter to sites with structured APIs"},
-					"page":      map[string]string{"type": "integer", "description": "Page number (default 1)"},
+					"q":            map[string]string{"type": "string", "description": "Search query"},
+					"category":     map[string]string{"type": "string", "description": "Filter by category (ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity)"},
+					"tag":          map[string]string{"type": "string", "description": "Filter by exact tag (e.g. mcp, openapi, llms-txt, payment, search)"},
+					"min_score":    map[string]string{"type": "integer", "description": "Minimum agentic readiness score (0-100)"},
+					"has_api":      map[string]string{"type": "boolean", "description": "Filter to sites with structured APIs"},
+					"has_mcp":      map[string]string{"type": "boolean", "description": "Filter to sites with an MCP server"},
+					"has_openapi":  map[string]string{"type": "boolean", "description": "Filter to sites with an OpenAPI spec"},
+					"has_llms_txt": map[string]string{"type": "boolean", "description": "Filter to sites publishing llms.txt"},
+					"page":         map[string]string{"type": "integer", "description": "Page number (default 1)"},
 				},
 			},
 			{
@@ -272,6 +276,10 @@ paths:
         - name: category
           in: query
           schema: { type: string, enum: [ai-tools, developer, data, jobs, finance, ecommerce, health, education, security, communication, productivity, other] }
+        - name: tag
+          in: query
+          schema: { type: string }
+          description: Exact tag match (e.g. mcp, openapi, payment, search). See /sitemap.xml for indexed tags.
         - name: min_score
           in: query
           schema: { type: integer, minimum: 0, maximum: 100 }
@@ -280,6 +288,18 @@ paths:
           in: query
           schema: { type: boolean }
           description: Filter to sites with structured APIs
+        - name: has_mcp
+          in: query
+          schema: { type: boolean }
+          description: Filter to sites with a Model Context Protocol server
+        - name: has_openapi
+          in: query
+          schema: { type: boolean }
+          description: Filter to sites that publish an OpenAPI spec
+        - name: has_llms_txt
+          in: query
+          schema: { type: boolean }
+          description: Filter to sites that publish llms.txt
         - name: page
           in: query
           schema: { type: integer, default: 1 }
