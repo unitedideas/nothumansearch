@@ -1,12 +1,17 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
@@ -14,10 +19,53 @@ import (
 type MonitorHandler struct {
 	DB      *sql.DB
 	BaseURL string
+
+	// Per-IP rate limiter for Register. Prevents a single attacker from
+	// flooding DB writes with unique (email, domain) pairs. Flagged in the
+	// code-reviewer expertise as unbounded-write risk.
+	rlMu      sync.Mutex
+	rlCounts  map[string]int
+	rlResetAt time.Time
 }
 
+const (
+	monitorRegisterLimit  = 5 // per IP per hour
+	monitorRegisterWindow = time.Hour
+)
+
 func NewMonitorHandler(db *sql.DB, baseURL string) *MonitorHandler {
-	return &MonitorHandler{DB: db, BaseURL: baseURL}
+	return &MonitorHandler{
+		DB:        db,
+		BaseURL:   baseURL,
+		rlCounts:  map[string]int{},
+		rlResetAt: time.Now().Add(monitorRegisterWindow),
+	}
+}
+
+func (h *MonitorHandler) rlAllow(ipHash string) (allowed bool, remaining int, resetUnix int64) {
+	h.rlMu.Lock()
+	defer h.rlMu.Unlock()
+	now := time.Now()
+	if now.After(h.rlResetAt) {
+		h.rlCounts = map[string]int{}
+		h.rlResetAt = now.Add(monitorRegisterWindow)
+	}
+	if h.rlCounts[ipHash] >= monitorRegisterLimit {
+		return false, 0, h.rlResetAt.Unix()
+	}
+	h.rlCounts[ipHash]++
+	remaining = monitorRegisterLimit - h.rlCounts[ipHash]
+	return true, remaining, h.rlResetAt.Unix()
+}
+
+func monitorHashIP(r *http.Request) string {
+	ip := r.RemoteAddr
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		ip = strings.Split(fwd, ",")[0]
+	}
+	ip = strings.TrimSpace(ip)
+	sum := sha256.Sum256([]byte(ip))
+	return hex.EncodeToString(sum[:8])
 }
 
 // POST /api/v1/monitor/register  {"email": "...", "domain": "..."}
@@ -26,6 +74,21 @@ func (h *MonitorHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 405, map[string]string{"error": "POST required"})
 		return
 	}
+
+	ipHash := monitorHashIP(r)
+	allowed, remaining, resetUnix := h.rlAllow(ipHash)
+	w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", monitorRegisterLimit))
+	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+	w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
+	if !allowed {
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(time.Unix(resetUnix, 0)).Seconds())+1))
+		writeJSON(w, 429, map[string]any{
+			"error":      "rate limit exceeded: 5 monitor registrations per hour per IP",
+			"retry_sec":  int(time.Until(time.Unix(resetUnix, 0)).Seconds()) + 1,
+		})
+		return
+	}
+
 	var req struct {
 		Email  string `json:"email"`
 		Domain string `json:"domain"`
