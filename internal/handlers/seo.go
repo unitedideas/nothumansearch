@@ -306,6 +306,36 @@ paths:
                       properties:
                         name:  { type: string }
                         count: { type: integer }
+  /monitor/register:
+    post:
+      summary: Register an email to monitor a site's agentic readiness score
+      operationId: registerMonitor
+      description: Sends an alert via email when the indicated domain's score drops. Returns an unsubscribe URL.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, domain]
+              properties:
+                email:  { type: string, format: email }
+                domain: { type: string, description: "Domain to monitor (no scheme)" }
+      responses:
+        "201":
+          description: Monitor registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:              { type: boolean }
+                  domain:          { type: string }
+                  unsubscribe_url: { type: string, format: uri }
+        "400":
+          description: Invalid email or domain
+        "429":
+          description: Too many monitors for this email
   /search:
     get:
       summary: Search for agent-ready sites
