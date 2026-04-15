@@ -23,15 +23,38 @@
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
-        "@type": "WebSite",
-        "name": "Not Human Search",
-        "url": "https://nothumansearch.ai",
-        "description": "The agentic-first search engine. AI agents search NHS to discover services, APIs, and tools ranked by how well they serve non-human users.",
-        "potentialAction": {
-            "@type": "SearchAction",
-            "target": "https://nothumansearch.ai/?q={search_term_string}",
-            "query-input": "required name=search_term_string"
-        }
+        "@graph": [
+            {
+                "@type": "WebSite",
+                "@id": "https://nothumansearch.ai/#website",
+                "name": "Not Human Search",
+                "url": "https://nothumansearch.ai",
+                "description": "The agentic-first search engine. AI agents search NHS to discover services, APIs, and tools ranked by how well they serve non-human users.",
+                "publisher": {"@id": "https://nothumansearch.ai/#organization"},
+                "potentialAction": {
+                    "@type": "SearchAction",
+                    "target": "https://nothumansearch.ai/?q={search_term_string}",
+                    "query-input": "required name=search_term_string"
+                }
+            },
+            {
+                "@type": "Organization",
+                "@id": "https://nothumansearch.ai/#organization",
+                "name": "Not Human Search",
+                "url": "https://nothumansearch.ai",
+                "logo": "https://nothumansearch.ai/static/img/logo.svg",
+                "description": "Search engine and discovery directory for agent-first services. Indexes sites by agentic readiness — llms.txt, OpenAPI, ai-plugin, MCP servers, and structured APIs."
+            }{{if .Heading}},
+            {
+                "@type": "CollectionPage",
+                "@id": "{{.Canonical}}#collection",
+                "name": {{.PageTitle | printf "%q"}},
+                "url": "{{.Canonical}}",
+                "description": {{.PageDesc | printf "%q"}},
+                "isPartOf": {"@id": "https://nothumansearch.ai/#website"},
+                "about": {"@id": "https://nothumansearch.ai/#organization"}
+            }{{end}}
+        ]
     }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
