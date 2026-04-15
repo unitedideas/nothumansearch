@@ -118,18 +118,22 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			}
 			if len(tsTerms) > 0 {
 				// Use OR across terms so multi-word queries surface partial matches.
-				// ts_rank still orders by relevance — sites matching all terms rank highest,
-				// but we don't drop sites that match only some. Critical for recall on
-				// queries like "SMS text messaging" where no indexed site has all three words.
-				tsQueryStr := strings.Join(tsTerms, " | ")
-				// Match: FTS OR ILIKE (catches things FTS misses like domain/description substrings)
+				// But ALSO pass an AND query so sites matching every term can be boosted
+				// in the ORDER BY — keeps precision for queries like "SMS text messaging"
+				// where messagebird (all-terms) should beat agentsafe (one-term, higher score).
+				tsQueryOr := strings.Join(tsTerms, " | ")
+				tsQueryAnd := strings.Join(tsTerms, " & ")
+				// Reference $argN+1 (AND tsquery) in WHERE as a harmless tautology so
+				// Postgres can infer its type even on the count query where $argN+1 is
+				// otherwise only used in ORDER BY. Without this, pq errors with
+				// "could not determine data type of parameter".
 				conditions = append(conditions, fmt.Sprintf(
-					"(search_vector @@ to_tsquery('english', $%d) OR name ILIKE $%d OR domain ILIKE $%d OR description ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
-					argN, argN+1, argN+1, argN+1, argN+1))
-				args = append(args, tsQueryStr, "%"+p.Query+"%")
+					"(search_vector @@ to_tsquery('english', $%d) OR name ILIKE $%d OR domain ILIKE $%d OR description ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d) AND ($%d::text IS NOT NULL)",
+					argN, argN+2, argN+2, argN+2, argN+2, argN+1))
+				args = append(args, tsQueryOr, tsQueryAnd, "%"+p.Query+"%")
 				tsQueryArg = argN
 				useFTS = true
-				argN += 2
+				argN += 3
 			}
 		}
 	}
@@ -174,10 +178,12 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	offset := (p.Page - 1) * p.Limit
 	var orderBy string
 	if useFTS {
-		// Rank by: FTS relevance * agentic_score weighting
+		// Rank by: all-terms-match boost + OR-relevance * agentic_score weighting.
+		// ts_rank on the AND tsquery returns 0 when any term is missing, so sites
+		// that match every query term get a large additive bonus over partial matches.
 		orderBy = fmt.Sprintf(
-			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) DESC, is_featured DESC, agentic_score DESC",
-			tsQueryArg)
+			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) DESC, is_featured DESC, agentic_score DESC",
+			tsQueryArg+1, tsQueryArg)
 	} else {
 		orderBy = "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
 	}
