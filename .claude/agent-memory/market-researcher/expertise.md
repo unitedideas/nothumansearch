@@ -167,6 +167,19 @@ openai, anthropic, google ai, cohere, mistral, github, vercel, fly.io, stripe, r
 - cline/mcp-marketplace — GitHub issue with: repo URL, 400x400 PNG logo, description; approx. 2-day review; repo URL required (private repo may be accepted)
 - mcp-get community-servers — GitHub PR only; requires full npm package scaffolding (MIT license, TypeScript, @mcp-get-community namespace); NOT viable for remote-only server
 
+## NHS Awesome-List Submission Targets (researched 2026-04-14)
+### Confirmed Active + High-Priority
+- punkpeye/awesome-mcp-servers (84.8k stars) — Aggregators section; last merged Apr 15 2026; entry format: `- [Name](url) 📇 ☁️ - Description.`; a2asearch-mcp already listed (NHS is broader)
+- tensorchord/Awesome-LLMOps (5.7k stars) — LLMOps section; last merged Apr 6 2026; Search section exists but is vector-only; fit = LLMOps section as developer utility
+- steven2358/awesome-generative-ai (11.8k stars) — "Search engines" subsection under Text; last merged Apr 14 2026; format: `- [Name](url) - Description.`; Perplexity/You.com/Phind listed
+- steel-dev/awesome-web-agents (1.4k stars) — "Web Search & Query Tools" section; last merged Apr 8 2026; SerpAPI/Exa listed; NHS fits as agent-native search
+
+### Skip
+- e2b-dev/awesome-ai-agents (27.3k stars) — last merged Jan 2025, dead
+- appcypher/awesome-mcp-servers (5.4k stars) — 0 confirmed merged PRs, likely not merging
+- kyrolabs/awesome-agents (2.2k stars) — no search/tools section, frameworks only
+- Deep-Insight-Labs/awesome-ai-agents (33 stars) — too small, no relevant section
+
 ## Anti-patterns / Avoid
 - Pure content sites with no API (Coursera-type education sites are marginal)
 - Sites that are wrappers of other APIs without own endpoints (many RapidAPI listings)

@@ -1437,6 +1437,17 @@ func categorize(site *models.Site) string {
 		"rube.app":               "ai-tools",
 		"creativeclaw.co":        "ai-tools",
 		"sourcelibrary.org":      "education",
+
+		// Batch 10: 2026-04-15 post-bulk-crawl final "other" trim
+		"jseek.co":               "jobs",
+		"propfirmdealfinder.com": "finance",
+		"rftools.io":             "developer",
+		"crunchtools.com":        "developer",
+		"onetool.beycom.online":  "ai-tools",
+		"hukuk.damdafa.com":      "productivity",
+		"foto.damdafa.com":       "ai-tools",
+		"ai.fin-discovery.com":   "finance",
+		"fin-discovery.com":      "finance",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
