@@ -129,7 +129,36 @@ openai, anthropic, google ai, cohere, mistral, github, vercel, fly.io, stripe, r
 - mintlify.com — docs platform, auto llms.txt+MCP server
 - readme.com — docs platform, MCP server + llms.txt
 
+## NHS Competitor Landscape (researched 2026-04-14)
+### MCP Registries (adjacent to NHS)
+- smithery.ai — 7,300+ servers, 491K monthly visits, tiered vendor pricing (Hobby/Pro/Custom), hosted MCP infra moat
+- pulsemcp.com — 12,520+ servers, free directory, no pricing; founder hand-reviews daily; paid MCP server case study: $9/mo credit model
+- mcp.so — 20,000+ community servers, free, GitHub-issue submissions; no business model
+- glama.ai — 9,000+ servers, free index + gateway
+- registry.modelcontextprotocol.io — official Anthropic registry, free, API /v0/servers
+- mcpmarket.com — 10,000+ servers leaderboard by GitHub stars
+
+### GEO / AI Visibility Tools (monetization precedent for NHS)
+- Profound — $99/$399/mo + Enterprise; raised $55M Series B; G2 AEO leader
+- AthenaHQ — $295/$595/mo + Enterprise; 100+ paying customers; YC W25; raised $2.2M
+- Goodie AI — $495/mo entry; described as "most complete GEO platform"
+- AEO/GEO agency retainers: $2,000–$8,000/mo mid-market; $1,000–$2,500 entry
+- Total AEO/GEO tool market: $200M+ raised across 24 platforms (confirmed 2026)
+
+### Agent Tool Discovery Patterns (how agents actually find tools)
+- MCP is now the dominant standard: LangChain, CrewAI, LlamaIndex all support MCP via adapters
+- Claude Code: built-in MCP tool search (lazy-load, reduces context 95%), no external registry call
+- OpenAI ChatGPT: chatgpt.com/apps directory + in-context suggestions; Apps SDK; no open API for discovery
+- Google Vertex AI: Cloud API Registry integration; `gcloud beta api-registry mcp servers list`; natural language agent finder
+- Pattern: agents do NOT dial a registry at runtime — they use pre-configured MCP servers or hardcoded tools
+- NHS opportunity: serve the CONFIGURATION step (developers choosing which servers to wire in), not runtime discovery
+
+### Paid MCP Server Precedent
+- Ref (doc search MCP): $9/mo, 1K credits ($0.009/search); "thousands of weekly users, hundreds of subscribers"
+- Willingness to pay confirmed for MCP-as-API services
+
 ## Anti-patterns / Avoid
 - Pure content sites with no API (Coursera-type education sites are marginal)
 - Sites that are wrappers of other APIs without own endpoints (many RapidAPI listings)
 - Sports sites with only embeddable widgets, no REST API
+- llms.txt directories (free, no moat, no traffic signal — NHS differentiates on API/MCP/OpenAPI signals)

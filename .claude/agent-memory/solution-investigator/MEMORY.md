@@ -1,0 +1,1 @@
+- [NHS monetization verdict](project_nhs_monetization.md) — Paid /check API (#1), Verified badge (#2), analytics tier (#3 year-2); sponsored results RED

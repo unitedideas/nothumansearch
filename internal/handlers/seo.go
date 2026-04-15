@@ -57,7 +57,7 @@ func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 
 	var totalSites int
-	if err := h.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM sites WHERE crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)").Scan(&totalSites); err != nil {
+	if err := h.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM sites WHERE "+models.AgentFirstFilter).Scan(&totalSites); err != nil {
 		log.Printf("llms.txt count query: %v", err)
 	}
 
