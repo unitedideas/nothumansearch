@@ -400,6 +400,13 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/mcp-servers", ChangeFreq: "daily", Priority: "0.9"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/ai-tools", ChangeFreq: "daily", Priority: "0.9"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/developer-apis", ChangeFreq: "daily", Priority: "0.9"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/data-apis", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/finance-apis", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/ecommerce-apis", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/productivity-apis", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/security-apis", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/communication-apis", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/jobs-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/about", ChangeFreq: "weekly", Priority: "0.5"})
 
 	// Site pages

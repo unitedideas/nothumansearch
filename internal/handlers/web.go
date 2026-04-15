@@ -153,6 +153,89 @@ func (h *WebHandler) DeveloperPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CategoryDirectoryPages exposes a single canonical URL per remaining
+// category. Content and copy are data-driven from CategoryLandingConfig.
+var CategoryLandingConfig = map[string]categoryLanding{
+	"data": {
+		Mode: "data", Path: "/data-apis",
+		Title:      "Data API Directory — Agent-Ready Datasets & Data APIs | Not Human Search",
+		Desc:       "Browse data APIs and datasets ranked by agentic readiness. Find market data, geospatial, weather, financial, and analytics APIs that AI agents can discover at build time.",
+		Heading:    "Data API Directory",
+		Subheading: "Every data API and dataset in our index, ranked by agentic readiness.",
+		Params:     models.SearchParams{Category: "data", Limit: 30},
+	},
+	"finance": {
+		Mode: "finance", Path: "/finance-apis",
+		Title:      "Finance API Directory — Agent-Ready Payment & Banking APIs | Not Human Search",
+		Desc:       "Finance APIs AI agents can actually call — payments, banking, market data, crypto. Ranked by agentic readiness score (OpenAPI, llms.txt, MCP).",
+		Heading:    "Finance API Directory",
+		Subheading: "Every finance API in our index — payments, banking, market data, crypto — ranked by agentic readiness.",
+		Params:     models.SearchParams{Category: "finance", Limit: 30},
+	},
+	"ecommerce": {
+		Mode: "ecommerce", Path: "/ecommerce-apis",
+		Title:      "E-Commerce API Directory — Agent-Ready Shopping & Commerce APIs | Not Human Search",
+		Desc:       "E-commerce APIs that AI agents can shop, search, and check out against. Every entry exposes structured signals AI agents can discover.",
+		Heading:    "E-Commerce API Directory",
+		Subheading: "Commerce APIs agents can shop against — search, catalog, cart, checkout. Ranked by agentic readiness.",
+		Params:     models.SearchParams{Category: "ecommerce", Limit: 30},
+	},
+	"productivity": {
+		Mode: "productivity", Path: "/productivity-apis",
+		Title:      "Productivity API Directory — Agent-Ready Task & Workflow APIs | Not Human Search",
+		Desc:       "Productivity APIs AI agents can use to manage tasks, calendars, docs, and workflows. All entries expose OpenAPI, llms.txt, or MCP endpoints.",
+		Heading:    "Productivity API Directory",
+		Subheading: "Productivity tools with agent-ready surfaces — tasks, calendars, docs, workflows.",
+		Params:     models.SearchParams{Category: "productivity", Limit: 30},
+	},
+	"security": {
+		Mode: "security", Path: "/security-apis",
+		Title:      "Security API Directory — Agent-Ready Authentication & Security APIs | Not Human Search",
+		Desc:       "Security APIs AI agents can call — authentication, secrets, WAF, threat intel. Every entry is discoverable at build time via OpenAPI or MCP.",
+		Heading:    "Security API Directory",
+		Subheading: "Security APIs with agent-ready surfaces — auth, secrets, threat intel, WAF.",
+		Params:     models.SearchParams{Category: "security", Limit: 30},
+	},
+	"communication": {
+		Mode: "communication", Path: "/communication-apis",
+		Title:      "Communication API Directory — Agent-Ready Messaging & Email APIs | Not Human Search",
+		Desc:       "Communication APIs AI agents can use — email, SMS, chat, voice. Ranked by agentic readiness.",
+		Heading:    "Communication API Directory",
+		Subheading: "Communication APIs with agent-ready surfaces — email, SMS, chat, voice.",
+		Params:     models.SearchParams{Category: "communication", Limit: 30},
+	},
+	"jobs": {
+		Mode: "jobs", Path: "/jobs-apis",
+		Title:      "Job Board API Directory — Agent-Ready Jobs APIs | Not Human Search",
+		Desc:       "Job boards with agent-ready APIs — AI agents can discover, filter, and apply to listings programmatically. Ranked by agentic readiness.",
+		Heading:    "Job Board API Directory",
+		Subheading: "Job boards with agent-ready APIs — listings, search, and apply endpoints agents can call.",
+		Params:     models.SearchParams{Category: "jobs", Limit: 30},
+	},
+}
+
+// CategoryLandingPage dispatches based on the URL path to CategoryLandingConfig.
+// Each path is a dedicated HandleFunc so the Go mux matches exact paths (not a
+// prefix) — prevents /productivity-apis-foo from accidentally matching.
+func (h *WebHandler) categoryHandler(slug string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cfg, ok := CategoryLandingConfig[slug]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		h.renderCategoryLanding(w, r, cfg)
+	}
+}
+
+// RegisterCategoryLandings wires every CategoryLandingConfig entry to its path.
+// Call from main.go after constructing the WebHandler.
+func (h *WebHandler) RegisterCategoryLandings(mux *http.ServeMux) {
+	for slug, cfg := range CategoryLandingConfig {
+		mux.HandleFunc(cfg.Path, h.categoryHandler(slug))
+	}
+}
+
 type categoryLanding struct {
 	Mode       string
 	Path       string
