@@ -119,6 +119,37 @@ func main() {
 	mux.HandleFunc("/llms-txt-sites", webHandler.LLMsTxtPage)
 	webHandler.RegisterCategoryLandings(mux)
 
+	// Classic URL synonyms — 301 to canonical pages so agents pattern-matching
+	// URLs don't hit 404s. Improves discoverability + preserves link equity.
+	for _, alias := range []struct{ from, to string }{
+		{"/mcp-server", "/mcp-servers"},
+		{"/ai", "/ai-tools"},
+		{"/tools", "/ai-tools"},
+		{"/apis", "/developer-apis"},
+		{"/api-directory", "/developer-apis"},
+		{"/agents-directory", "/ai-tools"},
+		{"/agents", "/ai-tools"},
+		{"/llm", "/tag/llm"},
+		{"/llms", "/tag/llm"},
+		{"/openapi", "/openapi-apis"},
+		{"/llms-txt", "/llms-txt-sites"},
+		{"/search", "/"},
+		{"/category/ai-tools", "/ai-tools"},
+		{"/category/developer", "/developer-apis"},
+		{"/category/data", "/data-apis"},
+		{"/category/finance", "/finance-apis"},
+		{"/category/productivity", "/productivity-apis"},
+		{"/category/ecommerce", "/ecommerce-apis"},
+		{"/category/security", "/security-apis"},
+		{"/category/communication", "/communication-apis"},
+		{"/category/jobs", "/jobs-apis"},
+	} {
+		to := alias.to
+		mux.HandleFunc(alias.from, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, to, http.StatusMovedPermanently)
+		})
+	}
+
 	// API
 	mux.HandleFunc("/api/v1", apiHandler.Index)
 	mux.HandleFunc("/api/v1/search", apiHandler.Search)
