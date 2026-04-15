@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Your Site — Agentic Readiness Check | Not Human Search</title>
+    <meta name="description" content="Instant agentic-readiness score for any URL. 7 signals — llms.txt, OpenAPI, ai-plugin, MCP, structured API, robots AI rules, Schema.org. Free, no sign-up.">
+    <meta property="og:title" content="Score Your Site — Agentic Readiness Check | Not Human Search">
+    <meta property="og:description" content="Instant agentic-readiness score for any URL. 7 signals. Free, no sign-up.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nothumansearch.ai/score">
+    <meta property="og:site_name" content="Not Human Search">
+    <meta property="og:image" content="https://nothumansearch.ai/static/img/og-default.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Score Your Site — Agentic Readiness Check">
+    <meta name="twitter:description" content="Instant agentic-readiness score for any URL. Free, no sign-up.">
+    <meta name="twitter:image" content="https://nothumansearch.ai/static/img/og-default.png">
+    <link rel="canonical" href="https://nothumansearch.ai/score">
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0d0e; --surface: #141416; --border: #1f1f23;
+            --text: #e0e0e0; --text-muted: #888; --accent: #d97757;
+            --green: #4ade80; --yellow: #facc15; --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+        .container { max-width:720px; margin:0 auto; padding:0 20px; }
+        header { padding:40px 0 24px; text-align:center; }
+        .logo { font-size:28px; font-weight:700; color:var(--text); letter-spacing:-1px; text-decoration:none; }
+        .logo span { color:var(--accent); }
+        h1 { font-size:32px; font-weight:700; margin:32px 0 8px; text-align:center; letter-spacing:-1px; }
+        .tagline { color:var(--text-muted); font-size:15px; text-align:center; margin-bottom:32px; }
+        .score-form { display:flex; gap:8px; margin:0 auto 12px; max-width:560px; }
+        .score-form input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:14px 16px; font-size:15px; border-radius:6px; font-family:inherit; }
+        .score-form input:focus { outline:none; border-color:var(--accent); }
+        .score-form button { background:var(--accent); color:#fff; border:none; padding:0 24px; font-weight:600; font-size:15px; border-radius:6px; cursor:pointer; font-family:inherit; }
+        .score-form button:hover { background:#b8613e; }
+        .score-form button:disabled { opacity:0.6; cursor:wait; }
+        .hint { text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+        .result { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:28px; margin:0 auto 32px; max-width:560px; display:none; }
+        .result.show { display:block; }
+        .result.error { border-color:var(--red); }
+        .score-num { font-family:'IBM Plex Mono',monospace; font-size:72px; font-weight:700; text-align:center; line-height:1; }
+        .score-num.high { color:var(--green); }
+        .score-num.medium { color:var(--yellow); }
+        .score-num.low { color:var(--red); }
+        .score-label { text-align:center; color:var(--text-muted); text-transform:uppercase; font-size:12px; letter-spacing:2px; margin-top:8px; }
+        .result-domain { text-align:center; font-family:'IBM Plex Mono',monospace; color:var(--accent); margin:16px 0 24px; font-size:14px; word-break:break-all; }
+        .signals { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:20px 0; }
+        .signal { display:flex; align-items:center; gap:8px; font-size:14px; }
+        .signal .mark { font-family:'IBM Plex Mono',monospace; font-weight:700; width:18px; text-align:center; }
+        .signal.on .mark { color:var(--green); }
+        .signal.off .mark { color:var(--red); }
+        .signal.off { color:var(--text-muted); }
+        .cta { display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
+        .cta a { color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:8px 16px; border-radius:6px; font-size:13px; }
+        .cta a:hover { background:var(--accent); color:#fff; }
+        .methodology { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; margin:32px 0; }
+        .methodology h2 { font-size:18px; margin-bottom:16px; }
+        .methodology p { color:var(--text-muted); font-size:14px; margin-bottom:12px; line-height:1.6; }
+        .methodology table { width:100%; border-collapse:collapse; font-size:13px; margin-top:12px; }
+        .methodology th, .methodology td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); }
+        .methodology th { color:var(--text-muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+        .methodology td code { font-family:'IBM Plex Mono',monospace; color:var(--accent); font-size:12px; }
+        .methodology .pts { color:var(--green); font-family:'IBM Plex Mono',monospace; text-align:right; }
+        footer { padding:32px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; color:var(--text-muted); font-size:13px; }
+        footer a { color:var(--accent); text-decoration:none; }
+    </style>
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "NHS Agentic Readiness Check",
+        "url": "https://nothumansearch.ai/score",
+        "description": "Free on-demand agentic-readiness scoring for any URL. Returns the 7-signal score and per-signal breakdown.",
+        "applicationCategory": "SEO",
+        "offers": {"@type": "Offer", "price": "0"}
+    }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a class="logo" href="/">not <span>human</span> search</a>
+        </header>
+
+        <h1>Score any site for agentic readiness</h1>
+        <p class="tagline">7 signals. 1 score. Free, no sign-up.</p>
+
+        <form class="score-form" id="scoreForm" onsubmit="return runCheck(event)">
+            <input type="text" id="urlInput" placeholder="stripe.com" autocomplete="off" required>
+            <button type="submit" id="submitBtn">Score</button>
+        </form>
+        <div class="hint">Rate-limited to 10 checks/hour per IP. No key needed.</div>
+
+        <div class="result" id="result"></div>
+
+        <div class="methodology">
+            <h2>How we score</h2>
+            <p>Every URL is checked for seven signals that AI agents look for when deciding whether to work with a site. Max score is 100. Sites must expose at least one <em>hard</em> signal (API/OpenAPI/ai-plugin/MCP) to appear in the <a href="/" style="color:var(--accent);">main directory</a>.</p>
+            <table>
+                <thead>
+                    <tr><th>Signal</th><th>What it means</th><th class="pts">Points</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>llms.txt</code></td><td>Markdown index for LLMs</td><td class="pts">25</td></tr>
+                    <tr><td><code>ai-plugin.json</code></td><td>OpenAI plugin manifest</td><td class="pts">20</td></tr>
+                    <tr><td><code>OpenAPI</code></td><td>Machine-readable API spec</td><td class="pts">20</td></tr>
+                    <tr><td><code>structured API</code></td><td>Discoverable REST/GraphQL surface</td><td class="pts">15</td></tr>
+                    <tr><td><code>MCP server</code></td><td>Model Context Protocol endpoint</td><td class="pts">10</td></tr>
+                    <tr><td><code>robots.txt AI</code></td><td>Explicit policy for AI crawlers</td><td class="pts">5</td></tr>
+                    <tr><td><code>Schema.org</code></td><td>Structured data markup</td><td class="pts">5</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <footer>
+            Part of <a href="/">Not Human Search</a>. &middot; <a href="/api/v1/search?q=">API</a> &middot; <a href="/about">About</a>
+        </footer>
+    </div>
+
+    <script>
+        const signalLabels = {
+            llms_txt: 'llms.txt',
+            ai_plugin: 'ai-plugin.json',
+            openapi: 'OpenAPI',
+            structured_api: 'structured API',
+            mcp_server: 'MCP server',
+            robots_ai: 'robots.txt AI',
+            schema_org: 'Schema.org'
+        };
+
+        function scoreClass(n) {
+            if (n >= 70) return 'high';
+            if (n >= 40) return 'medium';
+            return 'low';
+        }
+        function scoreWord(n) {
+            if (n >= 70) return 'Agent Ready';
+            if (n >= 40) return 'Partial';
+            return 'Basic';
+        }
+
+        async function runCheck(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const input = document.getElementById('urlInput');
+            const out = document.getElementById('result');
+            const url = input.value.trim();
+            if (!url) return false;
+
+            btn.disabled = true;
+            btn.textContent = 'Checking…';
+            out.className = 'result show';
+            out.innerHTML = '<div style="text-align:center;color:#888;padding:24px 0;">Crawling — up to 25 seconds…</div>';
+
+            try {
+                const resp = await fetch('/api/v1/check', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({url: url})
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    out.className = 'result show error';
+                    out.innerHTML = '<div style="text-align:center;color:#f87171;">' + (data.error || 'Request failed') + '</div>';
+                    return false;
+                }
+                const sig = data.signals || {};
+                const sigHTML = Object.keys(signalLabels).map(k => {
+                    const on = sig[k];
+                    return '<div class="signal ' + (on ? 'on' : 'off') + '"><span class="mark">' + (on ? '✓' : '×') + '</span>' + signalLabels[k] + '</div>';
+                }).join('');
+                out.className = 'result show';
+                const cls = scoreClass(data.agentic_score);
+                out.innerHTML =
+                    '<div class="score-num ' + cls + '">' + data.agentic_score + '</div>' +
+                    '<div class="score-label">' + scoreWord(data.agentic_score) + ' &middot; ' + (data.category || 'uncategorized') + '</div>' +
+                    '<div class="result-domain">' + (data.domain || url) + '</div>' +
+                    '<div class="signals">' + sigHTML + '</div>' +
+                    '<div class="cta">' +
+                        '<a href="' + (data.report_url || ('/site/' + data.domain)) + '">Full report</a>' +
+                        '<a href="/badge/' + data.domain + '.svg" target="_blank">Get badge SVG</a>' +
+                        '<a href="/#submit">Submit to directory</a>' +
+                    '</div>';
+            } catch (err) {
+                out.className = 'result show error';
+                out.innerHTML = '<div style="text-align:center;color:#f87171;">Request failed: ' + err.message + '</div>';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Score';
+            }
+            return false;
+        }
+
+        // Auto-run if ?url= is in query string
+        const params = new URLSearchParams(location.search);
+        if (params.get('url')) {
+            document.getElementById('urlInput').value = params.get('url');
+            document.getElementById('scoreForm').dispatchEvent(new Event('submit'));
+        }
+    </script>
+</body>
+</html>

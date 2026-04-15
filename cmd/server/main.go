@@ -102,6 +102,7 @@ func main() {
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)
 	mux.HandleFunc("/about", webHandler.AboutPage)
+	mux.HandleFunc("/score", webHandler.ScorePage)
 	mux.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/#submit", http.StatusMovedPermanently)
 	})

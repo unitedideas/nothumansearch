@@ -112,6 +112,16 @@ func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ScorePage renders the public /score UI — a form that POSTs to /api/v1/check
+// and displays the 7-signal breakdown inline. Free marketing surface.
+func (h *WebHandler) ScorePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "score.html", nil); err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+
 // MCPServersPage renders a dedicated landing page listing every MCP server
 // in the index. Canonical URL /mcp-servers — targets the "mcp server
 // directory" query class without the noise from /?q=mcp.
