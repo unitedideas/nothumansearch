@@ -58,7 +58,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"description": "MCP server for Not Human Search — search the agentic web.",
 			"transport":   "streamable-http",
 			"endpoint":    h.BaseURL + "/mcp",
-			"tools":       []string{"search_agents", "get_site_details", "get_stats", "submit_site"},
+			"tools":       []string{"search_agents", "get_site_details", "get_stats", "submit_site", "register_monitor", "verify_mcp"},
 			"setup": map[string]string{
 				"claude_code": "claude mcp add --transport http nothumansearch " + h.BaseURL + "/mcp",
 			},
@@ -191,6 +191,21 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			},
 		},
 		{
+			"name":        "verify_mcp",
+			"title":       "Verify MCP Endpoint",
+			"description": "Actively probe any URL to check if it is a live, spec-compliant MCP server. Sends a JSON-RPC tools/list request and verifies a valid response. Use this before depending on a third-party MCP endpoint — manifests and documentation can claim MCP support without actually serving it. Returns {verified: true/false, endpoint, note}.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"url": map[string]any{
+						"type":        "string",
+						"description": "Full URL of the MCP endpoint to probe (include scheme, e.g. 'https://example.com/mcp').",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
+		{
 			"name":        "register_monitor",
 			"title":       "Monitor a Site's Agentic Readiness",
 			"description": "Register an email to get alerted when the indicated domain's agentic readiness score drops. Useful for agents tracking a dependency's agent-readiness health — e.g. an agent that relies on stripe.com's MCP surface wants to know the moment it regresses. Returns an unsubscribe URL. Multiple monitors per email allowed, one per domain.",
@@ -227,6 +242,8 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest) {
 		h.toolSubmitSite(w, req.ID, params.Arguments)
 	case "register_monitor":
 		h.toolRegisterMonitor(w, req.ID, params.Arguments)
+	case "verify_mcp":
+		h.toolVerifyMCP(w, req.ID, params.Arguments)
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
@@ -460,6 +477,34 @@ func (h *MCPHandler) toolGetStats(w http.ResponseWriter, id json.RawMessage) {
 			"total_sites":  total,
 			"avg_score":    avg,
 			"top_category": top,
+		},
+	})
+}
+
+func (h *MCPHandler) toolVerifyMCP(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	raw, _ := args["url"].(string)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		h.writeToolError(w, id, "url is required")
+		return
+	}
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+	verified := crawler.ProbeMCPJSONRPC(raw)
+	note := "Endpoint responded with valid JSON-RPC 2.0 — server is live and MCP-compliant."
+	if !verified {
+		note = "Endpoint did not respond with valid JSON-RPC 2.0. Could be down, not an MCP server, or requires an initialize() handshake this probe does not send."
+	}
+	text := fmt.Sprintf("verify_mcp %s\n  verified: %v\n  %s", raw, verified, note)
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": text},
+		},
+		"structuredContent": map[string]any{
+			"verified": verified,
+			"endpoint": raw,
+			"note":     note,
 		},
 	})
 }

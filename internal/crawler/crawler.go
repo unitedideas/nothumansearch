@@ -35,12 +35,13 @@ func GenerateTags(site *models.Site) pq.StringArray { return generateTags(site) 
 
 const userAgent = "NotHumanSearch/1.0 (+https://nothumansearch.ai/about)"
 
-// probeMCPJSONRPC POSTs a tools/list request to an MCP endpoint and verifies
+// ProbeMCPJSONRPC POSTs a tools/list request to an MCP endpoint and verifies
 // the response is valid JSON-RPC 2.0 with a result.tools array. This is the
 // only way to confirm a claimed MCP server actually exists and responds —
 // manifest files can lie and text mentions can't be trusted. Short timeout
-// (6s) so this doesn't slow the crawler.
-func probeMCPJSONRPC(endpoint string) bool {
+// (6s) so this doesn't slow the crawler. Exported so the MCP server can
+// expose it as a verify_mcp tool for agents.
+func ProbeMCPJSONRPC(endpoint string) bool {
 	payload := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	req, err := http.NewRequest("POST", endpoint, payload)
 	if err != nil {
@@ -248,7 +249,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	if !site.HasMCPServer {
 		probeTargets := []string{base + "/mcp", base + "/api/mcp"}
 		for _, target := range probeTargets {
-			if probeMCPJSONRPC(target) {
+			if ProbeMCPJSONRPC(target) {
 				site.HasMCPServer = true
 				site.MCPEndpoint = target
 				break
@@ -258,7 +259,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 		// Manifest declared an endpoint — verify it actually responds. Leaves
 		// manifest-only claims in place (some hosts declare MCP preview/planned
 		// without live endpoint), but lets us log divergence for quality work.
-		if !probeMCPJSONRPC(site.MCPEndpoint) {
+		if !ProbeMCPJSONRPC(site.MCPEndpoint) {
 			log.Printf("mcp manifest-only (probe failed): %s endpoint=%s", site.Domain, site.MCPEndpoint)
 		}
 	}

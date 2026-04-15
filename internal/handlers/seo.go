@@ -74,7 +74,7 @@ Not Human Search is itself an MCP server. Wire it into your agent once and get l
 
 Endpoint: %s/mcp
 Transport: streamable-http
-Tools: search_agents, get_site_details, get_stats, submit_site, register_monitor
+Tools: search_agents, get_site_details, get_stats, submit_site, register_monitor, verify_mcp
 
 Claude Code setup:
   claude mcp add --transport http nothumansearch %s/mcp
