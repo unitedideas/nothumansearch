@@ -120,6 +120,7 @@ func main() {
 	webHandler.RegisterCategoryLandings(mux)
 
 	// API
+	mux.HandleFunc("/api/v1", apiHandler.Index)
 	mux.HandleFunc("/api/v1/search", apiHandler.Search)
 	mux.HandleFunc("/api/v1/site/", apiHandler.GetSite)
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)

@@ -34,6 +34,37 @@ func (h *APIHandler) writeJSON(w http.ResponseWriter, status int, data interface
 	json.NewEncoder(w).Encode(data)
 }
 
+// GET /api/v1 — API index. Returned so that crawlers (including our own
+// agent-first filter) can discover the structured API from the apex. The
+// crawler's isAPIResponse check requires a JSON body at /api/v1; without
+// this, NHS's own site loses the structured_api signal (15 points).
+func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/v1" && r.URL.Path != "/api/v1/" {
+		http.NotFound(w, r)
+		return
+	}
+	h.writeJSON(w, 200, map[string]any{
+		"$schema":             "https://schema.org/WebAPI",
+		"name":                "Not Human Search API v1",
+		"description":         "Search engine for agent-ready sites ranked by agentic readiness score (0-100).",
+		"version":             "1.0.0",
+		"base_url":            "https://nothumansearch.ai/api/v1",
+		"openapi_spec":        "https://nothumansearch.ai/openapi.yaml",
+		"ai_plugin_manifest":  "https://nothumansearch.ai/.well-known/ai-plugin.json",
+		"mcp_endpoint":        "https://nothumansearch.ai/mcp",
+		"endpoints": map[string]string{
+			"search":     "GET /api/v1/search?q=&category=&min_score=&page=",
+			"site":       "GET /api/v1/site/{domain}",
+			"submit":     "POST /api/v1/submit",
+			"stats":      "GET /api/v1/stats",
+			"categories": "GET /api/v1/categories",
+			"check":      "GET /api/v1/check?url=",
+		},
+		"auth":       "none",
+		"rate_limit": "60 req/min per IP",
+	})
+}
+
 // GET /api/v1/search?q=...&category=...&min_score=...&page=...
 func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
