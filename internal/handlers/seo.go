@@ -24,6 +24,7 @@ func NewSEOHandler(db *sql.DB, baseURL string) *SEOHandler {
 
 func (h *SEOHandler) Robots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	fmt.Fprintf(w, `# Not Human Search — robots.txt
 # We index sites for AI agent discovery. We welcome all crawlers.
 
@@ -98,6 +99,7 @@ Sitemap: %s/sitemap.xml
 
 func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Cache-Control", "public, max-age=300")
 
 	var totalSites int
 	if err := h.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM sites WHERE "+models.AgentFirstFilter).Scan(&totalSites); err != nil {
@@ -241,6 +243,7 @@ func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
 
 func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"name":        "nothumansearch",
 		"version":     "1.0.0",
@@ -298,6 +301,7 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 
 func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"schema_version":       "v1",
 		"name_for_human":       "Not Human Search",
@@ -317,6 +321,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 
 func (h *SEOHandler) OpenAPISpec(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/yaml")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	fmt.Fprintf(w, `openapi: "3.0.3"
 info:
   title: Not Human Search API
@@ -542,6 +547,7 @@ type sitemap struct {
 
 func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/xml")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 
 	sm := sitemap{XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9"}
 

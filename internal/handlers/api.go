@@ -201,6 +201,7 @@ func (h *APIHandler) SubmitSite(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/stats
 func (h *APIHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	totalSites, avgScore, topCategory := models.GetStats(h.DB)
+	w.Header().Set("Cache-Control", "public, max-age=300")
 	h.writeJSON(w, 200, map[string]interface{}{
 		"total_sites":  totalSites,
 		"avg_score":    avgScore,
@@ -215,6 +216,7 @@ func (h *APIHandler) Categories(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 500, map[string]string{"error": "failed to get categories"})
 		return
 	}
+	w.Header().Set("Cache-Control", "public, max-age=300")
 	h.writeJSON(w, 200, map[string]interface{}{
 		"categories": cats,
 	})
