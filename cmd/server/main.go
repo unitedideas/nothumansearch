@@ -123,6 +123,14 @@ func main() {
 	mux.HandleFunc("/", webHandler.HomePage)
 	mux.HandleFunc("/about", webHandler.AboutPage)
 	mux.HandleFunc("/score", webHandler.ScorePage)
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		// Live status dashboard — polls /health on the main three Foundry
+		// products via client-side JS so each check is an independent CORS
+		// request and the page loads instantly.
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.Write([]byte(statusHTML))
+	})
 	mux.HandleFunc("/guide", webHandler.GuidePage)
 	mux.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/#submit", http.StatusMovedPermanently)
@@ -244,6 +252,85 @@ func domainRedirectMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+const statusHTML = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status — Foundry Main Products</title>
+<meta name="description" content="Live status for Not Human Search, AI Dev Jobs, and 8bitconcepts. DB health + uptime, updated every minute.">
+<link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0d0e;color:#e8e8e9;font-family:'Inter',system-ui,sans-serif;line-height:1.7;padding:40px 20px;min-height:100vh}
+.wrap{max-width:640px;margin:0 auto}
+h1{font-size:28px;color:#fff;margin-bottom:8px;letter-spacing:-0.01em}
+.sub{color:#8b8d91;margin-bottom:32px;font-size:14px}
+.svc{display:flex;align-items:center;padding:16px 20px;background:#111214;border:1px solid rgba(255,255,255,0.07);border-radius:8px;margin-bottom:10px;gap:12px}
+.dot{width:10px;height:10px;border-radius:50%;background:#555}
+.dot.ok{background:#4ade80;box-shadow:0 0 8px rgba(74,222,128,0.4)}
+.dot.bad{background:#f87171;box-shadow:0 0 8px rgba(248,113,113,0.4)}
+.name{font-weight:600;color:#fff;flex:1}
+.url{font-family:'IBM Plex Mono',ui-monospace,monospace;color:#8b8d91;font-size:13px}
+.state{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;color:#8b8d91;min-width:80px;text-align:right}
+.state.ok{color:#4ade80}
+.state.bad{color:#f87171}
+a{color:#d97757;text-decoration:none}
+.foot{margin-top:32px;font-size:13px;color:#8b8d91;text-align:center}
+</style>
+</head><body><div class="wrap">
+<h1>Foundry Status</h1>
+<p class="sub">Live health for Not Human Search, AI Dev Jobs, and 8bitconcepts. Auto-refreshes every 60s.</p>
+
+<div class="svc" data-url="https://nothumansearch.ai/health">
+  <span class="dot"></span>
+  <div class="name">Not Human Search<br><span class="url">nothumansearch.ai/health</span></div>
+  <span class="state">checking…</span>
+</div>
+<div class="svc" data-url="https://aidevboard.com/health">
+  <span class="dot"></span>
+  <div class="name">AI Dev Jobs<br><span class="url">aidevboard.com/health</span></div>
+  <span class="state">checking…</span>
+</div>
+<div class="svc" data-url="https://8bitconcepts.com/">
+  <span class="dot"></span>
+  <div class="name">8bitconcepts<br><span class="url">8bitconcepts.com/</span></div>
+  <span class="state">checking…</span>
+</div>
+
+<p class="foot">← <a href="/">Not Human Search</a> · Last checked: <span id="ts">—</span></p>
+
+<script>
+async function check(el){
+  const url = el.dataset.url;
+  const dot = el.querySelector('.dot');
+  const state = el.querySelector('.state');
+  try {
+    const t0 = performance.now();
+    const r = await fetch(url, {cache:'no-store'});
+    const ms = Math.round(performance.now() - t0);
+    if (r.ok) {
+      dot.classList.add('ok'); dot.classList.remove('bad');
+      state.textContent = r.status + ' · ' + ms + 'ms';
+      state.classList.add('ok'); state.classList.remove('bad');
+    } else {
+      dot.classList.add('bad'); dot.classList.remove('ok');
+      state.textContent = 'HTTP ' + r.status;
+      state.classList.add('bad'); state.classList.remove('ok');
+    }
+  } catch(e) {
+    dot.classList.add('bad'); dot.classList.remove('ok');
+    state.textContent = 'unreachable';
+    state.classList.add('bad'); state.classList.remove('ok');
+  }
+}
+function runAll(){
+  document.querySelectorAll('.svc').forEach(check);
+  document.getElementById('ts').textContent = new Date().toLocaleTimeString();
+}
+runAll();
+setInterval(runAll, 60000);
+</script>
+</div></body></html>`
 
 // gzipMiddleware compresses responses if the client sent Accept-Encoding: gzip.
 // Uses a sync.Pool of gzip.Writers so we don't allocate per request. Falls
