@@ -39,6 +39,9 @@ SKIP_ROOT_DOMAINS = {
     "wikipedia.org", "wikimedia.org",
     "star-history.com",
     "archive.org", "web.archive.org",
+    # MCP registries themselves — we harvest them, don't submit them
+    "mcp.so", "smithery.ai", "glama.ai", "pulsemcp.com",
+    "llmstxt.site", "llmstxt.cloud", "llmstxt.org",
     "goo.gl", "bit.ly", "t.co", "tinyurl.com",
     # NHS-internal — never submit ourselves or test domains
     "nothumansearch.ai", "nothumansearch.com",
@@ -143,6 +146,34 @@ def from_pulsemcp(max_pages=40):
     return domains
 
 
+def from_mcpso(max_pages=10):
+    """Scrape mcp.so listing pages for external host references.
+
+    The index page + /servers?page=N pages embed many external URLs
+    (project homepages, docs, etc.). Yields ~150-200 unique hosts/page
+    before hitting diminishing returns.
+    """
+    domains = set()
+    for page in range(1, max_pages + 1):
+        url = f"https://mcp.so/servers?page={page}" if page > 1 else "https://mcp.so/"
+        try:
+            body = http_get(url)
+        except (HTTPError, URLError) as e:
+            print(f"[mcp.so] page={page} fetch failed: {e}", file=sys.stderr)
+            continue
+        page_domains = set()
+        for m in URL_RE.findall(body):
+            d = extract_domain(m)
+            if d and d != "mcp.so":
+                page_domains.add(d)
+        if not page_domains:
+            break
+        domains |= page_domains
+        time.sleep(0.3)
+    print(f"[mcp.so] {len(domains)} candidate domains")
+    return domains
+
+
 def from_llmstxt_site():
     """Scrape llms.txt index sites for referenced domains."""
     domains = set()
@@ -202,6 +233,7 @@ def main():
     candidates = set()
     candidates |= from_awesome_mcp()
     candidates |= from_pulsemcp()
+    candidates |= from_mcpso()
     candidates |= from_llmstxt_site()
     print(f"Total unique candidates: {len(candidates)}")
 
