@@ -1095,6 +1095,15 @@ func categorize(site *models.Site) string {
 		}
 	}
 
+	// Pass 1.5: subdomain + TLD hints (next-highest confidence after exact rules)
+	// api.* subdomains are almost always data/API services
+	if strings.HasPrefix(d, "api.") || strings.HasPrefix(d, "docs.api.") {
+		return "data"
+	}
+	// developer.* / docs.* are dev platform docs
+	if strings.HasPrefix(d, "developer.") || strings.HasPrefix(d, "developers.") || strings.HasPrefix(d, "docs.") {
+		return "developer"
+	}
 	// Pass 2: keyword matches on description/name (lower confidence)
 	combined := desc + " " + name
 	type catRule struct {
@@ -1123,6 +1132,41 @@ func categorize(site *models.Site) string {
 			}
 		}
 	}
+
+	// Pass 3: broader single-word keyword fallback. Lower confidence but catches
+	// many bulk imports that had narrow phrasing evade pass 2.
+	broadKeywords := []struct {
+		cat      string
+		keywords []string
+	}{
+		{"ai-tools", []string{"ai assistant", "ai agent", "llm ", "chatbot", "image generation", "text generation", "voice ai", "ai video"}},
+		{"developer", []string{"sdk", "open source", "devtools", "code editor", "cli tool", "api client", "webhook", "git-based"}},
+		{"data", []string{"dataset", "time series", "weather data", "financial data", "news api", "search api", "scraping"}},
+		{"security", []string{"encryption", "mfa", "sso", "audit log", "compliance"}},
+		{"finance", []string{"invoice", "billing", "subscription", "stripe", "crypto exchange"}},
+		{"ecommerce", []string{"product catalog", "checkout", "storefront", "order management", "inventory"}},
+		{"communication", []string{"email api", "sms ", "voip", "chat widget", "inbox", "customer support"}},
+		{"productivity", []string{"task tracker", "kanban", "gantt", "meeting notes", "scheduling"}},
+		{"health", []string{"patient", "diagnosis", "ehr ", "wellness", "fitness tracker"}},
+		{"education", []string{"classroom", "tutoring", "lesson plan", "quiz ", "learner"}},
+		{"jobs", []string{"applicant tracking", "recruiter", "job listing", "talent pool"}},
+	}
+	for _, rule := range broadKeywords {
+		for _, kw := range rule.keywords {
+			if strings.Contains(combined, kw) {
+				return rule.cat
+			}
+		}
+	}
+
+	// TLD-based last-resort hints
+	if strings.HasSuffix(d, ".ai") || strings.HasSuffix(d, ".ml") {
+		return "ai-tools"
+	}
+	if strings.HasSuffix(d, ".dev") || strings.HasSuffix(d, ".sh") {
+		return "developer"
+	}
+
 	return "other"
 }
 
