@@ -1404,6 +1404,39 @@ func categorize(site *models.Site) string {
 
 		// Ecommerce
 		"photo-fotograf.com":             "ecommerce",
+
+		// 2026-04-15 bulk-import cleanup: push top "other" domains into real buckets.
+		// Each mapped from the NHS API's /api/v1/search?category=other listing after
+		// mcp.so discovery run surfaced many un-ruled agent-first sites.
+		"attio.com":             "productivity",
+		"ticktick.com":           "productivity",
+		"coda.io":                "productivity",
+		"approval.studio":        "productivity",
+		"allourthings.io":        "productivity",
+		"dynamoi.com":            "productivity",
+		"zenda.com.ar":           "productivity",
+		"copus.network":          "productivity",
+		"notion.site":            "productivity",
+		"urlbox.com":             "developer",
+		"gitingest.com":          "developer",
+		"cronalert.com":          "developer",
+		"appscripthub.com":       "developer",
+		"shadcnstudio.com":       "developer",
+		"stackfox.co":            "security",
+		"vatsense.com":           "finance",
+		"frihet.io":              "finance",
+		"moonpay.com":            "finance",
+		"ib.phos.nz":             "finance",
+		"cryptorugmunch.app":     "finance",
+		"codex.io":               "data",
+		"swisscarinfo.ch":        "data",
+		"spaceprompts.com":       "ai-tools",
+		"superlines.io":          "ai-tools",
+		"aistatusdashboard.com":  "ai-tools",
+		"echomindr.com":          "ai-tools",
+		"rube.app":               "ai-tools",
+		"creativeclaw.co":        "ai-tools",
+		"sourcelibrary.org":      "education",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
@@ -1501,6 +1534,14 @@ func categorize(site *models.Site) string {
 		{"ai-tools", []string{"context engine", "agentic", "ai-powered", "prompt management", "vector memory"}},
 		{"data", []string{"open data", "public data", "statistical data", "census data", "government data"}},
 		{"news", []string{"breaking news", "daily news", "news aggregator"}},
+		// 2026-04-15 additions: capture more mcp.so-discovered domains via keywords.
+		{"developer", []string{"screenshot service", "uptime monitoring", "status monitoring", "cron job", "api monitor", "monitoring dashboard"}},
+		{"productivity", []string{"crm", "proofing software", "online proofing", "calendar app", "to-do list", "todo list", "notion", "collaborative workspace"}},
+		{"ai-tools", []string{"ai prompt", "prompt manager", "ai search", "ai brand", "ai status", "founder search", "ai-native"}},
+		{"finance", []string{"vat number", "vat validation", "tax api", "accounting", "bookkeeping", "billing platform", "invoicing"}},
+		{"data", []string{"blockchain data", "token data", "onchain data", "vehicle data", "registry api"}},
+		{"security", []string{"bot traffic", "bot detection", "bot control", "rate limit"}},
+		{"education", []string{"ancient text", "digital library", "scholarly archive", "research library"}},
 	}
 	for _, rule := range broadKeywords {
 		for _, kw := range rule.keywords {
