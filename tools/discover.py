@@ -21,34 +21,55 @@ from urllib.error import HTTPError, URLError
 NHS_BASE = "https://nothumansearch.ai"
 UA = "NHS-Discovery/1.0 (+https://nothumansearch.ai)"
 
-# Domains we never want to submit — noise, platform infra, social, etc.
-SKIP_PATTERNS = re.compile(
-    r"^(www\.)?("
-    r"github\.com|githubusercontent\.com|gitlab\.com|bitbucket\.org|"
-    r"raw\.github|gist\.github|pages\.github|"
-    r"shields\.io|img\.shields|badge\.fury|opencollective\.com|ko-fi\.com|"
-    r"buymeacoffee\.com|patreon\.com|paypal\.me|"
-    r"twitter\.com|x\.com|facebook\.com|linkedin\.com|youtube\.com|youtu\.be|"
-    r"instagram\.com|reddit\.com|t\.me|discord\.gg|discord\.com|"
-    r"medium\.com|dev\.to|hashnode\.dev|substack\.com|"
-    r"npmjs\.com|pypi\.org|crates\.io|rubygems\.org|packagist\.org|"
-    r"docker\.com|hub\.docker\.com|"
-    r"example\.com|localhost|127\.0\.0\.1|"
-    r"google\.com|apple\.com|microsoft\.com|amazon\.com|"
-    r"wikipedia\.org|wikimedia\.org|"
-    r"star-history\.com|github-readme-.*|"
-    r"archive\.org|web\.archive\.org|"
-    r"goo\.gl|bit\.ly|t\.co|tinyurl\.com"
-    r")$"
-)
+# Root domains we never want to submit — noise, platform infra, social, etc.
+# Matched against registrable domain (last 2 labels), so subdomains are caught too.
+SKIP_ROOT_DOMAINS = {
+    "github.com", "githubusercontent.com", "gitlab.com", "bitbucket.org",
+    "github.io", "gitlab.io", "netlify.app", "vercel.app", "pages.dev",
+    "shields.io", "opencollective.com", "ko-fi.com", "buymeacoffee.com",
+    "patreon.com", "paypal.me", "paypal.com",
+    "twitter.com", "x.com", "facebook.com", "linkedin.com", "youtube.com",
+    "youtu.be", "instagram.com", "reddit.com", "t.me", "discord.gg",
+    "discord.com", "mastodon.social",
+    "medium.com", "dev.to", "hashnode.dev", "substack.com",
+    "npmjs.com", "pypi.org", "crates.io", "rubygems.org", "packagist.org",
+    "docker.com", "hub.docker.com",
+    "example.com", "localhost", "127.0.0.1",
+    "google.com", "apple.com", "microsoft.com", "amazon.com",
+    "wikipedia.org", "wikimedia.org",
+    "star-history.com",
+    "archive.org", "web.archive.org",
+    "goo.gl", "bit.ly", "t.co", "tinyurl.com",
+    # NHS-internal — never submit ourselves or test domains
+    "nothumansearch.ai", "nothumansearch.com",
+}
+
+
+def registrable_domain(host):
+    """Return the last 2 labels of host (naive — good enough for blocklist)."""
+    parts = host.split(".")
+    if len(parts) < 2:
+        return host
+    return ".".join(parts[-2:])
 
 URL_RE = re.compile(r"https?://[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:/[^\s\"'<>)]*)?")
 
 
-def http_get(url, timeout=20):
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+def http_get(url, timeout=20, retries=2):
+    last = None
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return resp.read().decode("utf-8", errors="replace")
+        except (HTTPError, URLError) as e:
+            last = e
+            # 4xx is usually permanent; retry 429 + 5xx + transient 410
+            if isinstance(e, HTTPError) and e.code not in (410, 429, 500, 502, 503, 504):
+                raise
+            if attempt < retries:
+                time.sleep(1.5 * (attempt + 1))
+    raise last  # type: ignore[misc]
 
 
 def extract_domain(raw_url):
@@ -62,7 +83,9 @@ def extract_domain(raw_url):
         return None
     # Drop port, auth
     host = host.split("@")[-1].split(":")[0]
-    if SKIP_PATTERNS.match(host):
+    if host in SKIP_ROOT_DOMAINS:
+        return None
+    if registrable_domain(host) in SKIP_ROOT_DOMAINS:
         return None
     return host
 
