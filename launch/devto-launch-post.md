@@ -97,6 +97,25 @@ POST https://nothumansearch.ai/api/v1/submit
 
 The crawler picks it up on the next pass, verifies signals, and either adds it or flags it.
 
+## Instant score for any site
+
+Skip the submit queue — paste any URL into https://nothumansearch.ai/score and get the 7-signal breakdown in about 20 seconds. The result card includes a copy-paste embed badge (HTML / Markdown / JSX) that links back to the full report:
+
+```
+<a href="https://nothumansearch.ai/site/example.com">
+  <img src="https://nothumansearch.ai/badge/example.com.svg" height="28">
+</a>
+```
+
+Paste on your README or docs. The SVG auto-updates when your score changes.
+
+## RSS for agents and humans
+
+- https://nothumansearch.ai/feed.xml — all new agent-ready sites (score ≥25)
+- https://nothumansearch.ai/feed/developer.xml, /feed/ai-tools.xml, /feed/finance.xml, etc.
+
+Subscribe if you want a steady drip of new agent-first tools as they land.
+
 ## What's next
 
 - Semantic search over the index (embeddings for fuzzy agent queries)
@@ -104,6 +123,8 @@ The crawler picks it up on the next pass, verifies signals, and either adds it o
 - Paid tier for deeper agentic intelligence (auth flows, pagination hints, schema diffs)
 
 ## Try it
+
+870+ verified agent-first sites indexed today across 12 categories. Top three: developer (386), ai-tools (170), data (114). Daily recrawl. MIT licensed: https://github.com/unitedideas/nothumansearch
 
 https://nothumansearch.ai
 

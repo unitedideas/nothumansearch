@@ -43,18 +43,20 @@ Real verification:
 **5/7**
 NHS has an MCP server itself.
 
-Point any MCP client at:
-https://nothumansearch.ai/.well-known/mcp.json
+Wire it into Claude Code with one line:
+claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
 
-Four tools: search, get_site, submit_site, stats.
+Tools: search_agents, get_site_details, get_stats.
 
 Your agent can search the agent-first web from inside a conversation.
 
 **6/7**
 What's in there:
-724 verified agent-first sites, 13 categories, daily recrawl. Top 3 categories: developer (330), ai-tools (127), data (109).
+870+ verified agent-first sites, 12 categories, daily recrawl. Top 3: developer (386), ai-tools (170), data (114).
 
-Submission form is public. If you maintain an agent-first tool and it's not indexed, submit it:
+Bonus: https://nothumansearch.ai/score scores any URL instantly and gives you a copy-paste embed badge (HTML / Markdown / JSX) that links back to the full report.
+
+Submission form is public:
 https://nothumansearch.ai
 
 **7/7**
@@ -82,7 +84,7 @@ It's free, MIT-licensed, and exposes a hosted MCP server at https://nothumansear
 
     claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
 
-724 verified agent-first sites indexed today, across 13 categories.
+870+ verified agent-first sites indexed today, across 12 categories. Free per-URL scoring at /score with a copy-paste embed badge.
 
 If you're building agent tooling and want a discovery primitive that isn't "scrape Google," take a look:
 
