@@ -52,3 +52,10 @@ fly ssh console -a nothumansearch -C "/app/crawler -url https://example.com"
 # Bulk crawl from file (one domain per line, skips comments/#)
 fly ssh console -a nothumansearch -C "/app/crawler -file /tmp/urls.txt -workers 10"
 ```
+
+## Commit Discipline (recurring stop-hook offender)
+This repo is the #1 source of `N uncommitted changes` stop-hook fires. Mandatory protocol:
+
+**Sequence:** edit → `go build ./...` → `fly deploy --remote-only` → `curl` verify → `git add` + `git commit` + `git push origin HEAD` → next feature.
+
+The commit-and-push step is non-skippable. Crossing a feature boundary (i.e. starting a new logical change) with prior work uncommitted is the failure mode that keeps tripping the hook. If multiple small fixes ship back-to-back, batch them into one commit at the close of that batch — but close it before pivoting.
