@@ -1171,6 +1171,130 @@ func categorize(site *models.Site) string {
 		// Finance
 		"govtribe.com":          "finance",
 		"tip.md":                "finance",
+
+		// Batch 7: post-MCP-registry-bulk-crawl "other" cleanup (2026-04-13)
+		// AI-Tools / MCP hubs / agent infrastructure
+		"0nmcp.com":                "ai-tools",
+		"octo-dock.com":            "ai-tools",
+		"fidensa.com":              "ai-tools",
+		"prover.axiomatic-ai.com":  "ai-tools",
+		"axiomatic-ai.com":         "ai-tools",
+		"occam.fit":                "ai-tools",
+		"pilotgentic.com":          "ai-tools",
+		"moderatecontent.com":      "ai-tools",
+		"disco.leap-labs.com":      "ai-tools",
+		"leap-labs.com":            "ai-tools",
+		"gleanmark.com":            "ai-tools",
+		"prowl.chat":               "ai-tools",
+		"hjarni.com":               "ai-tools",
+		"getunblocked.com":         "ai-tools",
+		"audioscrape.com":          "ai-tools",
+		"promptot.com":             "ai-tools",
+
+		// Finance / Fintech / Crypto
+		"prereason.com":            "finance",
+		"revettr.com":              "finance",
+		"lona.agency":              "finance",
+		"getcurrentoffer.com":      "finance",
+		"youneedabudget.com":       "finance",
+		"bigredcloud.com":          "finance",
+		"audioalpha.io":            "finance",
+		"emc2ai.io":                "finance",
+		"blockscout.com":           "finance",
+		"dexpaprika.com":           "finance",
+		"bamboosnow.co":            "finance",
+
+		// Data / Research / Geospatial
+		"dchub.cloud":              "data",
+		"monarchinitiative.org":    "health",
+		"wolframalpha.com":         "data",
+		"deepmapai.com":            "data",
+		"daedalmap.com":            "data",
+		"olyport.com":              "data",
+		"meteosource.com":          "data",
+		"exchangerate-api.com":     "data",
+		"fedlex-connector.ch":      "data",
+		"opencaselaw.ch":           "data",
+		"clickmeter.com":           "data",
+		"canada-holidays.ca":       "data",
+		"goveda.com":               "data",
+		"sabermetrics.blazesportsintel.com": "data",
+		"blazesportsintel.com":     "data",
+		"guruwalk.com":             "data",
+
+		// Developer / DevTools / PDF / APIs
+		"rapidapi.com":             "developer",
+		"agentdomainsearch.com":    "developer",
+		"catchdoms.com":            "developer",
+		"domainkits.com":           "developer",
+		"instapods.com":            "developer",
+		"prodlint.com":             "developer",
+		"codesearch.debian.net":    "developer",
+		"kubernetes.io":            "developer",
+		"dev.to":                   "developer",
+		"pdfbroker.io":             "developer",
+		"formapi.io":               "developer",
+		"shotstack.io":             "developer",
+		"stoplight.io":             "developer",
+		"image-charts.com":         "developer",
+		"thenounproject.com":       "developer",
+		"fungenerators.com":        "developer",
+		"qrcodly.de":               "developer",
+		"cloudrf.com":              "developer",
+		"mymlh-mcp.git.ci":         "developer",
+		"jooq-mcp.martinelli.ch":   "developer",
+		"martinelli.ch":            "developer",
+		"waveguard-api":            "developer",
+		"wix.com":                  "developer",
+
+		// Productivity / Workflow
+		"app.basicops.com":         "productivity",
+		"basicops.com":             "productivity",
+		"automatedclientacquisition.com": "productivity",
+		"brandomica.com":           "productivity",
+		"brandcode.studio":         "productivity",
+		"epublys.com":              "productivity",
+		"flat.io":                  "productivity",
+		"readinglist.live":         "productivity",
+		"memesio.com":              "productivity",
+		"allgoodinsp.com":          "productivity",
+		"handwrytten.com":          "productivity",
+		"paichart.app":             "productivity",
+		"notion.com":               "productivity",
+		"heylead-api":              "productivity",
+
+		// Education
+		"admit-coach.com":          "education",
+		"nuberea.com":              "education",
+		"bible.simplecohortllc.com": "education",
+		"simplecohortllc.com":      "education",
+		"poemist.com":              "education",
+
+		// News / Media
+		"biztoc.com":               "news",
+		"groundhog-day.com":        "news",
+		"whisky-circle.info":       "news",
+
+		// Jobs
+		"qubitsok.com":             "jobs",
+
+		// Ecommerce / Real estate / Property
+		"immoswipe.ch":             "ecommerce",
+		"la-palma24.net":           "ecommerce",
+		"reilize.com":              "ecommerce",
+		"laei.ro":                  "ecommerce",
+		"shapedjt.com":             "ecommerce",
+		"orbiteos.cloud":           "ecommerce",
+		"freetv-app.com":           "ecommerce",
+
+		// Communication
+		"mandrillapp.com":          "communication",
+
+		// Sports (mapped to data — no sports category)
+		"flaim.app":                "data",
+
+		// Screenshot / media services
+		"urlbox.io":                "developer",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
@@ -1185,6 +1309,10 @@ func categorize(site *models.Site) string {
 	}
 	// developer.* / docs.* are dev platform docs
 	if strings.HasPrefix(d, "developer.") || strings.HasPrefix(d, "developers.") || strings.HasPrefix(d, "docs.") {
+		return "developer"
+	}
+	// mcp.* subdomains are hosted MCP servers — developer infrastructure
+	if strings.HasPrefix(d, "mcp.") {
 		return "developer"
 	}
 	// Pass 2: keyword matches on description/name (lower confidence)
