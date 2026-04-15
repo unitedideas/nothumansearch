@@ -5,10 +5,13 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -23,6 +26,44 @@ type APIHandler struct {
 // hundreds of simultaneous crawl+upsert goroutines. Requests above the cap still
 // queue in submissions table and get picked up by the scheduled recrawl.
 var submitCrawlSem = make(chan struct{}, 4)
+
+// submitRateLimiter is a per-IP rolling hourly limiter for /api/v1/submit.
+// 20/hour/IP lets legitimate bulk submitters (e.g. directory importers) run
+// through a few hundred URLs over an hour without blocking, but prevents
+// single-IP floods of the submissions table. Legitimate agent use is far
+// below this: most agents submit 1-3 sites total.
+var (
+	submitRLMu      sync.Mutex
+	submitRLCounts  = map[string]int{}
+	submitRLResetAt = time.Now().Add(time.Hour)
+)
+
+const submitRateLimit = 20
+
+func submitRLAllow(ipHash string) (allowed bool, remaining int, resetUnix int64) {
+	submitRLMu.Lock()
+	defer submitRLMu.Unlock()
+	now := time.Now()
+	if now.After(submitRLResetAt) {
+		submitRLCounts = map[string]int{}
+		submitRLResetAt = now.Add(time.Hour)
+	}
+	if submitRLCounts[ipHash] >= submitRateLimit {
+		return false, 0, submitRLResetAt.Unix()
+	}
+	submitRLCounts[ipHash]++
+	remaining = submitRateLimit - submitRLCounts[ipHash]
+	return true, remaining, submitRLResetAt.Unix()
+}
+
+func submitHashIP(r *http.Request) string {
+	ip := r.RemoteAddr
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		ip = strings.Split(fwd, ",")[0]
+	}
+	sum := sha256.Sum256([]byte(strings.TrimSpace(ip)))
+	return hex.EncodeToString(sum[:8])
+}
 
 func NewAPIHandler(db *sql.DB) *APIHandler {
 	return &APIHandler{DB: db}
@@ -153,6 +194,20 @@ func (h *APIHandler) GetSite(w http.ResponseWriter, r *http.Request) {
 func (h *APIHandler) SubmitSite(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		h.writeJSON(w, 405, map[string]string{"error": "POST required"})
+		return
+	}
+
+	ipHash := submitHashIP(r)
+	allowed, remaining, resetUnix := submitRLAllow(ipHash)
+	w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", submitRateLimit))
+	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+	w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
+	if !allowed {
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(time.Unix(resetUnix, 0)).Seconds())+1))
+		h.writeJSON(w, 429, map[string]any{
+			"error":     "rate limit exceeded: 20 submissions per hour per IP",
+			"retry_sec": int(time.Until(time.Unix(resetUnix, 0)).Seconds()) + 1,
+		})
 		return
 	}
 
