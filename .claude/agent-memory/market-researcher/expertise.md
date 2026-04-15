@@ -91,6 +91,44 @@ openai, anthropic, google ai, cohere, mistral, github, vercel, fly.io, stripe, r
 ### HR / Payroll Unified APIs
 - tryfinch.com (seeded via llms.txt dir), merge.dev, rippling.com
 
+## MCP Registries (additional, beyond seeds)
+- pulsemcp.com — 12,520+ servers, hand-reviewed daily
+- mcp.so — 20,005+ community servers
+- registry.modelcontextprotocol.io — official Anthropic registry (API: /v0/servers)
+- mcp.directory — 3,000+ servers with IDE integration
+- mcpserverfinder.com — curated + community ratings
+- opentools.com/registry — 400+ tools across 160+ MCP servers
+- mastra.ai/mcp-registry-registry — meta-index of registries
+- mcpverified.com — verification-focused directory
+- lobehub.com/mcp — MCP marketplace in LobeHub
+
+## llms.txt Directories (for crawl seeds)
+- directory.llmstxt.cloud — confirmed live, 1249+ sites
+- llmstxthub.com — github: thedaviddias/llms-txt-hub, 1249+ entries
+- llmsdirectory.com — scored 1-100
+- llmstxt.site — stats aggregator
+
+## Confirmed llms.txt Adopters (not yet in seeds)
+- mintlify.com, buildwithfern.com, speakeasy.com, readme.com, scalar.com
+- mastra.ai, portkey.ai, context7.com (upstash product)
+- dub.co, axiom.co, tinybird.co, infisical.com, plain.com
+- openphone.com, smartcar.com, writer.com, galileo.ai
+- stedi.com, projectdiscovery.io, inkeep.com, frigade.com
+- getlago.com, hyperline.co, conductor.is, flatfile.com
+- aporia.com, basehub.com, openpipe.ai, dotenvx.com
+- datafold.com, dynamic.xyz, velt.dev, screenshotone.com
+- tryvital.io, salesbricks.com, wordlift.io, pinata.cloud
+- micro1.ai, meshconnect.com, fractalpay.com, ionq.com
+- dopp.finance, axiom.co, campsite.com, onagents.org
+
+## SDK / API Dev Tools (agent-ready)
+- speakeasy.com — OpenAPI→SDK+MCP, has llms.txt, agent CLIs
+- stainlessapi.com — SDK generation from OpenAPI
+- buildwithfern.com — OpenAPI docs+SDK, llms.txt auto-gen
+- scalar.com — OpenAPI reference generator, interactive
+- mintlify.com — docs platform, auto llms.txt+MCP server
+- readme.com — docs platform, MCP server + llms.txt
+
 ## Anti-patterns / Avoid
 - Pure content sites with no API (Coursera-type education sites are marginal)
 - Sites that are wrappers of other APIs without own endpoints (many RapidAPI listings)

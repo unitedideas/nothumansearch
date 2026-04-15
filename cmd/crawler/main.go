@@ -38,6 +38,17 @@ func main() {
 		if err := database.RunMigrations(migrationsDir); err != nil {
 			log.Printf("WARNING: migration: %v", err)
 		}
+		// Belt-and-braces: ensure favicon columns exist regardless of file-based migration state.
+		if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_favicon BOOLEAN DEFAULT FALSE`); err != nil {
+			log.Printf("ensure has_favicon: %v", err)
+		} else {
+			log.Println("ensured column: has_favicon")
+		}
+		if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS favicon_url TEXT DEFAULT ''`); err != nil {
+			log.Printf("ensure favicon_url: %v", err)
+		} else {
+			log.Println("ensured column: favicon_url")
+		}
 	}
 
 	if *url != "" {

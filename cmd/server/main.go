@@ -39,6 +39,13 @@ func main() {
 	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations")); err != nil {
 		log.Printf("WARNING: migration: %v", err)
 	}
+	// Belt-and-braces: ensure favicon columns exist (was added in 006 migration).
+	if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_favicon BOOLEAN DEFAULT FALSE`); err != nil {
+		log.Printf("ensure has_favicon: %v", err)
+	}
+	if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS favicon_url TEXT DEFAULT ''`); err != nil {
+		log.Printf("ensure favicon_url: %v", err)
+	}
 
 	templatesDir := filepath.Join(projectRoot, "templates")
 	baseURL := os.Getenv("BASE_URL")

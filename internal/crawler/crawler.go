@@ -72,10 +72,19 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	site.LastCrawledAt = &now
 
 	// Fetch homepage for title/description
+	var homepageBody string
 	if body, status, err := fetch(base); err == nil && status == 200 {
 		site.Name = extractTitle(body)
 		site.Description = extractMetaDescription(body)
 		site.HasSchemaOrg = strings.Contains(body, "schema.org")
+		homepageBody = body
+	}
+
+	// Detect favicon so the frontend can render a clean letter-avatar instead of
+	// third-party placeholder globes when a site has no real favicon.
+	if fu, ok := detectFavicon(base, homepageBody); ok {
+		site.HasFavicon = true
+		site.FaviconURL = fu
 	}
 
 	// Check llms.txt
@@ -110,12 +119,12 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 		}
 	}
 
-	// Check OpenAPI spec
-	for _, path := range []string{"/openapi.yaml", "/openapi.json", "/api/openapi.yaml", "/api/openapi.json", "/swagger.json", "/api-docs"} {
-		if body, status, err := fetch(base + path); err == nil && status == 200 && len(body) > 50 {
-			if strings.Contains(body, "openapi") || strings.Contains(body, "swagger") || strings.Contains(body, "paths") {
+	// Check OpenAPI spec — must be a real OpenAPI 3.x or Swagger 2.x document,
+	// not just any HTML page containing the word "openapi".
+	for _, path := range []string{"/openapi.yaml", "/openapi.json", "/api/openapi.yaml", "/api/openapi.json", "/swagger.json"} {
+		if body, status, err := fetch(base + path); err == nil && status == 200 && len(body) > 100 {
+			if isValidOpenAPI(body) {
 				site.HasOpenAPI = true
-				// Extract summary
 				summary := body
 				if len(summary) > 500 {
 					summary = summary[:500]
@@ -169,20 +178,27 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 		}
 	}
 
-	// Check for structured API — high-confidence paths first, then content-verified paths
-	for _, path := range []string{"/api/v1", "/api/v2", "/api-docs", "/graphql"} {
-		if _, status, err := fetch(base + path); err == nil && (status == 200 || status == 301 || status == 302) {
+	// Check for structured API — require an actual JSON-ish / API-typical response.
+	// Redirects DON'T count: many sites 301 unknown paths to homepage.
+	// Status 200 alone is insufficient: sites with catch-all HTML routes hit everything.
+	apiPaths := []string{"/api/v1", "/api/v2", "/graphql"}
+	// API-subdomain sites (api.nasa.gov, api.fda.gov, etc.) expose their API at the root.
+	if strings.HasPrefix(strings.ToLower(site.Domain), "api.") {
+		apiPaths = append([]string{"/"}, apiPaths...)
+	}
+	for _, path := range apiPaths {
+		if body, status, err := fetch(base + path); err == nil && status == 200 && isAPIResponse(body) {
 			site.HasStructuredAPI = true
 			break
 		}
 	}
 	if !site.HasStructuredAPI {
-		// These paths need content verification (many sites have generic /docs or /developer pages)
-		apiIndicators := []string{"api", "endpoint", "rest", "graphql", "sdk", "authentication",
-			"rate limit", "api key", "access token", "bearer", "curl", "request", "response",
-			"json", "webhook", "oauth", "api reference", "openapi", "swagger"}
-		for _, path := range []string{"/api", "/docs/api", "/developer", "/developers"} {
-			if body, status, err := fetch(base + path); err == nil && (status == 200 || status == 301 || status == 302) {
+		// Developer-docs fallback: require strong API-doc evidence (multiple distinct signals).
+		apiIndicators := []string{"endpoint", "rest api", "graphql", "bearer token", "api key",
+			"rate limit", "access token", "curl -x", "curl --", "webhook", "oauth 2", "api reference",
+			"openapi", "swagger", "application/json"}
+		for _, path := range []string{"/api", "/docs/api", "/developer", "/developers", "/api-docs"} {
+			if body, status, err := fetch(base + path); err == nil && status == 200 {
 				bodyLower := strings.ToLower(body)
 				matches := 0
 				for _, indicator := range apiIndicators {
@@ -190,8 +206,9 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 						matches++
 					}
 				}
-				// Need at least 3 API indicators to confirm this is actual API documentation
-				if matches >= 3 {
+				// Raised from 3 → 5 indicators. Most false positives (e-commerce, blogs)
+				// have a few generic API words; real API docs have many.
+				if matches >= 5 {
 					site.HasStructuredAPI = true
 					break
 				}
@@ -214,6 +231,218 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 		site.HasRobotsAI, site.HasStructuredAPI, site.HasSchemaOrg)
 
 	return site, nil
+}
+
+// detectFavicon resolves a site's favicon if it exists. Returns absolute URL + ok.
+// Looks for <link rel="icon"> in homepage HTML first (most accurate), then falls back
+// to /favicon.ico. Does NOT accept HTML error pages as favicons.
+func detectFavicon(base, html string) (string, bool) {
+	// Try <link rel="icon"> / rel="shortcut icon" in homepage HTML
+	lower := strings.ToLower(html)
+	for _, relToken := range []string{`rel="icon"`, `rel='icon'`, `rel="shortcut icon"`, `rel='shortcut icon'`, `rel="apple-touch-icon"`, `rel='apple-touch-icon'`} {
+		idx := strings.Index(lower, relToken)
+		if idx == -1 {
+			continue
+		}
+		tagStart := strings.LastIndex(lower[:idx], "<link")
+		if tagStart == -1 {
+			continue
+		}
+		tagEnd := strings.Index(lower[tagStart:], ">")
+		if tagEnd == -1 {
+			continue
+		}
+		tag := html[tagStart : tagStart+tagEnd+1]
+		hrefIdx := strings.Index(strings.ToLower(tag), `href="`)
+		var quote byte = '"'
+		if hrefIdx == -1 {
+			hrefIdx = strings.Index(strings.ToLower(tag), `href='`)
+			quote = '\''
+		}
+		if hrefIdx == -1 {
+			continue
+		}
+		start := hrefIdx + 6
+		end := strings.Index(tag[start:], string(quote))
+		if end == -1 {
+			continue
+		}
+		href := strings.TrimSpace(tag[start : start+end])
+		if href == "" {
+			continue
+		}
+		// Resolve relative URLs
+		resolved := resolveURL(base, href)
+		if resolved == "" {
+			continue
+		}
+		if verifyFavicon(resolved) {
+			return resolved, true
+		}
+	}
+	// Fallback: /favicon.ico
+	candidate := strings.TrimSuffix(base, "/") + "/favicon.ico"
+	if verifyFavicon(candidate) {
+		return candidate, true
+	}
+	return "", false
+}
+
+func resolveURL(base, href string) string {
+	if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
+		return href
+	}
+	if strings.HasPrefix(href, "//") {
+		return "https:" + href
+	}
+	if strings.HasPrefix(href, "/") {
+		return strings.TrimSuffix(base, "/") + href
+	}
+	return strings.TrimSuffix(base, "/") + "/" + href
+}
+
+func verifyFavicon(u string) bool {
+	req, err := http.NewRequest("GET", u, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	if err != nil || len(body) < 16 {
+		return false
+	}
+	// Reject HTML (site returning 200 HTML for unknown paths)
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	if strings.Contains(ct, "text/html") {
+		return false
+	}
+	head := strings.ToLower(strings.TrimSpace(string(body)))
+	if strings.HasPrefix(head, "<!doctype") || strings.HasPrefix(head, "<html") {
+		return false
+	}
+	// Accept if content-type is image/* or if magic bytes look like ICO/PNG/SVG/GIF
+	if strings.HasPrefix(ct, "image/") {
+		return true
+	}
+	b := body
+	// ICO: 00 00 01 00; PNG: 89 50 4E 47; GIF: 47 49 46 38; JPEG: FF D8 FF; SVG: <svg or <?xml
+	if len(b) >= 4 {
+		if b[0] == 0x00 && b[1] == 0x00 && (b[2] == 0x01 || b[2] == 0x02) && b[3] == 0x00 {
+			return true
+		}
+		if b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 {
+			return true
+		}
+		if b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x38 {
+			return true
+		}
+		if b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF {
+			return true
+		}
+	}
+	if strings.Contains(head[:min(200, len(head))], "<svg") {
+		return true
+	}
+	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// isValidOpenAPI returns true only if the body is a real OpenAPI 3.x or Swagger 2.x
+// spec. Rejects HTML landing pages that happen to contain the word "openapi".
+func isValidOpenAPI(body string) bool {
+	trimmed := strings.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return false
+	}
+	// Reject HTML
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "<!doctype") || strings.HasPrefix(lower, "<html") || strings.HasPrefix(lower, "<?xml") {
+		return false
+	}
+	// Try JSON: must have openapi/swagger field AND a paths object
+	if strings.HasPrefix(trimmed, "{") {
+		var doc map[string]interface{}
+		if json.Unmarshal([]byte(trimmed), &doc) == nil {
+			_, hasOpenAPI := doc["openapi"]
+			_, hasSwagger := doc["swagger"]
+			paths, hasPaths := doc["paths"].(map[string]interface{})
+			if (hasOpenAPI || hasSwagger) && hasPaths && len(paths) > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	// YAML: heuristic — must have both a version declaration at top level AND a paths: block
+	// with at least one endpoint beneath it.
+	hasVersion := false
+	for _, line := range strings.Split(trimmed, "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "openapi:") || strings.HasPrefix(t, "swagger:") {
+			hasVersion = true
+			break
+		}
+	}
+	if !hasVersion {
+		return false
+	}
+	// Must have paths: block followed by at least one indented endpoint (starts with / or has :)
+	pathsIdx := strings.Index(trimmed, "\npaths:")
+	if pathsIdx == -1 && !strings.HasPrefix(trimmed, "paths:") {
+		return false
+	}
+	// Require at least one route under paths
+	afterPaths := trimmed
+	if pathsIdx >= 0 {
+		afterPaths = trimmed[pathsIdx:]
+	}
+	return strings.Contains(afterPaths, "\n  /") || strings.Contains(afterPaths, "\n '/") || strings.Contains(afterPaths, "\n \"/")
+}
+
+// isAPIResponse returns true if the response body looks like an API (JSON/GraphQL),
+// not an HTML page. Prevents catch-all routes on HTML sites from falsely matching.
+func isAPIResponse(body string) bool {
+	trimmed := strings.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return false
+	}
+	// HTML disqualifies
+	lower := strings.ToLower(trimmed)
+	if strings.HasPrefix(lower, "<!doctype") || strings.HasPrefix(lower, "<html") || strings.HasPrefix(lower, "<head") {
+		return false
+	}
+	// JSON object or array
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		var v interface{}
+		if json.Unmarshal([]byte(trimmed), &v) == nil {
+			return true
+		}
+	}
+	// GraphQL usually returns JSON too, but an unauthenticated GET often returns
+	// {"errors":[...]} or a "must POST" message — still JSON, caught above.
+	// Some APIs return plain text error like "Unauthorized" — accept if it mentions
+	// auth/token/api and is short.
+	if len(trimmed) < 200 {
+		for _, hint := range []string{"\"message\"", "\"error\"", "\"data\"", "unauthorized", "authentication required", "api key", "bearer"} {
+			if strings.Contains(strings.ToLower(trimmed), hint) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func extractTitle(html string) string {

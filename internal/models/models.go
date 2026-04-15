@@ -32,6 +32,9 @@ type Site struct {
 	IsVerified  bool   `json:"is_verified"`
 	IsFeatured  bool   `json:"is_featured"`
 
+	HasFavicon bool   `json:"has_favicon"`
+	FaviconURL string `json:"favicon_url,omitempty"`
+
 	LastCrawledAt *time.Time `json:"last_crawled_at,omitempty"`
 	CrawlStatus   string     `json:"crawl_status"`
 	CrawlError    string     `json:"crawl_error,omitempty"`

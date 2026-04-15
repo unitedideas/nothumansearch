@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
@@ -38,6 +39,15 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		"initial": func(domain string) string {
+			// First alphabetic character of the domain, uppercased — for favicon fallback.
+			for _, r := range domain {
+				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+					return strings.ToUpper(string(r))
+				}
+			}
+			return "?"
+		},
 	}
 
 	tmpl, err := template.New("").Funcs(funcMap).ParseGlob(filepath.Join(templatesDir, "*.html"))

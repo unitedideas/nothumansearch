@@ -20,8 +20,9 @@ func UpsertSite(db *sql.DB, s *Site) error {
 			llms_txt_content, openapi_summary, mcp_endpoint,
 			agentic_score, category, tags,
 			is_featured, last_crawled_at, crawl_status, crawl_error,
+			has_favicon, favicon_url,
 			search_vector)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
 			setweight(to_tsvector('english', COALESCE($3, '')), 'A') ||
 			setweight(to_tsvector('english', COALESCE($1, '')), 'A') ||
 			setweight(to_tsvector('english', COALESCE($4, '')), 'B') ||
@@ -38,7 +39,9 @@ func UpsertSite(db *sql.DB, s *Site) error {
 			agentic_score=EXCLUDED.agentic_score, category=EXCLUDED.category, tags=EXCLUDED.tags,
 			is_featured=(sites.is_featured OR EXCLUDED.is_featured),
 			last_crawled_at=EXCLUDED.last_crawled_at, crawl_status=EXCLUDED.crawl_status,
-			crawl_error=EXCLUDED.crawl_error, updated_at=NOW(),
+			crawl_error=EXCLUDED.crawl_error,
+			has_favicon=EXCLUDED.has_favicon, favicon_url=EXCLUDED.favicon_url,
+			updated_at=NOW(),
 			search_vector=EXCLUDED.search_vector`,
 		s.Domain, s.URL, s.Name, s.Description,
 		s.HasLLMsTxt, s.HasAIPlugin, s.HasOpenAPI, s.HasRobotsAI,
@@ -46,6 +49,7 @@ func UpsertSite(db *sql.DB, s *Site) error {
 		s.LLMsTxtContent, s.OpenAPISummary, s.MCPEndpoint,
 		s.AgenticScore, s.Category, pq.Array(s.Tags),
 		s.IsFeatured, s.LastCrawledAt, s.CrawlStatus, s.CrawlError,
+		s.HasFavicon, s.FaviconURL,
 	)
 	return err
 }
@@ -72,9 +76,10 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	argN := 1
 
 	conditions = append(conditions, "crawl_status = 'success'")
-	// Only show sites with at least one strong agent signal
-	// (API, llms.txt, OpenAPI, ai-plugin, or MCP — not just schema.org/robots.txt)
-	conditions = append(conditions, "(has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)")
+	// Only show sites with at least one HARD agent signal — something an agent can
+	// programmatically interact with. llms.txt alone is passive content (markdown index)
+	// and does not qualify. Must match AgentFirstFilter const below.
+	conditions = append(conditions, "(has_structured_api = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)")
 
 	useFTS := false
 	var tsQueryArg int
@@ -161,6 +166,7 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			has_structured_api, has_mcp_server, has_schema_org,
 			agentic_score, category, tags,
 			is_verified, is_featured, last_crawled_at, crawl_status,
+			COALESCE(has_favicon, false), COALESCE(favicon_url, ''),
 			created_at, updated_at
 		FROM sites %s
 		%s
@@ -183,6 +189,7 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			&s.HasStructuredAPI, &s.HasMCPServer, &s.HasSchemaOrg,
 			&s.AgenticScore, &s.Category, &tags,
 			&s.IsVerified, &s.IsFeatured, &s.LastCrawledAt, &s.CrawlStatus,
+			&s.HasFavicon, &s.FaviconURL,
 			&s.CreatedAt, &s.UpdatedAt,
 		)
 		if err != nil {
@@ -208,6 +215,7 @@ func GetSiteByDomain(db *sql.DB, domain string) (*Site, error) {
 			llms_txt_content, openapi_summary,
 			agentic_score, category, tags,
 			is_verified, is_featured, last_crawled_at, crawl_status,
+			COALESCE(has_favicon, false), COALESCE(favicon_url, ''),
 			created_at, updated_at
 		FROM sites WHERE domain = $1`, domain).Scan(
 		&s.ID, &s.Domain, &s.URL, &s.Name, &s.Description,
@@ -216,6 +224,7 @@ func GetSiteByDomain(db *sql.DB, domain string) (*Site, error) {
 		&s.LLMsTxtContent, &s.OpenAPISummary,
 		&s.AgenticScore, &s.Category, &tags,
 		&s.IsVerified, &s.IsFeatured, &s.LastCrawledAt, &s.CrawlStatus,
+		&s.HasFavicon, &s.FaviconURL,
 		&s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -225,7 +234,12 @@ func GetSiteByDomain(db *sql.DB, domain string) (*Site, error) {
 	return &s, nil
 }
 
-const AgentFirstFilter = "crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
+// AgentFirstFilter: a site only qualifies if it exposes at least one HARD agent signal —
+// something an agent can programmatically interact with. llms.txt alone is passive content
+// and doesn't qualify. Schema.org and robots.txt never qualified.
+// Hard signals: structured API, OpenAPI spec, MCP server, ai-plugin manifest.
+// llms.txt counts ONLY when paired with one of the above (enforced via score-agnostic OR).
+const AgentFirstFilter = "crawl_status='success' AND (has_structured_api = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
 
 func GetStats(db *sql.DB) (totalSites, avgScore int, topCategory string) {
 	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE " + AgentFirstFilter).Scan(&totalSites, &avgScore)

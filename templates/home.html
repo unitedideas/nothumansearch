@@ -109,8 +109,15 @@
         .site-card.featured { border-left:3px solid var(--accent); }
 
         .site-favicon {
-            width:32px; height:32px; border-radius:4px; flex-shrink:0;
-            background:var(--border);
+            width:32px; height:32px; border-radius:6px; flex-shrink:0;
+            background:var(--border); object-fit:contain; padding:2px;
+        }
+        .site-favicon-fallback {
+            width:32px; height:32px; border-radius:6px; flex-shrink:0;
+            display:flex; align-items:center; justify-content:center;
+            background:linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            color:var(--bg); font-weight:700; font-size:15px;
+            font-family:'IBM Plex Mono',monospace; text-transform:uppercase;
         }
         .site-info { flex:1; min-width:0; }
         .site-name {
@@ -213,7 +220,12 @@
 
         {{range .Sites}}
         <div class="site-card {{if .IsFeatured}}featured{{end}}">
-            <img class="site-favicon" src="https://www.google.com/s2/favicons?domain={{.Domain}}&sz=64" alt="" loading="lazy">
+            {{if .HasFavicon}}
+            <img class="site-favicon" src="{{if .FaviconURL}}{{.FaviconURL}}{{else}}https://{{.Domain}}/favicon.ico{{end}}" alt="" loading="lazy"
+                 onerror="this.outerHTML='<div class=\u0022site-favicon-fallback\u0022>{{initial .Domain}}</div>';">
+            {{else}}
+            <div class="site-favicon-fallback">{{initial .Domain}}</div>
+            {{end}}
             <div class="site-info">
                 <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}}</a>
                 {{if .IsFeatured}} <span style="color:var(--accent);font-size:11px;font-weight:600;">FEATURED</span>{{end}}

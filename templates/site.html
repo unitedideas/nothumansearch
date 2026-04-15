@@ -45,7 +45,15 @@
         .back:hover { color:var(--accent); }
 
         .site-header { display:flex; gap:20px; align-items:flex-start; margin:24px 0; }
-        .site-header img { width:48px; height:48px; border-radius:8px; }
+        .site-header img { width:48px; height:48px; border-radius:8px; object-fit:contain; padding:3px; background:var(--border); }
+        .site-header-fallback {
+            width:48px; height:48px; border-radius:8px;
+            display:flex; align-items:center; justify-content:center;
+            background:linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 100%);
+            color:var(--bg); font-weight:700; font-size:22px;
+            font-family:'IBM Plex Mono',monospace; text-transform:uppercase;
+            flex-shrink:0;
+        }
         .site-header h1 { font-size:28px; font-weight:700; }
         .site-header .domain { color:var(--text-muted); font-family:'IBM Plex Mono',monospace; font-size:14px; }
 
@@ -92,7 +100,12 @@
         </header>
 
         <div class="site-header">
-            <img src="https://www.google.com/s2/favicons?domain={{.Domain}}&sz=128" alt="">
+            {{if .HasFavicon}}
+            <img src="{{if .FaviconURL}}{{.FaviconURL}}{{else}}https://{{.Domain}}/favicon.ico{{end}}" alt=""
+                 onerror="this.outerHTML='<div class=\u0022site-header-fallback\u0022>{{initial .Domain}}</div>';">
+            {{else}}
+            <div class="site-header-fallback">{{initial .Domain}}</div>
+            {{end}}
             <div>
                 <h1>{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}}</h1>
                 <div class="domain"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Domain}}</a></div>
