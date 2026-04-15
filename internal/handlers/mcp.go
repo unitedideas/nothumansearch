@@ -128,7 +128,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 					"category": map[string]any{
 						"type":        "string",
 						"description": "Filter by category",
-						"enum":        []string{"ai-tools", "developer", "data", "jobs", "finance", "ecommerce", "health", "education", "security", "communication", "productivity", "other"},
+						"enum":        []string{"ai-tools", "developer", "data", "jobs", "finance", "ecommerce", "health", "education", "security", "communication", "productivity", "news"},
 					},
 					"min_score": map[string]any{
 						"type":        "integer",
