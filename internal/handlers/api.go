@@ -150,6 +150,10 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 500, map[string]string{"error": "search failed"})
 		return
 	}
+	// Never return JSON null for results — consumers iterate without nil-check.
+	if sites == nil {
+		sites = []models.Site{}
+	}
 
 	// Log search query for analytics (non-blocking)
 	if params.Query != "" {
