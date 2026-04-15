@@ -244,6 +244,12 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"endpoint":    h.BaseURL + "/api/v1/stats",
 				"method":      "GET",
 			},
+			{
+				"name":        "register_monitor",
+				"description": "Subscribe an email to get alerted when the indicated domain's agentic readiness score drops.",
+				"endpoint":    h.BaseURL + "/api/v1/monitor/register",
+				"method":      "POST",
+			},
 		},
 	})
 }
