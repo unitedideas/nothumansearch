@@ -55,13 +55,15 @@ func UpsertSite(db *sql.DB, s *Site) error {
 }
 
 type SearchParams struct {
-	Query    string
-	Category string
-	MinScore int
-	HasAPI   bool
-	HasMCP   bool
-	Limit    int
-	Page     int
+	Query       string
+	Category    string
+	MinScore    int
+	HasAPI      bool
+	HasMCP      bool
+	HasOpenAPI  bool
+	HasLLMsTxt  bool
+	Limit       int
+	Page        int
 }
 
 func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
@@ -141,6 +143,12 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	}
 	if p.HasMCP {
 		conditions = append(conditions, "has_mcp_server = true")
+	}
+	if p.HasOpenAPI {
+		conditions = append(conditions, "has_openapi = true")
+	}
+	if p.HasLLMsTxt {
+		conditions = append(conditions, "has_llms_txt = true")
 	}
 
 	where := "WHERE " + strings.Join(conditions, " AND ")

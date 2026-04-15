@@ -140,6 +140,32 @@ func (h *WebHandler) AIToolsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// OpenAPIPage: /openapi-apis — surfaces every site exposing an OpenAPI spec.
+func (h *WebHandler) OpenAPIPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "openapi",
+		Path:       "/openapi-apis",
+		Title:      "OpenAPI Directory — Browse APIs With OpenAPI Specs for AI Agents | Not Human Search",
+		Desc:       "Every site in our index publishing a valid OpenAPI spec — the machine-readable contract AI agents use to call APIs at build time. Ranked by agentic readiness.",
+		Heading:    "OpenAPI Spec Directory",
+		Subheading: "Every API in our index that publishes an OpenAPI/Swagger spec — ranked by agentic readiness.",
+		Params:     models.SearchParams{HasOpenAPI: true, Limit: 30},
+	})
+}
+
+// LLMsTxtPage: /llms-txt-sites — surfaces every site publishing an llms.txt manifest.
+func (h *WebHandler) LLMsTxtPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "llms-txt",
+		Path:       "/llms-txt-sites",
+		Title:      "llms.txt Directory — Sites Publishing llms.txt Manifests | Not Human Search",
+		Desc:       "Every site in our index that publishes an llms.txt manifest — the /llms.txt convention AI agents read at crawl time. Ranked by agentic readiness.",
+		Heading:    "llms.txt Directory",
+		Subheading: "Every site in our index that ships an llms.txt manifest — ranked by agentic readiness.",
+		Params:     models.SearchParams{HasLLMsTxt: true, Limit: 30},
+	})
+}
+
 // DeveloperPage: /developer-apis — targets "developer API directory" / "agent-ready APIs" queries.
 func (h *WebHandler) DeveloperPage(w http.ResponseWriter, r *http.Request) {
 	h.renderCategoryLanding(w, r, categoryLanding{

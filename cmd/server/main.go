@@ -109,6 +109,8 @@ func main() {
 	mux.HandleFunc("/mcp-servers", webHandler.MCPServersPage)
 	mux.HandleFunc("/ai-tools", webHandler.AIToolsPage)
 	mux.HandleFunc("/developer-apis", webHandler.DeveloperPage)
+	mux.HandleFunc("/openapi-apis", webHandler.OpenAPIPage)
+	mux.HandleFunc("/llms-txt-sites", webHandler.LLMsTxtPage)
 	webHandler.RegisterCategoryLandings(mux)
 
 	// API
