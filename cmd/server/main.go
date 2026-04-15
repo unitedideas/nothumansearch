@@ -59,6 +59,7 @@ func main() {
 	}
 	apiHandler := handlers.NewAPIHandler(database.DB)
 	seoHandler := handlers.NewSEOHandler(database.DB, baseURL)
+	monitorHandler := handlers.NewMonitorHandler(database.DB, baseURL)
 
 	mux := http.NewServeMux()
 
@@ -99,6 +100,11 @@ func main() {
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
+	mux.HandleFunc("/api/v1/monitor/register", monitorHandler.Register)
+
+	// Monitor (free feature — email alerts when a site's agentic readiness drops)
+	mux.HandleFunc("/monitor", monitorHandler.LandingPage)
+	mux.HandleFunc("/monitor/unsubscribe/", monitorHandler.Unsubscribe)
 
 	// Middleware chain: logging → domain redirect → CORS → handler
 	handler := loggingMiddleware(domainRedirectMiddleware(corsMiddleware(mux)))
