@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -41,6 +42,11 @@ func main() {
 		}
 	}
 
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://nothumansearch.ai"
+	}
+
 	cutoff := time.Now().Add(-time.Duration(*cutoffHours) * time.Hour)
 	due, err := models.ListDueMonitors(database.DB, cutoff, *limit)
 	if err != nil {
@@ -48,24 +54,45 @@ func main() {
 	}
 	log.Printf("monitor-check: %d due monitors (cutoff %s)", len(due), cutoff.Format(time.RFC3339))
 
+	// Dedup by domain so one crawl fans out to all watchers. Same domain
+	// subscribed by 5 emails = 1 crawl, 5 possible alerts.
+	byDomain := map[string][]models.Monitor{}
+	order := []string{}
 	for _, m := range due {
-		if err := checkOne(database.DB, mailer, &m, *dry); err != nil {
-			log.Printf("  %s (%s): error: %v", m.Domain, m.Email, err)
-			continue
+		if _, ok := byDomain[m.Domain]; !ok {
+			order = append(order, m.Domain)
+		}
+		byDomain[m.Domain] = append(byDomain[m.Domain], m)
+	}
+
+	for _, domain := range order {
+		site, cerr := crawler.CrawlSite("https://" + domain)
+		for _, m := range byDomain[domain] {
+			if err := handleOne(database.DB, mailer, baseURL, &m, site, cerr, *dry); err != nil {
+				log.Printf("  %s (%s): error: %v", m.Domain, m.Email, err)
+			}
 		}
 	}
 	log.Printf("monitor-check done")
 }
 
-func checkOne(db *sql.DB, mailer *email.Client, m *models.Monitor, dry bool) error {
-	site, err := crawler.CrawlSite("https://" + m.Domain)
-	if err != nil {
-		// Unreachable is a newsworthy event if it previously worked.
+// handleOne applies a single crawl result to a single monitor row.
+// site/cerr are the shared crawl result for this domain; we accept nil
+// site when cerr != nil.
+func handleOne(db *sql.DB, mailer *email.Client, baseURL string, m *models.Monitor, site *models.Site, cerr error, dry bool) error {
+	if cerr != nil {
 		if m.LastScore != nil && *m.LastScore > 0 {
-			return maybeAlert(db, mailer, m, 0, "unreachable", dry,
-				fmt.Sprintf("We couldn't reach %s during our weekly check. Error: %v", m.Domain, err))
+			// Site previously worked, now unreachable — alert.
+			return maybeAlert(db, mailer, baseURL, m, 0, "unreachable", dry,
+				fmt.Sprintf("We couldn't reach %s during our weekly check. Error: %v", m.Domain, cerr))
 		}
-		return err
+		// First-ever crawl failed. Record a zero-score baseline so the
+		// monitor isn't retried forever on every run.
+		log.Printf("  WARN %s: first crawl failed, baselining at score=0: %v", m.Domain, cerr)
+		if dry {
+			return nil
+		}
+		return models.UpdateMonitorCheck(db, m.ID, 0, "", false)
 	}
 
 	score := site.AgenticScore
@@ -82,14 +109,13 @@ func checkOne(db *sql.DB, mailer *email.Client, m *models.Monitor, dry bool) err
 	}
 
 	drop := *m.LastScore - score
-	changed := m.LastSignalsHash == nil || *m.LastSignalsHash != hash
-	log.Printf("  %s: score %d->%d (drop=%d) signals_changed=%v", m.Domain, *m.LastScore, score, drop, changed)
+	log.Printf("  %s: score %d->%d (drop=%d)", m.Domain, *m.LastScore, score, drop)
 
 	// Alert only on meaningful regressions: score drop ≥ 5 OR any signal disappeared.
 	disappeared := signalsDisappeared(m, site)
 	if drop >= 5 || disappeared != "" {
 		reason := reasonText(drop, disappeared, *m.LastScore, score)
-		return maybeAlert(db, mailer, m, score, hash, dry, reason)
+		return maybeAlert(db, mailer, baseURL, m, score, hash, dry, reason)
 	}
 	if dry {
 		return nil
@@ -169,10 +195,10 @@ func reasonText(drop int, disappeared string, before, after int) string {
 	return sb.String()
 }
 
-func maybeAlert(db *sql.DB, mailer *email.Client, m *models.Monitor, score int, hash string, dry bool, reason string) error {
+func maybeAlert(db *sql.DB, mailer *email.Client, baseURL string, m *models.Monitor, score int, hash string, dry bool, reason string) error {
 	subject := fmt.Sprintf("Agentic-readiness drop: %s", m.Domain)
-	unsubURL := "https://nothumansearch.ai/monitor/unsubscribe/" + m.Token
-	siteURL := "https://nothumansearch.ai/site/" + m.Domain
+	unsubURL := baseURL + "/monitor/unsubscribe/" + m.Token
+	siteURL := baseURL + "/site/" + m.Domain
 	htmlBody := fmt.Sprintf(`<p>Hi,</p>
 <p>%s</p>
 <p>See the full breakdown: <a href="%s">%s</a></p>

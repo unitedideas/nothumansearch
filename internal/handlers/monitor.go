@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"html/template"
+	"log"
 	"net/http"
 	"strings"
 
@@ -40,8 +41,11 @@ func (h *MonitorHandler) Register(w http.ResponseWriter, r *http.Request) {
 		case models.ErrInvalidEmail:
 			writeJSON(w, 400, map[string]string{"error": "invalid email"})
 		case models.ErrInvalidDomain:
-			writeJSON(w, 400, map[string]string{"error": "invalid domain"})
+			writeJSON(w, 400, map[string]string{"error": "invalid or unsupported domain"})
+		case models.ErrTooManyMonitors:
+			writeJSON(w, 429, map[string]string{"error": "too many monitors for this email"})
 		default:
+			log.Printf("monitor register: %v", err)
 			writeJSON(w, 500, map[string]string{"error": "registration failed"})
 		}
 		return
@@ -72,13 +76,17 @@ func (h *MonitorHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	unsubTmpl.Execute(w, map[string]string{"Domain": m.Domain, "Email": m.Email})
+	if err := unsubTmpl.Execute(w, map[string]string{"Domain": m.Domain, "Email": m.Email}); err != nil {
+		log.Printf("unsub template: %v", err)
+	}
 }
 
 // GET /monitor — landing page with signup form.
 func (h *MonitorHandler) LandingPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	landingTmpl.Execute(w, nil)
+	if err := landingTmpl.Execute(w, nil); err != nil {
+		log.Printf("landing template: %v", err)
+	}
 }
 
 // writeJSON is a package-local helper matching api.go's pattern without

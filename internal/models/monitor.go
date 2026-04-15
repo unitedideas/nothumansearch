@@ -24,20 +24,85 @@ type Monitor struct {
 var (
 	ErrInvalidEmail  = errors.New("invalid email")
 	ErrInvalidDomain = errors.New("invalid domain")
+	ErrTooManyMonitors = errors.New("too many monitors for this email")
 )
 
-// NormalizeDomain strips scheme, path, and lowercases. Returns ErrInvalidDomain
-// for empty/junk input.
+// MaxMonitorsPerEmail caps how many domain subscriptions a single email
+// address can hold. Prevents a script from filling the monitors table with
+// arbitrary domains and turning the weekly worker into a crawl amplifier.
+const MaxMonitorsPerEmail = 20
+
+// privateHostPrefixes lists hostname shapes that must never be monitored —
+// SSRF from the worker crawling arbitrary internal IPs / metadata endpoints.
+// Also blocks the literal hostnames that resolve to them.
+var privateHostPrefixes = []string{
+	"localhost",
+	"127.",
+	"10.",
+	"192.168.",
+	"169.254.", // link-local incl. AWS/GCP metadata 169.254.169.254
+	"0.",
+	"::1",
+	"fc00:",
+	"fd",
+}
+
+// is172Private catches 172.16.0.0/12 which isn't a simple prefix match.
+func is172Private(host string) bool {
+	if !strings.HasPrefix(host, "172.") {
+		return false
+	}
+	rest := strings.TrimPrefix(host, "172.")
+	dot := strings.Index(rest, ".")
+	if dot < 0 {
+		return false
+	}
+	octet := rest[:dot]
+	// 172.16 — 172.31 are private.
+	if len(octet) != 2 {
+		return false
+	}
+	if octet[0] != '1' && octet[0] != '2' && octet[0] != '3' {
+		return false
+	}
+	// 16-31: second digit 6-9 with '1', 0-9 with '2', 0-1 with '3'.
+	switch octet[0] {
+	case '1':
+		return octet[1] >= '6' && octet[1] <= '9'
+	case '2':
+		return octet[1] >= '0' && octet[1] <= '9'
+	case '3':
+		return octet[1] == '0' || octet[1] == '1'
+	}
+	return false
+}
+
+func isPrivateHost(host string) bool {
+	for _, p := range privateHostPrefixes {
+		if strings.HasPrefix(host, p) {
+			return true
+		}
+	}
+	return is172Private(host)
+}
+
+// NormalizeDomain strips scheme, path, port, and lowercases. Returns
+// ErrInvalidDomain for empty/junk input or private-address shapes.
 func NormalizeDomain(raw string) (string, error) {
-	d := strings.TrimSpace(raw)
+	d := strings.ToLower(strings.TrimSpace(raw))
 	d = strings.TrimPrefix(d, "http://")
 	d = strings.TrimPrefix(d, "https://")
 	if i := strings.Index(d, "/"); i >= 0 {
 		d = d[:i]
 	}
+	if i := strings.Index(d, ":"); i >= 0 {
+		d = d[:i]
+	}
 	d = strings.TrimPrefix(d, "www.")
-	d = strings.ToLower(d)
 	if d == "" || !strings.Contains(d, ".") {
+		return "", ErrInvalidDomain
+	}
+	if isPrivateHost(d) {
 		return "", ErrInvalidDomain
 	}
 	return d, nil
@@ -67,8 +132,11 @@ func newToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// RegisterMonitor inserts a new monitor row or refreshes the created_at on
-// an existing (email, domain) pair. Returns the monitor row with token.
+// RegisterMonitor inserts a new monitor row or refreshes created_at on an
+// existing (email, domain) pair. Returns the monitor row with token.
+// The token for an existing pair is preserved — RETURNING gives back the
+// already-stored value, not the newly generated one. Unsubscribe links
+// from a prior registration continue to work after re-registration.
 func RegisterMonitor(db *sql.DB, email, domain string) (*Monitor, error) {
 	email, err := ValidateEmail(email)
 	if err != nil {
@@ -78,6 +146,21 @@ func RegisterMonitor(db *sql.DB, email, domain string) (*Monitor, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Rate limit: cap the number of domains any one email can watch to
+	// prevent a script from filling the table + turning the weekly worker
+	// into a large-scale third-party-domain fetcher.
+	var count int
+	if err := db.QueryRow(
+		`SELECT COUNT(*) FROM monitors WHERE email = $1 AND domain != $2`,
+		email, domain,
+	).Scan(&count); err != nil {
+		return nil, err
+	}
+	if count >= MaxMonitorsPerEmail {
+		return nil, ErrTooManyMonitors
+	}
+
 	token, err := newToken()
 	if err != nil {
 		return nil, err

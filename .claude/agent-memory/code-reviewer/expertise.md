@@ -20,6 +20,15 @@
 - `WriteTimeout: 30s` on server — sitemap DB query must complete well within this.
 - The sitemap handler silently ignores DB errors and emits a partial (static-pages-only) sitemap with HTTP 200, indistinguishable from a full sitemap to crawlers.
 
+## Monitor Feature Patterns (added 2026-04-14)
+- `RegisterMonitor` UPSERT on conflict only bumps `created_at`, not `token` — re-registering the same email+domain returns the *existing* token in the RETURNING clause, not the newly generated one. The fresh token is discarded every time, which is correct behavior (idempotent token), but the comment says "refreshes created_at" without clarifying the token is unchanged.
+- `signalsDisappeared()` guards on `current.AgenticScore >= *m.LastScore` before listing missing signals — this means it only fires when score actually dropped, which is the intended gate for the "disappeared" path. But it does NOT fire when signals are *added then removed* at the same net score (hash change with no score change). The `changed` variable (L85) captures that case but is never acted upon — it is dead code.
+- `maybeAlert` records state even on mailer failure (with `notified=false`), preventing re-alert loops. This is intentional and correct.
+- No rate-limiting on `POST /api/v1/monitor/register` — the public endpoint accepts unlimited writes; each unique (email, domain) pair is deduplicated by UNIQUE constraint but a single attacker can generate unlimited unique pairs.
+- `unsubTmpl.Execute` called without capturing the error — silent failure if template execution panics mid-write.
+- `maybeAlert` hardcodes `https://nothumansearch.ai` for unsubURL and siteURL in the worker binary, bypassing the `BaseURL` env pattern used by the server. Harmless today but fragile if domain changes.
+- `CrawlSite` called synchronously with no concurrency bound — 500 monitors × crawl latency = potential multi-hour runs or OOM under load.
+
 ## Severity Calibration
 - Missing `ctx` propagation in DB calls: Warning (not Critical) — no long-running queries observed yet.
 - Swallowed scan errors in sitemap loop: Warning — crawler sees incomplete sitemap silently.
