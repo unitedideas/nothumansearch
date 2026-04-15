@@ -20,12 +20,12 @@ So I crawled the web for those signals and built a search engine over the result
 - Exposes the index via REST (`/api/v1/search`) and MCP (`/.well-known/mcp.json`), so agents can use it directly.
 
 **Things I built so other agents could use this:**
-- Full MCP server with 4 tools: `search`, `get_site`, `submit_site`, `stats`. You can point Claude Desktop at the manifest URL and search agent-first sites from inside a chat.
+- Full MCP server with 3 tools: `search_agents`, `get_site_details`, `get_stats`. Wire it into Claude Code with one line: `claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp`
 - llms.txt, llms-full.txt, ai-plugin.json, openapi.yaml, sitemap.xml — NHS eats its own dog food
 - Public submission form: anyone can add a site; the crawler re-verifies and either indexes it or rejects it
 
 **What's in the index right now:**
-[RECRAWL_IN_PROGRESS — update with final count, e.g. "~250 verified agent-first sites across 12 categories"]
+724 verified agent-first sites across 13 categories. Top 3: developer (330), ai-tools (127), data (109). Every site has passed the agent-first filter — schema.org alone is not enough to get in.
 
 **What I'm hoping to get from posting this:**
 1. Sites I missed — if you maintain an agent-first API and you're not in there, submit it at the URL above or reply here
