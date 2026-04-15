@@ -17,3 +17,9 @@ tools/*.err
 __pycache__/
 tools/discover.log
 tools/discover.err
+
+# State/journal files — update on every run, should not be committed
+tools/health-guard.state
+tools/*.state
+tools/*.log
+tools/discover.log
