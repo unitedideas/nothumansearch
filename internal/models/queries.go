@@ -179,13 +179,14 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	var orderBy string
 	if useFTS {
 		// Rank by: all-terms-match boost + OR-relevance * score-multiplier + additive
-		// score floor. The additive term (score/150) gives high-score sites a baseline
-		// advantage of up to ~0.67 even when ts_rank is weak — prevents score-20 sites
+		// score floor. The additive term (score/75) gives high-score sites a baseline
+		// advantage of up to ~1.33 even when ts_rank is weak — prevents score-20 sites
 		// with better text match from outranking score-100 agent-ready sites on common
-		// queries like "payment api" or "cron monitor". Baseline captured at
-		// project_nhs_ranking_improvement.md (2026-04-15).
+		// queries like "payment api", "cron monitor", "job board". Baseline captured at
+		// project_nhs_ranking_improvement.md (2026-04-15). Initial /150 floor was too
+		// weak for multi-term queries; bumped to /75 after A/B on 10 baseline queries.
 		orderBy = fmt.Sprintf(
-			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/150 DESC, is_featured DESC, agentic_score DESC",
+			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, is_featured DESC, agentic_score DESC",
 			tsQueryArg+1, tsQueryArg)
 	} else {
 		orderBy = "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
