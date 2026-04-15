@@ -81,6 +81,15 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 			minScore = s
 		}
 	}
+	perPage := 20
+	if pp := q.Get("per_page"); pp != "" {
+		if n, err := strconv.Atoi(pp); err == nil && n > 0 {
+			perPage = n
+		}
+	}
+	if perPage > 50 {
+		perPage = 50
+	}
 
 	params := models.SearchParams{
 		Query:      q.Get("q"),
@@ -91,7 +100,7 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		HasMCP:     q.Get("has_mcp") == "true",
 		HasOpenAPI: q.Get("has_openapi") == "true",
 		HasLLMsTxt: q.Get("has_llms_txt") == "true",
-		Limit:      20,
+		Limit:      perPage,
 		Page:       page,
 	}
 
@@ -118,7 +127,8 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		"results":  sites,
 		"total":    total,
 		"page":     page,
-		"has_next": page*20 < total,
+		"per_page": perPage,
+		"has_next": page*perPage < total,
 	})
 }
 
