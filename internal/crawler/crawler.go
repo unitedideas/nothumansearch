@@ -1448,6 +1448,17 @@ func categorize(site *models.Site) string {
 		"foto.damdafa.com":       "ai-tools",
 		"ai.fin-discovery.com":   "finance",
 		"fin-discovery.com":      "finance",
+
+		// Batch 11: 2026-04-15 session end — Foundry siblings + well-known "other" sites
+		"passdown.arflow.io":    "productivity",
+		"poddrop.arflow.io":     "ecommerce",
+		"typefully.com":         "communication",
+		"wasabi.com":             "data",
+		"databuddy.cc":           "developer",
+		"dealsurface.com":        "data",
+		"barevalue.com":          "productivity",
+		"open.bigmodel.cn":       "ai-tools",
+		"agentbazaar.tech":       "ai-tools",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
