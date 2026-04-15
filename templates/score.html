@@ -59,8 +59,21 @@
         .signal.off .mark { color:var(--red); }
         .signal.off { color:var(--text-muted); }
         .cta { display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
-        .cta a { color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:8px 16px; border-radius:6px; font-size:13px; }
+        .cta a { color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; }
         .cta a:hover { background:var(--accent); color:#fff; }
+        .embed { margin-top:28px; padding-top:20px; border-top:1px solid var(--border); }
+        .embed h3 { font-size:14px; margin-bottom:6px; color:var(--text); }
+        .embed p { color:var(--text-muted); font-size:12px; margin-bottom:14px; line-height:1.5; }
+        .embed-preview { text-align:center; margin-bottom:14px; }
+        .embed-preview img { max-width:260px; height:auto; }
+        .tabs { display:flex; gap:4px; margin-bottom:8px; border-bottom:1px solid var(--border); }
+        .tab { padding:6px 12px; font-size:12px; color:var(--text-muted); cursor:pointer; border-bottom:2px solid transparent; font-family:inherit; background:none; border-left:none; border-top:none; border-right:none; }
+        .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+        .snippet { background:#0a0a0b; border:1px solid var(--border); border-radius:6px; padding:12px; position:relative; }
+        .snippet pre { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text); margin:0; white-space:pre-wrap; word-break:break-all; line-height:1.5; }
+        .copy-btn { position:absolute; top:8px; right:8px; background:var(--border); color:var(--text); border:none; padding:4px 10px; font-size:11px; border-radius:4px; cursor:pointer; font-family:inherit; }
+        .copy-btn:hover { background:var(--accent); color:#fff; }
+        .copy-btn.copied { background:var(--green); color:#000; }
         .methodology { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; margin:32px 0; }
         .methodology h2 { font-size:18px; margin-bottom:16px; }
         .methodology p { color:var(--text-muted); font-size:14px; margin-bottom:12px; line-height:1.6; }
@@ -179,16 +192,60 @@
                 }).join('');
                 out.className = 'result show';
                 const cls = scoreClass(data.agentic_score);
+                const dom = data.domain || url;
+                const badgeURL = 'https://nothumansearch.ai/badge/' + dom + '.svg';
+                const reportURL = 'https://nothumansearch.ai/site/' + dom;
+                const htmlSnip = '<a href="' + reportURL + '" target="_blank" rel="noopener"><img src="' + badgeURL + '" alt="NHS Agentic Readiness Score" height="28"></a>';
+                const mdSnip = '[![NHS Agentic Readiness Score](' + badgeURL + ')](' + reportURL + ')';
+                const jsxSnip = '<a href="' + reportURL + '" target="_blank" rel="noopener">\n  <img src="' + badgeURL + '" alt="NHS Agentic Readiness Score" height={28} />\n</a>';
                 out.innerHTML =
                     '<div class="score-num ' + cls + '">' + data.agentic_score + '</div>' +
                     '<div class="score-label">' + scoreWord(data.agentic_score) + ' &middot; ' + (data.category || 'uncategorized') + '</div>' +
-                    '<div class="result-domain">' + (data.domain || url) + '</div>' +
+                    '<div class="result-domain">' + dom + '</div>' +
                     '<div class="signals">' + sigHTML + '</div>' +
                     '<div class="cta">' +
-                        '<a href="' + (data.report_url || ('/site/' + data.domain)) + '">Full report</a>' +
-                        '<a href="/badge/' + data.domain + '.svg" target="_blank">Get badge SVG</a>' +
+                        '<a href="' + (data.report_url || ('/site/' + dom)) + '">Full report</a>' +
                         '<a href="/#submit">Submit to directory</a>' +
+                    '</div>' +
+                    '<div class="embed">' +
+                        '<h3>Show your score. Get a backlink.</h3>' +
+                        '<p>Paste this badge on your site, README, or docs. It links back to your full report on Not Human Search — free forever.</p>' +
+                        '<div class="embed-preview"><img src="' + badgeURL + '" alt="preview"></div>' +
+                        '<div class="tabs">' +
+                            '<button type="button" class="tab active" data-snip="html">HTML</button>' +
+                            '<button type="button" class="tab" data-snip="md">Markdown</button>' +
+                            '<button type="button" class="tab" data-snip="jsx">JSX / React</button>' +
+                        '</div>' +
+                        '<div class="snippet" id="snippet-box">' +
+                            '<button type="button" class="copy-btn" id="copyBtn">Copy</button>' +
+                            '<pre id="snippet-text"></pre>' +
+                        '</div>' +
                     '</div>';
+
+                const snippets = {html: htmlSnip, md: mdSnip, jsx: jsxSnip};
+                let active = 'html';
+                const setSnip = (k) => {
+                    active = k;
+                    document.getElementById('snippet-text').textContent = snippets[k];
+                    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.snip === k));
+                };
+                setSnip('html');
+                document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => setSnip(t.dataset.snip)));
+                document.getElementById('copyBtn').addEventListener('click', async () => {
+                    try {
+                        await navigator.clipboard.writeText(snippets[active]);
+                        const b = document.getElementById('copyBtn');
+                        b.textContent = 'Copied ✓';
+                        b.classList.add('copied');
+                        setTimeout(() => { b.textContent = 'Copy'; b.classList.remove('copied'); }, 1500);
+                    } catch {
+                        const r = document.createRange();
+                        r.selectNodeContents(document.getElementById('snippet-text'));
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(r);
+                    }
+                });
             } catch (err) {
                 out.className = 'result show error';
                 out.innerHTML = '<div style="text-align:center;color:#f87171;">Request failed: ' + err.message + '</div>';
