@@ -112,6 +112,51 @@ func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// MCPServersPage renders a dedicated landing page listing every MCP server
+// in the index. Canonical URL /mcp-servers — targets the "mcp server
+// directory" query class without the noise from /?q=mcp.
+func (h *WebHandler) MCPServersPage(w http.ResponseWriter, r *http.Request) {
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
+			page = pn
+		}
+	}
+
+	params := models.SearchParams{
+		HasMCP: true,
+		Limit:  30,
+		Page:   page,
+	}
+	sites, total, err := models.SearchSites(h.DB, params)
+	if err != nil {
+		log.Printf("mcp-servers search: %v", err)
+	}
+
+	totalSites, avgScore, _ := models.GetStats(h.DB)
+
+	data := map[string]interface{}{
+		"Mode":       "mcp-servers",
+		"PageTitle":  "MCP Server Directory — Browse All Model Context Protocol Servers | Not Human Search",
+		"PageDesc":   "Complete directory of MCP servers ranked by agentic readiness. Find Model Context Protocol endpoints for every AI agent use case — search, data, automation, commerce, and more.",
+		"Heading":    "MCP Server Directory",
+		"Subheading": "Every Model Context Protocol server in our index, ranked by agentic readiness score.",
+		"Sites":      sites,
+		"Total":      total,
+		"Page":       page,
+		"HasNext":    page*30 < total,
+		"TotalSites": totalSites,
+		"AvgScore":   avgScore,
+		"Canonical":  "https://nothumansearch.ai/mcp-servers",
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := h.tmpl.ExecuteTemplate(w, "home.html", data); err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+
 func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
 	domain := r.URL.Path[len("/site/"):]
 	if domain == "" {

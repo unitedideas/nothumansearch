@@ -59,6 +59,7 @@ type SearchParams struct {
 	Category string
 	MinScore int
 	HasAPI   bool
+	HasMCP   bool
 	Limit    int
 	Page     int
 }
@@ -137,6 +138,9 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	}
 	if p.HasAPI {
 		conditions = append(conditions, "has_structured_api = true")
+	}
+	if p.HasMCP {
+		conditions = append(conditions, "has_mcp_server = true")
 	}
 
 	where := "WHERE " + strings.Join(conditions, " AND ")

@@ -123,10 +123,11 @@ ai-tools, developer, data, finance, ecommerce, jobs, security, health, education
 
 ## Links
 - Search: %s/api/v1/search?q=
+- MCP Server Directory: %s/mcp-servers
 - Full Index: %s/llms-full.txt
 - OpenAPI: %s/openapi.yaml
 - Plugin: %s/.well-known/ai-plugin.json
-`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
@@ -396,6 +397,8 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 
 	// Static pages
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/", ChangeFreq: "daily", Priority: "1.0"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/mcp-servers", ChangeFreq: "daily", Priority: "0.9"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/about", ChangeFreq: "weekly", Priority: "0.5"})
 
 	// Site pages
 	rows, err := h.DB.QueryContext(r.Context(), "SELECT domain, updated_at FROM sites WHERE crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true) ORDER BY agentic_score DESC LIMIT 49999")

@@ -3,22 +3,22 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Not Human Search — Google for AI Agents</title>
-    <meta name="description" content="The agentic-first search engine. AI agents search NHS to find services, APIs, and tools — ranked by how well they serve non-human users.">
-    <meta property="og:title" content="Not Human Search — Google for AI Agents">
-    <meta property="og:description" content="The agentic-first search engine. Your agent searches NHS to find services, APIs, and tools that actually work for non-human users.">
+    <title>{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Google for AI Agents{{end}}</title>
+    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}The agentic-first search engine. AI agents search NHS to find services, APIs, and tools — ranked by how well they serve non-human users.{{end}}">
+    <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Google for AI Agents{{end}}">
+    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}The agentic-first search engine. Your agent searches NHS to find services, APIs, and tools that actually work for non-human users.{{end}}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://nothumansearch.ai/">
+    <meta property="og:url" content="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <meta property="og:site_name" content="Not Human Search">
     <meta property="og:image" content="https://nothumansearch.ai/static/img/og-default.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Not Human Search — Google for AI Agents. 736 verified agent-first sites indexed.">
+    <meta property="og:image:alt" content="Not Human Search — Google for AI Agents.">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Not Human Search — Google for AI Agents">
-    <meta name="twitter:description" content="The agentic-first search engine. Find services, APIs, and tools ranked by how well they serve AI agents.">
+    <meta name="twitter:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Google for AI Agents{{end}}">
+    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}The agentic-first search engine. Find services, APIs, and tools ranked by how well they serve AI agents.{{end}}">
     <meta name="twitter:image" content="https://nothumansearch.ai/static/img/og-default.png">
-    <link rel="canonical" href="https://nothumansearch.ai/">
+    <link rel="canonical" href="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
     <script type="application/ld+json">
     {
@@ -187,8 +187,13 @@
 <body>
     <div class="container">
         <header>
-            <div class="logo"><span>&gt;_</span> Not Human Search</div>
+            <div class="logo"><span>&gt;_</span> <a href="/" style="color:inherit;text-decoration:none;">Not Human Search</a></div>
+            {{if eq .Mode "mcp-servers"}}
+            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">{{.Heading}}</h1>
+            <p class="tagline">{{.Subheading}} Every server listed exposes a Model Context Protocol endpoint that AI agents can wire in with <code style="color:var(--green);">claude mcp add --transport http &lt;name&gt; &lt;url&gt;/mcp</code>.</p>
+            {{else}}
             <p class="tagline">The Google for AI agents. Find any service, API, or tool — ranked by agentic readiness.</p>
+            {{end}}
         </header>
 
         <div class="stats">
@@ -202,20 +207,25 @@
             </div>
         </div>
 
+        {{if ne .Mode "mcp-servers"}}
         <form class="search-box" method="GET" action="/">
             <input type="text" name="q" value="{{.Query}}" placeholder="What does your agent need? e.g. payment API, AI jobs, weather data..." autofocus>
             <button type="submit">Search</button>
         </form>
+        {{end}}
 
         <div style="max-width:640px;margin:-16px auto 32px;padding:12px 16px;background:linear-gradient(135deg, rgba(217,119,87,0.10) 0%, rgba(217,119,87,0.02) 100%);border:1px solid rgba(217,119,87,0.35);border-radius:6px;text-align:center;">
             <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Wire NHS into Claude Code</div>
             <code style="display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);word-break:break-all;">claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp</code>
         </div>
 
+        {{if ne .Mode "mcp-servers"}}
         <div class="example-queries">
-            Try: <a href="/?q=AI+jobs">AI jobs</a> <a href="/?q=payment+API">payment API</a> <a href="/?q=ecommerce">ecommerce</a> <a href="/?q=weather+data">weather data</a> <a href="/?q=authentication">authentication</a> <a href="/?q=code+hosting">code hosting</a>
+            Try: <a href="/?q=AI+jobs">AI jobs</a> <a href="/?q=payment+API">payment API</a> <a href="/?q=ecommerce">ecommerce</a> <a href="/?q=weather+data">weather data</a> <a href="/?q=authentication">authentication</a> <a href="/?q=code+hosting">code hosting</a> &middot; <a href="/mcp-servers">Browse all MCP servers &rarr;</a>
         </div>
+        {{end}}
 
+        {{if ne .Mode "mcp-servers"}}
         <div class="filters">
             <a href="/" class="filter-btn {{if eq .Category ""}}active{{end}}">All</a>
             <a href="/?category=ai-tools" class="filter-btn {{if eq .Category "ai-tools"}}active{{end}}">AI Tools</a>
@@ -230,9 +240,10 @@
             <a href="/?category=health" class="filter-btn {{if eq .Category "health"}}active{{end}}">Health</a>
             <a href="/?category=education" class="filter-btn {{if eq .Category "education"}}active{{end}}">Education</a>
         </div>
+        {{end}}
 
         {{if .Sites}}
-        <div class="results-header">{{.Total}} sites found{{if .Query}} for "{{.Query}}"{{end}}</div>
+        <div class="results-header">{{.Total}} {{if eq .Mode "mcp-servers"}}MCP servers indexed{{else}}sites found{{if .Query}} for "{{.Query}}"{{end}}{{end}}</div>
 
         {{range .Sites}}
         <div class="site-card {{if .IsFeatured}}featured{{end}}">
@@ -264,8 +275,13 @@
 
         {{if .HasNext}}
         <div class="pagination">
-            {{if gt .Page 1}}<a href="/?q={{.Query}}&category={{.Category}}&page={{sub .Page 1}}">&larr; Prev</a>{{end}}
-            <a href="/?q={{.Query}}&category={{.Category}}&page={{add .Page 1}}">Next &rarr;</a>
+            {{if eq .Mode "mcp-servers"}}
+                {{if gt .Page 1}}<a href="/mcp-servers?page={{sub .Page 1}}">&larr; Prev</a>{{end}}
+                {{if .HasNext}}<a href="/mcp-servers?page={{add .Page 1}}">Next &rarr;</a>{{end}}
+            {{else}}
+                {{if gt .Page 1}}<a href="/?q={{.Query}}&category={{.Category}}&page={{sub .Page 1}}">&larr; Prev</a>{{end}}
+                <a href="/?q={{.Query}}&category={{.Category}}&page={{add .Page 1}}">Next &rarr;</a>
+            {{end}}
         </div>
         {{end}}
 

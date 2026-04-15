@@ -106,6 +106,7 @@ func main() {
 		http.Redirect(w, r, "/#submit", http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("/site/", webHandler.SitePage)
+	mux.HandleFunc("/mcp-servers", webHandler.MCPServersPage)
 
 	// API
 	mux.HandleFunc("/api/v1/search", apiHandler.Search)
