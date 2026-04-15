@@ -53,7 +53,7 @@ So detection is:
 - **OpenAPI**: parse as JSON or YAML, require `openapi: 3.x` or `swagger: 2.x`, require non-empty `paths`
 - **Structured API**: require a real JSON response (valid parse, array or object), not HTML with JSON-in-Script tags
 - **ai-plugin.json**: must be valid JSON with at least `schema_version`, `name_for_model`, `api`
-- **MCP server**: must have valid `/.well-known/mcp.json` with `tools` array
+- **MCP server**: must serve a valid MCP endpoint (tested via `tools/list` JSON-RPC probe) OR publish a well-known MCP manifest with a `tools` array
 
 Between the filter and the verification, ~70% of sites that *look* agent-first get rejected.
 
@@ -83,7 +83,11 @@ GET https://nothumansearch.ai/api/v1/search?q=weather&min_score=50
 ```
 
 **Via MCP:**
-Point any MCP-capable client at `https://nothumansearch.ai/.well-known/mcp.json`. You get four tools: `search`, `get_site`, `submit_site`, `stats`.
+Hosted streamable-http MCP server at `https://nothumansearch.ai/mcp`. Three tools: `search_agents`, `get_site_details`, `get_stats`. Wire it into Claude Code in one line:
+
+```
+claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
+```
 
 **Submitting a site:**
 ```
