@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -68,7 +69,11 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ipHash := hashIP(r)
 	if !h.allow(ipHash) {
-		w.Header().Set("Retry-After", "3600")
+		remaining, resetUnix := h.rateLimitState(ipHash)
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(time.Unix(resetUnix, 0)).Seconds())+1))
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", checkFreeLimit))
+		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
 		h.writeJSON(w, 429, map[string]any{
 			"error":      "rate limit exceeded",
 			"limit":      checkFreeLimit,
@@ -76,6 +81,13 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"upgrade":    "Higher limits and CI-grade webhooks coming soon. Email hello@nothumansearch.ai to join the paid-tier waitlist.",
 		})
 		return
+	}
+	// Emit rate-limit headers on successful responses too so callers can pace themselves.
+	{
+		remaining, resetUnix := h.rateLimitState(ipHash)
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", checkFreeLimit))
+		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
 	}
 
 	var req struct {
@@ -159,6 +171,20 @@ func (h *CheckHandler) allow(ipHash string) bool {
 	}
 	h.counts[ipHash]++
 	return true
+}
+
+// rateLimitState returns the current (remaining, resetUnix) for a given IP
+// without incrementing. Used to emit X-RateLimit-* headers on every response
+// so callers can back off gracefully instead of surprise-429ing.
+func (h *CheckHandler) rateLimitState(ipHash string) (remaining int, resetUnix int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	remaining = checkFreeLimit - h.counts[ipHash]
+	if remaining < 0 {
+		remaining = 0
+	}
+	resetUnix = h.resetAt.Unix()
+	return
 }
 
 func hashIP(r *http.Request) string {
