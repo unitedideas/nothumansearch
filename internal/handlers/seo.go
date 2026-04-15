@@ -412,6 +412,10 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/communication-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/jobs-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/about", ChangeFreq: "weekly", Priority: "0.5"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed.xml", ChangeFreq: "hourly", Priority: "0.7"})
+	for _, cat := range []string{"ai-tools", "developer", "finance", "data", "ecommerce", "productivity", "security", "communication", "jobs"} {
+		sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed/" + cat + ".xml", ChangeFreq: "daily", Priority: "0.5"})
+	}
 
 	// Site pages
 	rows, err := h.DB.QueryContext(r.Context(), "SELECT domain, updated_at FROM sites WHERE crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true) ORDER BY agentic_score DESC LIMIT 49999")
@@ -479,27 +483,50 @@ type rssItem struct {
 }
 
 func (h *SEOHandler) Feed(w http.ResponseWriter, r *http.Request) {
+	// Per-category feeds at /feed/{slug}.xml (route registered separately).
+	// Empty slug = master feed across all categories.
+	slug := strings.TrimPrefix(r.URL.Path, "/feed/")
+	slug = strings.TrimSuffix(slug, ".xml")
+	if r.URL.Path == "/feed.xml" || r.URL.Path == "/rss.xml" {
+		slug = ""
+	}
+
 	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+
+	title := "Not Human Search — New Agent-Ready Sites"
+	desc := "Newly indexed agent-first sites (score ≥25) — ranked by agentic readiness. Updated continuously."
+	selfHref := h.BaseURL + "/feed.xml"
+	if slug != "" {
+		title = fmt.Sprintf("Not Human Search — New %s Sites", strings.Title(slug))
+		desc = fmt.Sprintf("Newly indexed agent-first sites in category: %s. Score ≥25.", slug)
+		selfHref = h.BaseURL + "/feed/" + slug + ".xml"
+	}
 
 	feed := rssFeed{
 		Version: "2.0",
 		Atom:    "http://www.w3.org/2005/Atom",
 		Channel: rssChannel{
-			Title:         "Not Human Search — New Agent-Ready Sites",
+			Title:         title,
 			Link:          h.BaseURL + "/",
-			AtomLink:      atomLink{Href: h.BaseURL + "/feed.xml", Rel: "self", Type: "application/rss+xml"},
-			Description:   "Most recently indexed agent-first sites — ranked by agentic readiness. Updated daily.",
+			AtomLink:      atomLink{Href: selfHref, Rel: "self", Type: "application/rss+xml"},
+			Description:   desc,
 			Language:      "en-us",
 			LastBuildDate: time.Now().UTC().Format(time.RFC1123Z),
 		},
 	}
 
-	rows, err := h.DB.QueryContext(r.Context(), `
-		SELECT domain, name, description, category, agentic_score, created_at
-		FROM sites
-		WHERE `+models.AgentFirstFilter+`
-		ORDER BY created_at DESC
-		LIMIT 50`)
+	// MinScore=25 filters out schema-only/robots-only noise; syndication
+	// quality matters more than feed length.
+	args := []interface{}{}
+	query := `SELECT domain, name, description, category, agentic_score, created_at
+		FROM sites WHERE ` + models.AgentFirstFilter + ` AND agentic_score >= 25`
+	if slug != "" {
+		query += ` AND category = $1`
+		args = append(args, slug)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 50`
+
+	rows, err := h.DB.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		log.Printf("feed query: %v", err)
 		http.Error(w, "feed error", 500)
@@ -508,22 +535,22 @@ func (h *SEOHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var domain, name, desc, category string
+		var domain, name, itemDesc, category string
 		var score int
 		var created time.Time
-		if err := rows.Scan(&domain, &name, &desc, &category, &score, &created); err != nil {
+		if err := rows.Scan(&domain, &name, &itemDesc, &category, &score, &created); err != nil {
 			continue
 		}
 		if name == "" {
 			name = domain
 		}
-		title := fmt.Sprintf("%s — score %d/100 (%s)", name, score, category)
-		body := desc
+		itemTitle := fmt.Sprintf("%s — score %d/100 (%s)", name, score, category)
+		body := itemDesc
 		if body == "" {
 			body = fmt.Sprintf("Agentic readiness report for %s. Category: %s. Score: %d/100.", domain, category, score)
 		}
 		feed.Channel.Items = append(feed.Channel.Items, rssItem{
-			Title:       title,
+			Title:       itemTitle,
 			Link:        h.BaseURL + "/site/" + domain,
 			GUID:        h.BaseURL + "/site/" + domain,
 			Category:    category,

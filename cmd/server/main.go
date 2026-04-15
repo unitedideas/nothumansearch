@@ -100,6 +100,7 @@ func main() {
 	mux.HandleFunc("/sitemap.xml", seoHandler.Sitemap)
 	mux.HandleFunc("/feed.xml", seoHandler.Feed)
 	mux.HandleFunc("/rss.xml", seoHandler.Feed)
+	mux.HandleFunc("/feed/", seoHandler.Feed) // /feed/{category}.xml
 
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)
