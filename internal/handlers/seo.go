@@ -417,6 +417,35 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 		sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed/" + cat + ".xml", ChangeFreq: "daily", Priority: "0.5"})
 	}
 
+	// Tag landing pages — one URL per distinct tag with at least 2 agent-first
+	// sites carrying it. Long-tail SEO surface; keeps low-signal one-off tags
+	// out of the index.
+	tagRows, terr := h.DB.QueryContext(r.Context(),
+		`SELECT tag, COUNT(*) AS n
+		   FROM (SELECT unnest(tags) AS tag FROM sites
+		         WHERE crawl_status='success'
+		           AND (has_structured_api = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)) t
+		  WHERE tag ~ '^[a-z0-9-]+$'
+		  GROUP BY tag HAVING COUNT(*) >= 2
+		  ORDER BY n DESC LIMIT 200`)
+	if terr == nil {
+		defer tagRows.Close()
+		for tagRows.Next() {
+			var tag string
+			var n int
+			if err := tagRows.Scan(&tag, &n); err != nil {
+				continue
+			}
+			sm.URLs = append(sm.URLs, sitemapURL{
+				Loc:        h.BaseURL + "/tag/" + tag,
+				ChangeFreq: "weekly",
+				Priority:   "0.6",
+			})
+		}
+	} else {
+		log.Printf("sitemap tags: %v", terr)
+	}
+
 	// Site pages
 	rows, err := h.DB.QueryContext(r.Context(), "SELECT domain, updated_at FROM sites WHERE crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true) ORDER BY agentic_score DESC LIMIT 49999")
 	if err == nil {

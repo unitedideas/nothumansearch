@@ -110,6 +110,7 @@ func main() {
 		http.Redirect(w, r, "/#submit", http.StatusMovedPermanently)
 	})
 	mux.HandleFunc("/site/", webHandler.SitePage)
+	mux.HandleFunc("/tag/", webHandler.TagPage)
 	mux.HandleFunc("/mcp-servers", webHandler.MCPServersPage)
 	mux.HandleFunc("/ai-tools", webHandler.AIToolsPage)
 	mux.HandleFunc("/developer-apis", webHandler.DeveloperPage)

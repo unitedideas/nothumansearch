@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -319,6 +320,55 @@ func (h *WebHandler) renderCategoryLanding(w http.ResponseWriter, r *http.Reques
 		log.Printf("template error: %v", err)
 		http.Error(w, "internal error", 500)
 	}
+}
+
+// TagPage renders /tag/{name} — a programmatic-SEO landing page showing every
+// indexed site tagged with {name}. Provides long-tail ranking surface for
+// tag-class queries like "agent-ready payment APIs" or "mcp server search".
+func (h *WebHandler) TagPage(w http.ResponseWriter, r *http.Request) {
+	tag := r.URL.Path[len("/tag/"):]
+	// Strip optional trailing slash.
+	tag = strings.TrimSuffix(tag, "/")
+	// Only accept simple, lowercase slug-style tags.
+	if tag == "" {
+		http.NotFound(w, r)
+		return
+	}
+	for _, c := range tag {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
+	// Human-readable form: "llms-txt" → "llms.txt", "mcp" → "MCP", etc.
+	display := tag
+	switch tag {
+	case "llms-txt":
+		display = "llms.txt"
+	case "ai-plugin":
+		display = "ai-plugin.json"
+	case "openapi":
+		display = "OpenAPI"
+	case "api":
+		display = "API"
+	case "mcp":
+		display = "MCP"
+	case "ai":
+		display = "AI"
+	case "ai-friendly":
+		display = "AI-Friendly"
+	}
+
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "tag-" + tag,
+		Path:       "/tag/" + tag,
+		Title:      fmt.Sprintf("%s — Agent-First Sites Tagged %s | Not Human Search", display, display),
+		Desc:       fmt.Sprintf("Every site in our index tagged %s, ranked by agentic readiness. Discover agent-first tools and APIs matching the %s tag.", display, display),
+		Heading:    fmt.Sprintf("Sites tagged \"%s\"", display),
+		Subheading: fmt.Sprintf("Every site in the index carrying the %s tag, ranked by agentic readiness score.", display),
+		Params:     models.SearchParams{Tag: tag, Limit: 30},
+	})
 }
 
 func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {

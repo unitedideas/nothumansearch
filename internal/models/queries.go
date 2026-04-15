@@ -57,6 +57,7 @@ func UpsertSite(db *sql.DB, s *Site) error {
 type SearchParams struct {
 	Query       string
 	Category    string
+	Tag         string // exact tag match against tags[] column
 	MinScore    int
 	HasAPI      bool
 	HasMCP      bool
@@ -149,6 +150,11 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	}
 	if p.HasLLMsTxt {
 		conditions = append(conditions, "has_llms_txt = true")
+	}
+	if p.Tag != "" {
+		conditions = append(conditions, fmt.Sprintf("$%d = ANY(tags)", argN))
+		args = append(args, p.Tag)
+		argN++
 	}
 
 	where := "WHERE " + strings.Join(conditions, " AND ")
