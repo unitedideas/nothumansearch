@@ -18,6 +18,12 @@ type APIHandler struct {
 	DB *sql.DB
 }
 
+// submitCrawlSem caps concurrent inline crawl goroutines spawned by /api/v1/submit.
+// Without this, a bulk submitter can OOM a small Postgres instance by spawning
+// hundreds of simultaneous crawl+upsert goroutines. Requests above the cap still
+// queue in submissions table and get picked up by the scheduled recrawl.
+var submitCrawlSem = make(chan struct{}, 4)
+
 func NewAPIHandler(db *sql.DB) *APIHandler {
 	return &APIHandler{DB: db}
 }
@@ -120,20 +126,28 @@ func (h *APIHandler) SubmitSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Crawl immediately in background
-	go func() {
-		site, err := crawler.CrawlSite(req.URL)
-		if err != nil {
-			log.Printf("submit crawl failed for %s: %v", req.URL, err)
-			h.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", req.URL)
-			return
-		}
-		if err := models.UpsertSite(h.DB, site); err != nil {
-			log.Printf("submit upsert failed for %s: %v", req.URL, err)
-		}
-		h.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", req.URL)
-		log.Printf("submit crawl success: %s score=%d", site.Domain, site.AgenticScore)
-	}()
+	// Try to crawl immediately, but only if we're below concurrency cap.
+	// Otherwise the submission stays in 'pending' and the scheduled recrawl
+	// picks it up — avoiding OOM storms during bulk submissions.
+	select {
+	case submitCrawlSem <- struct{}{}:
+		go func() {
+			defer func() { <-submitCrawlSem }()
+			site, err := crawler.CrawlSite(req.URL)
+			if err != nil {
+				log.Printf("submit crawl failed for %s: %v", req.URL, err)
+				h.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", req.URL)
+				return
+			}
+			if err := models.UpsertSite(h.DB, site); err != nil {
+				log.Printf("submit upsert failed for %s: %v", req.URL, err)
+			}
+			h.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", req.URL)
+			log.Printf("submit crawl success: %s score=%d", site.Domain, site.AgenticScore)
+		}()
+	default:
+		// semaphore full — leave as 'pending', recrawl will handle it
+	}
 
 	h.writeJSON(w, 201, map[string]string{"message": "submitted for crawling"})
 }
