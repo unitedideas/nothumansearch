@@ -117,11 +117,15 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 				}
 			}
 			if len(tsTerms) > 0 {
-				tsQueryStr := strings.Join(tsTerms, " & ")
-				// Match: FTS OR ILIKE (catches things FTS misses like domain substrings)
+				// Use OR across terms so multi-word queries surface partial matches.
+				// ts_rank still orders by relevance — sites matching all terms rank highest,
+				// but we don't drop sites that match only some. Critical for recall on
+				// queries like "SMS text messaging" where no indexed site has all three words.
+				tsQueryStr := strings.Join(tsTerms, " | ")
+				// Match: FTS OR ILIKE (catches things FTS misses like domain/description substrings)
 				conditions = append(conditions, fmt.Sprintf(
-					"(search_vector @@ to_tsquery('english', $%d) OR name ILIKE $%d OR domain ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
-					argN, argN+1, argN+1, argN+1))
+					"(search_vector @@ to_tsquery('english', $%d) OR name ILIKE $%d OR domain ILIKE $%d OR description ILIKE $%d OR array_to_string(tags, ' ') ILIKE $%d)",
+					argN, argN+1, argN+1, argN+1, argN+1))
 				args = append(args, tsQueryStr, "%"+p.Query+"%")
 				tsQueryArg = argN
 				useFTS = true
