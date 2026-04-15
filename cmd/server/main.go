@@ -98,6 +98,8 @@ func main() {
 	mux.HandleFunc("/llms-full.txt", seoHandler.LLMsFullTxt)
 	mux.HandleFunc("/openapi.yaml", seoHandler.OpenAPISpec)
 	mux.HandleFunc("/sitemap.xml", seoHandler.Sitemap)
+	mux.HandleFunc("/feed.xml", seoHandler.Feed)
+	mux.HandleFunc("/rss.xml", seoHandler.Feed)
 
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)

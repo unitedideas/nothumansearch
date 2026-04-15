@@ -50,7 +50,8 @@ User-agent: cohere-ai
 Allow: /
 
 Sitemap: %s/sitemap.xml
-`, h.BaseURL)
+# RSS feed: %s/feed.xml (new agent-ready additions)
+`, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
@@ -440,5 +441,99 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(xml.Header))
 	if err := xml.NewEncoder(w).Encode(sm); err != nil {
 		log.Printf("sitemap encode: %v", err)
+	}
+}
+
+// RSS feed of most recently added agent-first sites. Syndication surface —
+// aggregators/readers can subscribe and repost, generating backlinks.
+type rssFeed struct {
+	XMLName xml.Name   `xml:"rss"`
+	Version string     `xml:"version,attr"`
+	Atom    string     `xml:"xmlns:atom,attr"`
+	Channel rssChannel `xml:"channel"`
+}
+
+type rssChannel struct {
+	Title         string     `xml:"title"`
+	Link          string     `xml:"link"`
+	AtomLink      atomLink   `xml:"atom:link"`
+	Description   string     `xml:"description"`
+	Language      string     `xml:"language"`
+	LastBuildDate string     `xml:"lastBuildDate"`
+	Items         []rssItem  `xml:"item"`
+}
+
+type atomLink struct {
+	Href string `xml:"href,attr"`
+	Rel  string `xml:"rel,attr"`
+	Type string `xml:"type,attr"`
+}
+
+type rssItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	GUID        string `xml:"guid"`
+	Category    string `xml:"category"`
+	PubDate     string `xml:"pubDate"`
+	Description string `xml:"description"`
+}
+
+func (h *SEOHandler) Feed(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/rss+xml; charset=utf-8")
+
+	feed := rssFeed{
+		Version: "2.0",
+		Atom:    "http://www.w3.org/2005/Atom",
+		Channel: rssChannel{
+			Title:         "Not Human Search — New Agent-Ready Sites",
+			Link:          h.BaseURL + "/",
+			AtomLink:      atomLink{Href: h.BaseURL + "/feed.xml", Rel: "self", Type: "application/rss+xml"},
+			Description:   "Most recently indexed agent-first sites — ranked by agentic readiness. Updated daily.",
+			Language:      "en-us",
+			LastBuildDate: time.Now().UTC().Format(time.RFC1123Z),
+		},
+	}
+
+	rows, err := h.DB.QueryContext(r.Context(), `
+		SELECT domain, name, description, category, agentic_score, created_at
+		FROM sites
+		WHERE `+models.AgentFirstFilter+`
+		ORDER BY created_at DESC
+		LIMIT 50`)
+	if err != nil {
+		log.Printf("feed query: %v", err)
+		http.Error(w, "feed error", 500)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var domain, name, desc, category string
+		var score int
+		var created time.Time
+		if err := rows.Scan(&domain, &name, &desc, &category, &score, &created); err != nil {
+			continue
+		}
+		if name == "" {
+			name = domain
+		}
+		title := fmt.Sprintf("%s — score %d/100 (%s)", name, score, category)
+		body := desc
+		if body == "" {
+			body = fmt.Sprintf("Agentic readiness report for %s. Category: %s. Score: %d/100.", domain, category, score)
+		}
+		feed.Channel.Items = append(feed.Channel.Items, rssItem{
+			Title:       title,
+			Link:        h.BaseURL + "/site/" + domain,
+			GUID:        h.BaseURL + "/site/" + domain,
+			Category:    category,
+			PubDate:     created.UTC().Format(time.RFC1123Z),
+			Description: body,
+		})
+	}
+
+	w.Write([]byte(xml.Header))
+	if err := xml.NewEncoder(w).Encode(feed); err != nil {
+		log.Printf("feed encode: %v", err)
 	}
 }
