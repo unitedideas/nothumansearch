@@ -190,6 +190,19 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 				"required": []string{"url"},
 			},
 		},
+		{
+			"name":        "register_monitor",
+			"title":       "Monitor a Site's Agentic Readiness",
+			"description": "Register an email to get alerted when the indicated domain's agentic readiness score drops. Useful for agents tracking a dependency's agent-readiness health — e.g. an agent that relies on stripe.com's MCP surface wants to know the moment it regresses. Returns an unsubscribe URL. Multiple monitors per email allowed, one per domain.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"email":  map[string]any{"type": "string", "description": "Email address to receive alert"},
+					"domain": map[string]any{"type": "string", "description": "Domain to monitor (no scheme, e.g. 'stripe.com')"},
+				},
+				"required": []string{"email", "domain"},
+			},
+		},
 	}
 }
 
@@ -212,9 +225,53 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest) {
 		h.toolGetStats(w, req.ID)
 	case "submit_site":
 		h.toolSubmitSite(w, req.ID, params.Arguments)
+	case "register_monitor":
+		h.toolRegisterMonitor(w, req.ID, params.Arguments)
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
+}
+
+// toolRegisterMonitor wraps the /api/v1/monitor/register REST handler so
+// agents can subscribe to drop alerts via MCP. Mirrors the email+domain
+// flow exactly; returns the unsubscribe URL in the response text.
+func (h *MCPHandler) toolRegisterMonitor(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	email := strings.TrimSpace(asString(args["email"]))
+	domain := strings.TrimSpace(asString(args["domain"]))
+	if email == "" || domain == "" {
+		h.writeToolError(w, id, "email and domain both required")
+		return
+	}
+	m, err := models.RegisterMonitor(h.DB, email, domain)
+	if err != nil {
+		switch err {
+		case models.ErrInvalidEmail:
+			h.writeToolError(w, id, "invalid email")
+		case models.ErrInvalidDomain:
+			h.writeToolError(w, id, "invalid or unsupported domain")
+		case models.ErrTooManyMonitors:
+			h.writeToolError(w, id, "too many monitors for this email")
+		default:
+			h.writeToolError(w, id, "registration failed: "+err.Error())
+		}
+		return
+	}
+	unsub := h.BaseURL + "/monitor/unsubscribe/" + m.Token
+	text := fmt.Sprintf("Monitor registered for %s — alert will fire if score drops. Unsubscribe: %s", m.Domain, unsub)
+	resp := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"result": map[string]any{
+			"content": []map[string]any{{"type": "text", "text": text}},
+			"structuredContent": map[string]any{
+				"ok":              true,
+				"domain":          m.Domain,
+				"unsubscribe_url": unsub,
+			},
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 // toolSubmitSite queues a URL for crawling and tries an inline crawl if
