@@ -35,6 +35,67 @@ func GenerateTags(site *models.Site) pq.StringArray { return generateTags(site) 
 
 const userAgent = "NotHumanSearch/1.0 (+https://nothumansearch.ai/about)"
 
+// probeMCPJSONRPC POSTs a tools/list request to an MCP endpoint and verifies
+// the response is valid JSON-RPC 2.0 with a result.tools array. This is the
+// only way to confirm a claimed MCP server actually exists and responds —
+// manifest files can lie and text mentions can't be trusted. Short timeout
+// (6s) so this doesn't slow the crawler.
+func probeMCPJSONRPC(endpoint string) bool {
+	payload := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	req, err := http.NewRequest("POST", endpoint, payload)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("User-Agent", userAgent)
+
+	probeClient := &http.Client{Timeout: 6 * time.Second}
+	resp, err := probeClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if err != nil {
+		return false
+	}
+	// Streamable-http transport may wrap JSON-RPC in SSE "data: " prefixes.
+	raw := strings.TrimSpace(string(body))
+	if strings.HasPrefix(raw, "data:") {
+		for _, line := range strings.Split(raw, "\n") {
+			if strings.HasPrefix(line, "data:") {
+				raw = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+				break
+			}
+		}
+	}
+	var rpc struct {
+		JSONRPC string `json:"jsonrpc"`
+		Result  struct {
+			Tools []any `json:"tools"`
+		} `json:"result"`
+		Error *struct {
+			Code int `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(raw), &rpc); err != nil {
+		return false
+	}
+	if rpc.JSONRPC != "2.0" {
+		return false
+	}
+	// Accept either a successful tools array or a method-specific error
+	// (some servers require initialize() first — still proves MCP-compliance).
+	if rpc.Error != nil {
+		return rpc.Error.Code == -32601 || rpc.Error.Code == -32600
+	}
+	return rpc.Result.Tools != nil
+}
+
 func fetch(rawURL string) (string, int, error) {
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
@@ -181,12 +242,24 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 			}
 		}
 	}
-	// Also check if llms.txt or homepage mentions MCP
+	// If no manifest was found, try a live JSON-RPC probe against common endpoints.
+	// Only a valid tools/list response counts — text mentions alone proved too noisy
+	// (481/951 = 51% of the index claimed has_mcp; most were unverifiable).
 	if !site.HasMCPServer {
-		contentToCheck := strings.ToLower(site.LLMsTxtContent + " " + site.Description)
-		if strings.Contains(contentToCheck, "mcp server") || strings.Contains(contentToCheck, "mcp endpoint") ||
-			strings.Contains(contentToCheck, "model context protocol") || strings.Contains(contentToCheck, "mcp-server") {
-			site.HasMCPServer = true
+		probeTargets := []string{base + "/mcp", base + "/api/mcp"}
+		for _, target := range probeTargets {
+			if probeMCPJSONRPC(target) {
+				site.HasMCPServer = true
+				site.MCPEndpoint = target
+				break
+			}
+		}
+	} else if site.MCPEndpoint != "" {
+		// Manifest declared an endpoint — verify it actually responds. Leaves
+		// manifest-only claims in place (some hosts declare MCP preview/planned
+		// without live endpoint), but lets us log divergence for quality work.
+		if !probeMCPJSONRPC(site.MCPEndpoint) {
+			log.Printf("mcp manifest-only (probe failed): %s endpoint=%s", site.Domain, site.MCPEndpoint)
 		}
 	}
 
