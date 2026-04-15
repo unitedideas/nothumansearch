@@ -110,6 +110,15 @@ when a site's agent signals regress.
 ### Stats
 GET /stats
 
+### Categories
+GET /categories
+Returns: {categories: [{name, count}]} — all 12 buckets with live counts.
+
+### Monitor a Site
+POST /monitor/register  Body: {"email": "you@x.com", "domain": "site.com"}
+Email alert when a site's agentic readiness drops. Returns an unsubscribe URL.
+Free tier: multiple monitors per email allowed, one per domain.
+
 ## Categories
 ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity.
 
