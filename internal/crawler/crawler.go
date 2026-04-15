@@ -24,6 +24,15 @@ var client = &http.Client{
 	},
 }
 
+// Categorize returns the category for an already-populated Site (no HTTP).
+// Exposed so the crawler CLI can re-apply categorize() rules over existing
+// DB rows without re-hitting the network — useful when new domainRules are
+// added to categorize() and recrawl is slow or stuck on HTTP.
+func Categorize(site *models.Site) string { return categorize(site) }
+
+// GenerateTags is the exported wrapper around generateTags for recategorize mode.
+func GenerateTags(site *models.Site) pq.StringArray { return generateTags(site) }
+
 const userAgent = "NotHumanSearch/1.0 (+https://nothumansearch.ai/about)"
 
 func fetch(rawURL string) (string, int, error) {
@@ -1295,11 +1304,136 @@ func categorize(site *models.Site) string {
 
 		// Screenshot / media services
 		"urlbox.io":                "developer",
+
+		// Batch 8: post-second-bulk-crawl "other" cleanup (2026-04-15)
+		// Developer / MCP infra / APIs
+		"reqres.in":                      "developer",
+		"mcp-router.net":                 "developer",
+		"mcpjam.com":                     "developer",
+		"sushimcp.com":                   "developer",
+		"ragrabbit.com":                  "developer",
+		"hyprmcp.com":                    "developer",
+		"metrifyr.cloud":                 "developer",
+		"contextplus.vercel.app":         "developer",
+		"fastapi-mcp.tadata.com":         "developer",
+		"sec-edgar-mcp.amorelli.tech":    "developer",
+		"jupyter-mcp-server.datalayer.tech": "developer",
+		"shields.io":                     "developer",
+		"cloudconvert.com":               "developer",
+		"urlscan.io":                     "security",
+		"postcodes.io":                   "data",
+		"geodb-cities-api.wirefreethought.com": "data",
+		"improvmx.com":                   "communication",
+		"jamdesk.com":                    "developer",
+		"pypi.python.org":                "developer",
+		"strava.github.io":               "developer",
+		"sonarsource.com":                "developer",
+		"n8n.partnerlinks.io":            "productivity",
+		"md.genedai.me":                  "developer",
+		"color.serialif.com":             "developer",
+		"dev.twitch.tv":                  "communication",
+
+		// AI-tools / agentic / MCP products
+		"tandem.ac":                      "ai-tools",
+		"misaligned.top":                 "ai-tools",
+		"usesideways.com":                "ai-tools",
+		"sideways.aribadernatal.com":     "ai-tools",
+		"translatesheet.com":             "ai-tools",
+		"bottalk.io":                     "ai-tools",
+		"xactions.app":                   "ai-tools",
+
+		// Finance / Crypto / Trading
+		"coinmarketcap.com":              "finance",
+		"stockmarketscan.com":            "finance",
+		"lendtrain.com":                  "finance",
+		"tosheroon.com":                  "finance",
+
+		// Data / Research / Open Data
+		"supplymaven.com":                "data",
+		"signals.global":                 "data",
+		"opendata.umea.se":               "data",
+		"data.nantesmetropole.fr":        "data",
+		"data.ratp.fr":                   "data",
+		"gettreatmenthelp.com":           "health",
+		"wger.de":                        "health",
+
+		// Ecommerce / Real Estate
+		"smarthomeexplorer.com":          "ecommerce",
+		"xfish.hu":                       "ecommerce",
+
+		// Batch 9: post-recategorize-only pass cleanup (2026-04-15)
+		// Developer / APIs / DevTools
+		"zipcodeapi.com":                 "data",
+		"linkpreview.net":                "developer",
+		"filestack.com":                  "developer",
+		"gorules.io":                     "developer",
+		"urlbae.com":                     "developer",
+		"zenquotes.io":                   "data",
+		"blackhistoryapi.io":             "data",
+		"scorebat.com":                   "data",
+		"data.oddsmagnet.com":            "data",
+		"oddsmagnet.com":                 "data",
+		"pipedream-policy-brief.vercel.app": "data",
+		"corrently.io":                   "data",
+
+		// AI-tools
+		"imagine.art":                    "ai-tools",
+		"voice.couillardelectricllc.com": "ai-tools",
+		"ikangai.com":                    "ai-tools",
+		"randomlovecraft.com":            "ai-tools",
+
+		// Finance
+		"billplz.com":                    "finance",
+		"aruannik.ee":                    "finance",
+
+		// Education
+		"kaggle.com":                     "education",
+		"slidemaster.tw":                 "education",
+
+		// Productivity / personal / agency
+		"taishoku-anshin-daiko.com":      "productivity",
+		"berger.team":                    "productivity",
+		"modeser.com":                    "productivity",
+		"campos.works":                   "productivity",
+		"angshumangupta.com":             "productivity",
+		"cesaryague.es":                  "productivity",
+
+		// Developer (personal tech blogs)
+		"sethhobson.com":                 "developer",
+		"glucn.com":                      "developer",
+
+		// Ecommerce
+		"photo-fotograf.com":             "ecommerce",
 	}
 	for domainKey, cat := range domainRules {
 		if strings.Contains(d, domainKey) {
 			return cat
 		}
+	}
+
+	// Pass 1.4: MCP server domains (anywhere in the domain) → developer infrastructure.
+	// Catches many bulk-imported one-off hosted MCP servers like
+	// *-mcp.*, mcp-*.com, *.mcp.foo, mcp anywhere in leftmost label, etc.
+	if strings.Contains(d, "-mcp.") || strings.Contains(d, "-mcp-") ||
+		strings.HasSuffix(d, "-mcp") || strings.Contains(d, ".mcp.") ||
+		strings.HasSuffix(d, "mcp.com") || strings.HasSuffix(d, "mcp.io") ||
+		strings.HasSuffix(d, "mcp.net") || strings.HasSuffix(d, "mcp.app") {
+		return "developer"
+	}
+	// subdomain containing "mcp" (e.g., verylongmcp.example.com)
+	if first := strings.SplitN(d, ".", 2); len(first) > 0 && strings.Contains(first[0], "mcp") {
+		return "developer"
+	}
+
+	// Cloud Run / Vercel API-style ephemeral hostnames (e.g., fabric-api-*.run.app,
+	// the-lounge-*.run.app) are almost always developer tooling or API backends.
+	if strings.HasSuffix(d, ".run.app") || strings.HasSuffix(d, ".vercel.app") ||
+		strings.HasSuffix(d, ".fly.dev") || strings.HasSuffix(d, ".modal.run") {
+		return "developer"
+	}
+	if strings.Contains(d, "-api.") || strings.Contains(d, "-api-") ||
+		strings.HasPrefix(d, "api-") {
+		return "developer"
 	}
 
 	// Pass 1.5: subdomain + TLD hints (next-highest confidence after exact rules)
@@ -1334,6 +1468,7 @@ func categorize(site *models.Site) string {
 		{"communication", []string{"messaging platform", "chat platform", "sms api", "email delivery", "push notification", "real-time communication", "notification service"}},
 		{"productivity", []string{"project management", "task management", "collaboration platform", "workflow automation", "no-code", "low-code", "scheduling platform", "form builder", "crm platform"}},
 		{"ai-tools", []string{"llm observability", "llmops", "agent framework", "agent platform", "ai orchestration", "prompt engineering", "model serving", "ai gateway"}},
+		{"developer", []string{"mcp server", "mcp client", "model context protocol", "mcp-server", "hosted mcp", "remote mcp"}},
 	}
 
 	for _, rule := range rules {
@@ -1361,6 +1496,11 @@ func categorize(site *models.Site) string {
 		{"health", []string{"patient", "diagnosis", "ehr ", "wellness", "fitness tracker"}},
 		{"education", []string{"classroom", "tutoring", "lesson plan", "quiz ", "learner"}},
 		{"jobs", []string{"applicant tracking", "recruiter", "job listing", "talent pool"}},
+		{"ecommerce", []string{"real estate", "property listing", "ferienhaus", "vacation rental", "short term rental"}},
+		{"finance", []string{"bitcoin", "cryptocurrency", "crypto ", "stock market", "mortgage", "cashback", "credit card"}},
+		{"ai-tools", []string{"context engine", "agentic", "ai-powered", "prompt management", "vector memory"}},
+		{"data", []string{"open data", "public data", "statistical data", "census data", "government data"}},
+		{"news", []string{"breaking news", "daily news", "news aggregator"}},
 	}
 	for _, rule := range broadKeywords {
 		for _, kw := range rule.keywords {

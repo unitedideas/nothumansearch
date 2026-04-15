@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/database"
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -18,6 +19,7 @@ import (
 func main() {
 	seed := flag.Bool("seed", false, "Crawl seed sites")
 	recrawl := flag.Bool("recrawl", false, "Re-crawl all sites in the database")
+	recategorize := flag.Bool("recategorize", false, "Re-apply categorize() + tags to all DB sites (no HTTP)")
 	url := flag.String("url", "", "Crawl a single URL")
 	file := flag.String("file", "", "Crawl URLs from a file (one per line)")
 	dryRun := flag.Bool("dry-run", false, "Crawl but don't save to DB")
@@ -71,12 +73,81 @@ func main() {
 		return
 	}
 
+	if *recategorize {
+		recategorizeAll()
+		return
+	}
+
 	fmt.Println("Usage:")
 	fmt.Println("  crawler -seed              Crawl all seed sites")
 	fmt.Println("  crawler -recrawl           Re-crawl all DB sites")
+	fmt.Println("  crawler -recategorize      Re-apply categorize() + tags (no HTTP)")
 	fmt.Println("  crawler -url https://...   Crawl a single URL")
 	fmt.Println("  crawler -file urls.txt     Crawl URLs from file")
 	fmt.Println("  crawler -dry-run -seed     Crawl without saving")
+}
+
+// recategorizeAll re-applies the current categorize() and generateTags() rules
+// to every site in the DB in a single pass — no HTTP, no re-scoring. Useful
+// after adding new domainRules/keyword rules when recrawl is slow or blocked.
+func recategorizeAll() {
+	rows, err := database.DB.Query(`SELECT id, domain, name, description, category,
+		has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai, has_structured_api, has_mcp_server, has_schema_org
+		FROM sites`)
+	if err != nil {
+		log.Fatalf("query sites: %v", err)
+	}
+	defer rows.Close()
+
+	type row struct {
+		id       string
+		oldCat   string
+		site     models.Site
+	}
+	var all []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.site.Domain, &r.site.Name, &r.site.Description, &r.oldCat,
+			&r.site.HasLLMsTxt, &r.site.HasAIPlugin, &r.site.HasOpenAPI, &r.site.HasRobotsAI,
+			&r.site.HasStructuredAPI, &r.site.HasMCPServer, &r.site.HasSchemaOrg); err != nil {
+			log.Printf("scan: %v", err)
+			continue
+		}
+		all = append(all, r)
+	}
+	log.Printf("Recategorizing %d sites...", len(all))
+
+	var changed, unchanged, failed int
+	moves := map[string]int{}
+	for _, r := range all {
+		newCat := crawler.Categorize(&r.site)
+		newTags := crawler.GenerateTags(&r.site)
+		if newTags == nil {
+			newTags = pq.StringArray{}
+		}
+		if newCat == r.oldCat {
+			unchanged++
+			// still update tags in case they changed
+			if _, err := database.DB.Exec(`UPDATE sites SET tags=$1, updated_at=NOW() WHERE id=$2`, newTags, r.id); err != nil {
+				log.Printf("UPDATE %s tags: %v", r.site.Domain, err)
+				failed++
+			}
+			continue
+		}
+		if _, err := database.DB.Exec(`UPDATE sites SET category=$1, tags=$2, updated_at=NOW() WHERE id=$3`, newCat, newTags, r.id); err != nil {
+			log.Printf("UPDATE %s: %v", r.site.Domain, err)
+			failed++
+			continue
+		}
+		changed++
+		key := r.oldCat + " -> " + newCat
+		moves[key]++
+		log.Printf("  %s: %s -> %s", r.site.Domain, r.oldCat, newCat)
+	}
+	log.Printf("Done. Changed: %d, Unchanged: %d, Failed: %d", changed, unchanged, failed)
+	for k, v := range moves {
+		log.Printf("  %s: %d", k, v)
+	}
 }
 
 func crawlOne(rawURL string, dryRun bool) {
@@ -229,7 +300,7 @@ func crawlSeeds(numWorkers int, dryRun bool) {
 
 func recrawlAll(numWorkers int) {
 	// First, process any pending submissions
-	rows, err := database.DB.Query("SELECT url FROM submissions WHERE status='pending' LIMIT 50")
+	rows, err := database.DB.Query("SELECT url FROM submissions WHERE status='pending' LIMIT 500")
 	if err == nil {
 		defer rows.Close()
 		var pendingURLs []string
