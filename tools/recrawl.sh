@@ -32,7 +32,10 @@ curl -s -X POST "https://api.indexnow.org/indexnow" \
       "https://nothumansearch.ai/sitemap.xml",
       "https://nothumansearch.ai/llms.txt",
       "https://nothumansearch.ai/llms-full.txt",
-      "https://nothumansearch.ai/openapi.yaml"
+      "https://nothumansearch.ai/openapi.yaml",
+      "https://nothumansearch.ai/api/v1",
+      "https://nothumansearch.ai/.well-known/ai-plugin.json",
+      "https://nothumansearch.ai/.well-known/mcp.json"
     ]
   }' >> /dev/null 2>&1 || true
 
