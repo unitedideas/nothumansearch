@@ -381,6 +381,8 @@ func gzipMiddleware(next http.Handler) http.Handler {
 
 // securityHeadersMiddleware adds standard hardening headers to every response.
 // HSTS is 1yr with preload-eligible flags; NHS has been HTTPS-only since launch.
+// Also adds Link header advertising agent-discovery resources (llms.txt,
+// openapi.yaml, mcp manifest) so agents can find them without parsing HTML.
 func securityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -389,6 +391,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+		h.Set("Link", `</llms.txt>; rel="describedby"; type="text/plain", </openapi.yaml>; rel="alternate"; type="application/yaml", </.well-known/mcp.json>; rel="alternate"; type="application/json"`)
 		next.ServeHTTP(w, r)
 	})
 }
