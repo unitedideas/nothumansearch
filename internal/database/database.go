@@ -59,10 +59,13 @@ func RunMigrations(dir string) error {
 		stmts := strings.Split(string(data), ";")
 		for _, stmt := range stmts {
 			stmt = strings.TrimSpace(stmt)
-			if stmt == "" || strings.HasPrefix(stmt, "--") {
+			if stmt == "" {
 				continue
 			}
-			// Skip pure comment blocks
+			// Skip pure-comment pieces (every non-blank line starts with --).
+			// NOTE: do NOT short-circuit on HasPrefix("--") alone — a real
+			// statement with a leading comment block ("-- doc\nCREATE TABLE …")
+			// would be skipped entirely. Check every line.
 			lines := strings.Split(stmt, "\n")
 			hasCode := false
 			for _, line := range lines {
