@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
+	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
@@ -56,7 +58,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"description": "MCP server for Not Human Search — search the agentic web.",
 			"transport":   "streamable-http",
 			"endpoint":    h.BaseURL + "/mcp",
-			"tools":       []string{"search_agents", "get_site_details", "get_stats"},
+			"tools":       []string{"search_agents", "get_site_details", "get_stats", "submit_site"},
 			"setup": map[string]string{
 				"claude_code": "claude mcp add --transport http nothumansearch " + h.BaseURL + "/mcp",
 			},
@@ -173,6 +175,21 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 				"properties": map[string]any{},
 			},
 		},
+		{
+			"name":        "submit_site",
+			"title":       "Submit a Site for Indexing",
+			"description": "Submit a URL for NHS to crawl and score. Use when you discover an agent-first tool, API, or service that isn't in the index yet. NHS will fetch the site, check its 7 agentic signals (llms.txt, ai-plugin.json, OpenAPI, structured API, MCP server, robots.txt AI rules, Schema.org), compute a score, and add it to the index. The site becomes searchable within a few seconds if the crawl succeeds.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"url": map[string]any{
+						"type":        "string",
+						"description": "Full URL to submit (include scheme, e.g. 'https://example.com'). Homepage is best — NHS will check /.well-known/ paths, /robots.txt, /llms.txt, etc. relative to the site root.",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
 	}
 }
 
@@ -193,9 +210,72 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest) {
 		h.toolGetSiteDetails(w, req.ID, params.Arguments)
 	case "get_stats":
 		h.toolGetStats(w, req.ID)
+	case "submit_site":
+		h.toolSubmitSite(w, req.ID, params.Arguments)
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
+}
+
+// toolSubmitSite queues a URL for crawling and tries an inline crawl if
+// concurrency allows. Mirrors the /api/v1/submit handler behavior so agents
+// get identical semantics regardless of transport.
+func (h *MCPHandler) toolSubmitSite(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	rawURL := strings.TrimSpace(asString(args["url"]))
+	if rawURL == "" {
+		h.writeToolError(w, id, "url required")
+		return
+	}
+	// Normalize — accept domains without scheme, reject obvious garbage.
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		rawURL = "https://" + rawURL
+	}
+
+	_, err := h.DB.Exec(`
+		INSERT INTO submissions (url, status) VALUES ($1, 'pending')
+		ON CONFLICT DO NOTHING`, rawURL)
+	if err != nil {
+		h.writeToolError(w, id, "submission failed: "+err.Error())
+		return
+	}
+
+	// Try an inline crawl if the global submit-crawl semaphore has room. If
+	// not, fall back to queued status and let the scheduled recrawl pick it
+	// up. The semaphore lives in api.go to prevent OOM during bulk submissions.
+	crawled := false
+	var crawlText string
+	select {
+	case submitCrawlSem <- struct{}{}:
+		site, err := crawler.CrawlSite(rawURL)
+		<-submitCrawlSem
+		if err != nil {
+			log.Printf("mcp submit crawl failed for %s: %v", rawURL, err)
+			h.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", rawURL)
+			crawlText = fmt.Sprintf("Queued %s, but inline crawl failed: %v. Will retry on next scheduled recrawl.", rawURL, err)
+		} else {
+			if err := models.UpsertSite(h.DB, site); err != nil {
+				log.Printf("mcp submit upsert failed for %s: %v", rawURL, err)
+				crawlText = fmt.Sprintf("Crawled %s (score %d/100) but index write failed; will retry.", site.Domain, site.AgenticScore)
+			} else {
+				h.DB.Exec("UPDATE submissions SET status='crawled' WHERE url=$1", rawURL)
+				crawled = true
+				crawlText = fmt.Sprintf("Indexed %s — agentic score %d/100, category %s. Live at %s/site/%s.", site.Domain, site.AgenticScore, site.Category, h.BaseURL, site.Domain)
+			}
+		}
+	default:
+		crawlText = fmt.Sprintf("Queued %s for crawl (index busy — scheduled recrawl will pick it up within the hour).", rawURL)
+	}
+
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": crawlText},
+		},
+		"structuredContent": map[string]any{
+			"url":     rawURL,
+			"crawled": crawled,
+			"queued":  !crawled,
+		},
+	})
 }
 
 func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
