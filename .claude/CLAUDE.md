@@ -14,6 +14,7 @@ The Google for AI agents. Search engine that indexes agent-first tools ranked by
 - `internal/crawler/seeds.go` — 440+ seed URLs
 - `internal/models/queries.go` — FTS search with weighted tsvector, AgentFirstFilter constant
 - `internal/handlers/seo.go` — All GEO endpoints: robots, llms.txt, llms-full.txt, mcp.json, ai-plugin.json, openapi.yaml, sitemap.xml
+- `internal/handlers/mcp.go` — NHS-as-MCP-server. Live at `/mcp` (JSON-RPC 2.0, streamable-http). Tools: search_agents, get_site_details, get_stats. This is the primary agent-discovery surface — agents wire NHS in at build time via `claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp`.
 
 ## Agent-First Rule (CRITICAL)
 Every site in the index MUST have at least one strong agent signal:

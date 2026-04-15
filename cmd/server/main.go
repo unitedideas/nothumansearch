@@ -60,6 +60,8 @@ func main() {
 	apiHandler := handlers.NewAPIHandler(database.DB)
 	seoHandler := handlers.NewSEOHandler(database.DB, baseURL)
 	monitorHandler := handlers.NewMonitorHandler(database.DB, baseURL)
+	mcpHandler := handlers.NewMCPHandler(database.DB, baseURL)
+	checkHandler := handlers.NewCheckHandler(database.DB)
 
 	mux := http.NewServeMux()
 
@@ -74,6 +76,16 @@ func main() {
 	mux.HandleFunc("/bb1637af360f471ab2a1555d45d683ea.txt", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("bb1637af360f471ab2a1555d45d683ea"))
+	})
+
+	// Official MCP registry HTTP-based domain authentication. This public-key
+	// proof lets `mcp-publisher login http --domain nothumansearch.ai` sign
+	// registry publishes with the matching private key. The private key itself
+	// lives in macOS Keychain (account "foundry", service
+	// "nhs-mcp-registry-privkey") and is never checked in.
+	mux.HandleFunc("/.well-known/mcp-registry-auth", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("v=MCPv1; k=ed25519; p=1qXOvfXi+Dim0+NN9XiDyB0pO6seHUwAiNxjUyoraZM=\n"))
 	})
 
 	// SEO / GEO
@@ -100,11 +112,17 @@ func main() {
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
+	mux.Handle("/api/v1/check", checkHandler)
 	mux.HandleFunc("/api/v1/monitor/register", monitorHandler.Register)
 
 	// Monitor (free feature — email alerts when a site's agentic readiness drops)
 	mux.HandleFunc("/monitor", monitorHandler.LandingPage)
 	mux.HandleFunc("/monitor/unsubscribe/", monitorHandler.Unsubscribe)
+
+	// MCP server — agents connect here to search NHS as a tool.
+	// GET returns a friendly info blurb; POST is JSON-RPC 2.0.
+	mux.Handle("/mcp", mcpHandler)
+	mux.Handle("/mcp/", mcpHandler)
 
 	// Middleware chain: logging → domain redirect → CORS → handler
 	handler := loggingMiddleware(domainRedirectMiddleware(corsMiddleware(mux)))

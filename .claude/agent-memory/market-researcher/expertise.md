@@ -157,6 +157,16 @@ openai, anthropic, google ai, cohere, mistral, github, vercel, fly.io, stripe, r
 - Ref (doc search MCP): $9/mo, 1K credits ($0.009/search); "thousands of weekly users, hundreds of subscribers"
 - Willingness to pay confirmed for MCP-as-API services
 
+## NHS MCP Registry Submission Map (researched 2026-04-14)
+- smithery.ai — CLI: `smithery mcp publish <url> -n org/name`; no GitHub required; streamable-http supported; sign-in at smithery.ai/new; no OSS requirement
+- pulsemcp.com — Web form at pulsemcp.com/submit; URL can be website (not just GitHub); also ingests from official registry daily; GitHub not required
+- mcp.so — GitHub issue submission; link to server; GitHub repo appears expected but not confirmed mandatory
+- Official registry (registry.modelcontextprotocol.io) — CLI tool `mcp-publisher`; server.json with `remotes` array for HTTP; DNS/HTTP verification for domain namespace (no GitHub needed); API at /v0/servers (read-only, no auth); publish requires CLI + domain ownership proof
+- punkpeye/awesome-mcp-servers — GitHub PR to repo; CONTRIBUTING.md requires name+repo link+description; 786 open PRs; add "🤖🤖🤖" for fast-track; remote servers may be accepted but repo link seems expected
+- glama.ai — appears to auto-index from GitHub repos; glama.json for claiming; remote-capable category exists; submission path unclear without GitHub repo
+- cline/mcp-marketplace — GitHub issue with: repo URL, 400x400 PNG logo, description; approx. 2-day review; repo URL required (private repo may be accepted)
+- mcp-get community-servers — GitHub PR only; requires full npm package scaffolding (MIT license, TypeScript, @mcp-get-community namespace); NOT viable for remote-only server
+
 ## Anti-patterns / Avoid
 - Pure content sites with no API (Coursera-type education sites are marginal)
 - Sites that are wrappers of other APIs without own endpoints (many RapidAPI listings)

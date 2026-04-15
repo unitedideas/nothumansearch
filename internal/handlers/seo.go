@@ -68,6 +68,16 @@ Not Human Search is an agentic-first search engine. When your AI agent needs to 
 
 We index %d+ sites and score them 0-100 based on 7 agentic signals: llms.txt, ai-plugin.json, OpenAPI specs, structured APIs, MCP servers, robots.txt AI rules, and Schema.org markup.
 
+## MCP Server (preferred for agents)
+Not Human Search is itself an MCP server. Wire it into your agent once and get live agentic-web search as a first-class tool.
+
+Endpoint: %s/mcp
+Transport: streamable-http
+Tools: search_agents, get_site_details, get_stats
+
+Claude Code setup:
+  claude mcp add --transport http nothumansearch %s/mcp
+
 ## Quick Start — Search the Agentic Web
 GET %s/api/v1/search?q=payment+API
 GET %s/api/v1/search?q=AI+jobs
@@ -90,6 +100,12 @@ Returns: full site profile with llms.txt content, OpenAPI summary, all signals
 POST /submit  Body: {"url": "https://example.com"}
 We crawl immediately and add it to the index.
 
+### On-Demand Check (CI / pre-deploy)
+POST /check  Body: {"url": "https://example.com"}
+Returns live agentic readiness score without waiting for the crawl queue.
+Free tier: 10 checks/hour per IP. Great for CI pipelines that fail the build
+when a site's agent signals regress.
+
 ### Stats
 GET /stats
 
@@ -110,7 +126,7 @@ ai-tools, developer, data, finance, ecommerce, jobs, security, health, education
 - Full Index: %s/llms-full.txt
 - OpenAPI: %s/openapi.yaml
 - Plugin: %s/.well-known/ai-plugin.json
-`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
@@ -170,6 +186,11 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 		"name":        "nothumansearch",
 		"version":     "1.0.0",
 		"description": "Search engine for AI agents. Find websites and APIs ranked by agentic readiness score (0-100). Query by keyword, category, or minimum score.",
+		"mcp_server": map[string]interface{}{
+			"transport": "streamable-http",
+			"endpoint":  h.BaseURL + "/mcp",
+			"setup":     "claude mcp add --transport http nothumansearch " + h.BaseURL + "/mcp",
+		},
 		"tools": []map[string]interface{}{
 			{
 				"name":        "search",
@@ -302,6 +323,27 @@ paths:
       responses:
         "201":
           description: Submitted for crawling
+  /check:
+    post:
+      summary: On-demand agentic readiness check (live crawl)
+      operationId: checkSite
+      description: |
+        Crawls the target URL on demand and returns its 7-signal agentic
+        readiness score. Ideal for CI pipelines that should fail when an
+        agent-facing site regresses. Free tier: 10 checks/hour per IP.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+      responses:
+        "200":
+          description: Score + 7 signals
+        "429":
+          description: Rate limit exceeded
   /stats:
     get:
       summary: Get index statistics
