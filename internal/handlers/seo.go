@@ -201,7 +201,7 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 		},
 		"tools": []map[string]interface{}{
 			{
-				"name":        "search",
+				"name":        "search_agents",
 				"description": "Search for agent-ready websites and APIs by keyword, category, or minimum agentic score.",
 				"endpoint":    h.BaseURL + "/api/v1/search",
 				"method":      "GET",
@@ -218,7 +218,7 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				},
 			},
 			{
-				"name":        "get_site",
+				"name":        "get_site_details",
 				"description": "Get detailed agentic readiness report for a specific domain.",
 				"endpoint":    h.BaseURL + "/api/v1/site/{domain}",
 				"method":      "GET",
@@ -230,7 +230,7 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"method":      "POST",
 			},
 			{
-				"name":        "stats",
+				"name":        "get_stats",
 				"description": "Get index statistics: total sites, average score, top category.",
 				"endpoint":    h.BaseURL + "/api/v1/stats",
 				"method":      "GET",
