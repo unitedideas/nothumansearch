@@ -62,6 +62,7 @@ func main() {
 	monitorHandler := handlers.NewMonitorHandler(database.DB, baseURL)
 	mcpHandler := handlers.NewMCPHandler(database.DB, baseURL)
 	checkHandler := handlers.NewCheckHandler(database.DB)
+	badgeHandler := handlers.NewBadgeHandler(database.DB)
 
 	mux := http.NewServeMux()
 
@@ -113,6 +114,9 @@ func main() {
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
 	mux.Handle("/api/v1/check", checkHandler)
+
+	// Embeddable score badges: /badge/{domain}.svg
+	mux.Handle("/badge/", badgeHandler)
 	mux.HandleFunc("/api/v1/monitor/register", monitorHandler.Register)
 
 	// Monitor (free feature — email alerts when a site's agentic readiness drops)

@@ -166,6 +166,18 @@
             </div>
         </div>
 
+        <div class="section">
+            <h2>Embed this badge</h2>
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px;">Show off your agentic readiness &mdash; add this SVG to your docs, README, or marketing site.</p>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+                <a href="/site/{{.Domain}}"><img src="/badge/{{.Domain}}.svg" alt="Agentic Ready {{.AgenticScore}}/100" style="display:block;"></a>
+                <span style="color:var(--text-muted);font-size:13px;">Auto-updates when your score changes.</span>
+            </div>
+            <div class="content-box" style="max-height:none;">&lt;a href="https://nothumansearch.ai/site/{{.Domain}}"&gt;
+  &lt;img src="https://nothumansearch.ai/badge/{{.Domain}}.svg" alt="Agentic Ready"&gt;
+&lt;/a&gt;</div>
+        </div>
+
         {{if .LLMsTxtContent}}
         <div class="section">
             <h2>llms.txt Content</h2>
