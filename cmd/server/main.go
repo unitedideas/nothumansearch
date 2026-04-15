@@ -1,12 +1,15 @@
 package main
 
 import (
+	"compress/gzip"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/database"
@@ -172,8 +175,8 @@ func main() {
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", mcpHandler)
 
-	// Middleware chain: logging → domain redirect → security → CORS → handler
-	handler := loggingMiddleware(domainRedirectMiddleware(securityHeadersMiddleware(corsMiddleware(mux))))
+	// Middleware chain: logging → domain redirect → security → CORS → gzip → handler
+	handler := loggingMiddleware(domainRedirectMiddleware(securityHeadersMiddleware(corsMiddleware(gzipMiddleware(mux)))))
 
 	log.Printf("Not Human Search starting on :%s", *port)
 	srv := &http.Server{
@@ -225,6 +228,53 @@ func domainRedirectMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// gzipMiddleware compresses responses if the client sent Accept-Encoding: gzip.
+// Uses a sync.Pool of gzip.Writers so we don't allocate per request. Falls
+// through uncompressed for Upgrade/Sec-Websocket or already-encoded paths.
+var gzipWriterPool = sync.Pool{New: func() any { return gzip.NewWriter(io.Discard) }}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	writer      io.Writer
+	wroteHeader bool
+}
+
+func (g *gzipResponseWriter) WriteHeader(code int) {
+	if !g.wroteHeader {
+		g.Header().Del("Content-Length") // length changes after compression
+		g.wroteHeader = true
+	}
+	g.ResponseWriter.WriteHeader(code)
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	if !g.wroteHeader {
+		g.WriteHeader(http.StatusOK)
+	}
+	return g.writer.Write(b)
+}
+
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Skip SSE / upgrade paths
+		if r.Header.Get("Upgrade") != "" || strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gz := gzipWriterPool.Get().(*gzip.Writer)
+		gz.Reset(w)
+		defer func() { gz.Close(); gzipWriterPool.Put(gz) }()
+
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		next.ServeHTTP(&gzipResponseWriter{ResponseWriter: w, writer: gz}, r)
 	})
 }
 
