@@ -10,7 +10,7 @@ var SeedSites = []struct {
 	{"https://aidevboard.com", true},
 	{"https://8bitconcepts.com", true},
 	{"https://agentcanary.com", true},
-	{"https://nothumansearch.ai", true},
+	{"https://nothumansearch.ai", false},
 
 	// Major AI platforms (known agent-ready)
 	{"https://platform.openai.com", false},
