@@ -176,15 +176,53 @@
 
         <div class="section">
             <h2>Embed this badge</h2>
-            <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px;">Show off your agentic readiness &mdash; add this SVG to your docs, README, or marketing site.</p>
-            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
+            <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px;">Show off your agentic readiness &mdash; the badge auto-updates when your score changes.</p>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
                 <a href="/site/{{.Domain}}"><img src="/badge/{{.Domain}}.svg" alt="Agentic Ready {{.AgenticScore}}/100" style="display:block;"></a>
-                <span style="color:var(--text-muted);font-size:13px;">Auto-updates when your score changes.</span>
             </div>
-            <div class="content-box" style="max-height:none;">&lt;a href="https://nothumansearch.ai/site/{{.Domain}}"&gt;
-  &lt;img src="https://nothumansearch.ai/badge/{{.Domain}}.svg" alt="Agentic Ready"&gt;
-&lt;/a&gt;</div>
+            <div style="display:flex;gap:4px;margin-bottom:8px;border-bottom:1px solid var(--border);" id="embedTabs">
+                <button type="button" class="embed-tab active" data-snip="html" style="padding:6px 12px;font-size:12px;color:var(--accent);cursor:pointer;border:none;border-bottom:2px solid var(--accent);background:none;font-family:inherit;">HTML</button>
+                <button type="button" class="embed-tab" data-snip="md" style="padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;">Markdown</button>
+                <button type="button" class="embed-tab" data-snip="jsx" style="padding:6px 12px;font-size:12px;color:var(--text-muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;">JSX</button>
+            </div>
+            <div style="position:relative;">
+                <button type="button" id="embedCopyBtn" style="position:absolute;top:8px;right:8px;background:var(--border);color:var(--text);border:none;padding:4px 10px;font-size:11px;border-radius:4px;cursor:pointer;font-family:inherit;z-index:2;">Copy</button>
+                <pre id="embedSnippet" class="content-box" style="max-height:none;white-space:pre-wrap;word-break:break-all;margin:0;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;"></pre>
+            </div>
         </div>
+        <script>
+        (function() {
+            const dom = {{.Domain}};
+            const badgeURL = 'https://nothumansearch.ai/badge/' + dom + '.svg';
+            const reportURL = 'https://nothumansearch.ai/site/' + dom;
+            const snips = {
+                html: '<a href="' + reportURL + '" target="_blank" rel="noopener"><img src="' + badgeURL + '" alt="NHS Agentic Readiness Score" height="28"></a>',
+                md: '[![NHS Agentic Readiness Score](' + badgeURL + ')](' + reportURL + ')',
+                jsx: '<a href="' + reportURL + '" target="_blank" rel="noopener">\n  <img src="' + badgeURL + '" alt="NHS Agentic Readiness Score" height={28} />\n</a>'
+            };
+            let active = 'html';
+            const render = () => {
+                document.getElementById('embedSnippet').textContent = snips[active];
+                document.querySelectorAll('.embed-tab').forEach(t => {
+                    const on = t.dataset.snip === active;
+                    t.style.color = on ? 'var(--accent)' : 'var(--text-muted)';
+                    t.style.borderBottomColor = on ? 'var(--accent)' : 'transparent';
+                });
+            };
+            render();
+            document.querySelectorAll('.embed-tab').forEach(t => t.addEventListener('click', () => { active = t.dataset.snip; render(); }));
+            document.getElementById('embedCopyBtn').addEventListener('click', async () => {
+                const btn = document.getElementById('embedCopyBtn');
+                try {
+                    await navigator.clipboard.writeText(snips[active]);
+                    btn.textContent = 'Copied ✓';
+                    btn.style.background = 'var(--green)';
+                    btn.style.color = '#000';
+                    setTimeout(() => { btn.textContent = 'Copy'; btn.style.background = 'var(--border)'; btn.style.color = 'var(--text)'; }, 1500);
+                } catch {}
+            });
+        })();
+        </script>
 
         {{if .LLMsTxtContent}}
         <div class="section">
