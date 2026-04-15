@@ -60,10 +60,13 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	if u.Scheme == "" {
 		u.Scheme = "https"
 	}
-	base := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+	// Normalize: strip "www." and lowercase so "www.prisma.io" and "prisma.io"
+	// collapse into a single canonical record.
+	canonicalHost := strings.ToLower(strings.TrimPrefix(u.Host, "www."))
+	base := fmt.Sprintf("%s://%s", u.Scheme, canonicalHost)
 
 	site := &models.Site{
-		Domain:      u.Host,
+		Domain:      canonicalHost,
 		URL:         base,
 		CrawlStatus: "success",
 	}
