@@ -52,7 +52,7 @@ Your agent can search the agent-first web from inside a conversation.
 
 **6/7**
 What's in there:
-[RECRAWL_IN_PROGRESS — update with final count, e.g. "~250 verified agent-first sites, 12 categories, daily recrawl"]
+724 verified agent-first sites, 13 categories, daily recrawl. Top 3 categories: developer (330), ai-tools (127), data (109).
 
 Submission form is public. If you maintain an agent-first tool and it's not indexed, submit it:
 https://nothumansearch.ai
@@ -78,9 +78,11 @@ So I built a search engine for agents.
 
 Not Human Search crawls the web for seven agent-readiness signals — OpenAPI, ai-plugin.json, MCP servers, structured APIs, llms.txt, and more — and scores every site on an agentic readiness scale. Only sites with a verified hard signal make the index. Not "contains the word openapi" — actually parses, actually has endpoints.
 
-It's free, MIT-licensed, has a full MCP server at /.well-known/mcp.json so agents can use it directly.
+It's free, MIT-licensed, and exposes a hosted MCP server at https://nothumansearch.ai/mcp — wire it into Claude Code with one line:
 
-[RECRAWL_IN_PROGRESS — update final count]
+    claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
+
+724 verified agent-first sites indexed today, across 13 categories.
 
 If you're building agent tooling and want a discovery primitive that isn't "scrape Google," take a look:
 
