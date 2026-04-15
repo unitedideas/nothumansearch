@@ -270,6 +270,42 @@ info:
 servers:
   - url: %s/api/v1
 paths:
+  /:
+    get:
+      summary: API index — list of endpoints and base URLs
+      operationId: getIndex
+      responses:
+        "200":
+          description: API index document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  base_url:           { type: string }
+                  openapi_spec:       { type: string }
+                  ai_plugin_manifest: { type: string }
+                  mcp_endpoint:       { type: string }
+                  endpoints:          { type: object, additionalProperties: { type: string } }
+  /categories:
+    get:
+      summary: Get all category buckets and their counts
+      operationId: listCategories
+      responses:
+        "200":
+          description: Category counts across the index
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:  { type: string }
+                        count: { type: integer }
   /search:
     get:
       summary: Search for agent-ready sites
