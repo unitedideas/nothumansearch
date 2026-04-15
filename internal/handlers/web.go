@@ -60,7 +60,7 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 
 func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		h.NotFoundPage(w, r)
 		return
 	}
 
@@ -117,6 +117,49 @@ func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 
 // GuidePage renders /guide — evergreen long-form content covering the 7 signals.
 // Primary SEO surface for "how to add llms.txt" / "make site agent-ready" queries
+// NotFoundPage renders a branded 404 that surfaces the core navigation instead
+// of leaving visitors at a bare "404 page not found" response. Sent on any
+// path that didn't match a registered handler.
+func (h *WebHandler) NotFoundPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	fmt.Fprint(w, notFoundHTML)
+}
+
+const notFoundHTML = `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Not found — Not Human Search</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d0d0e;color:#e8e8e9;font-family:'Inter',system-ui,sans-serif;line-height:1.7;padding:40px 20px;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.wrap{max-width:640px;margin:0 auto;text-align:center}
+.code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:96px;font-weight:700;color:#d97757;line-height:1;margin-bottom:16px;letter-spacing:-0.04em}
+h1{font-size:28px;color:#fff;margin-bottom:14px}
+p{color:#c5c5c9;margin-bottom:28px}
+.links{display:grid;grid-template-columns:1fr;gap:12px;text-align:left}
+.links a{display:block;padding:16px 20px;background:#111214;border:1px solid rgba(255,255,255,0.07);border-radius:8px;color:#e8e8e9;text-decoration:none}
+.links a:hover{border-color:#d97757}
+.links a strong{color:#fff;display:block;margin-bottom:4px}
+.links a span{color:#8b8d91;font-size:14px}
+.home{display:inline-block;margin-top:32px;padding:10px 22px;background:#d97757;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px}
+</style>
+</head><body><div class="wrap">
+<div class="code">404</div>
+<h1>That page doesn't exist</h1>
+<p>Try searching the agentic web or browse the directories:</p>
+<div class="links">
+  <a href="/"><strong>Search 980+ agent-ready sites →</strong><span>Find any API, tool, or service ranked by agentic readiness.</span></a>
+  <a href="/mcp-servers"><strong>MCP Server Directory →</strong><span>Every Model Context Protocol server in the index.</span></a>
+  <a href="/ai-tools"><strong>AI Tools Directory →</strong><span>Agent-ready AI tools scored on 7 signals.</span></a>
+  <a href="/developer-apis"><strong>Developer API Directory →</strong><span>APIs AI agents can discover at build time.</span></a>
+  <a href="/score"><strong>Score any URL →</strong><span>Run the 7-signal check live against any site.</span></a>
+</div>
+<a class="home" href="/">← Not Human Search</a>
+</div></body></html>`
+
 // and the canonical link target for badge + outreach CTAs.
 func (h *WebHandler) GuidePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
