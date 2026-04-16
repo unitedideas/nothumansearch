@@ -50,3 +50,6 @@ date,channel,target,ref,product,notes,status
 2026-04-16,github-pr,VoltAgent/awesome-agent-skills,https://github.com/VoltAgent/awesome-agent-skills/pull/443,open,NHS + aidevboard MCP skills (15.9k stars)
 2026-04-16,github-pr,frutik/awesome-search,https://github.com/frutik/awesome-search/pull/49,open,NHS in Agentic search + Search Engines (1.5k stars)
 2026-04-16,github-pr,nibzard/awesome-agentic-patterns,https://github.com/nibzard/awesome-agentic-patterns/pull/75,open,NHS agent-first tool discovery pattern (4.3k stars)
+2026-04-16,github-pr,VoltAgent/awesome-claude-code-subagents,https://github.com/VoltAgent/awesome-claude-code-subagents/pull/219,open,NHS tool-discovery subagent (17.4k stars)
+2026-04-16,github-pr,Prat011/awesome-llm-skills,https://github.com/Prat011/awesome-llm-skills/pull/90,open,NHS agent-tool-discovery skill (1.1k stars)
+2026-04-16,github-pr,ComposioHQ/awesome-claude-plugins,https://github.com/ComposioHQ/awesome-claude-plugins/pull/163,open,NHS already has #160; aidevboard MCP added (1.4k stars)
