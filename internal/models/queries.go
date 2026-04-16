@@ -5,11 +5,24 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/lib/pq"
 )
 
+func sanitizeUTF8(s string) string {
+	if utf8.ValidString(s) {
+		return s
+	}
+	return strings.ToValidUTF8(s, "")
+}
+
 func UpsertSite(db *sql.DB, s *Site) error {
+	s.Name = sanitizeUTF8(s.Name)
+	s.Description = sanitizeUTF8(s.Description)
+	s.LLMsTxtContent = sanitizeUTF8(s.LLMsTxtContent)
+	s.OpenAPISummary = sanitizeUTF8(s.OpenAPISummary)
+	s.CrawlError = sanitizeUTF8(s.CrawlError)
 	if s.Tags == nil {
 		s.Tags = pq.StringArray{}
 	}
