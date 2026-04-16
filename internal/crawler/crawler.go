@@ -272,41 +272,57 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 		apiPaths = append([]string{"/"}, apiPaths...)
 	}
 	for _, path := range apiPaths {
-		if body, status, err := fetch(base + path); err == nil && status == 200 && isAPIResponse(body) {
+		if body, status, err := fetch(base + path); err == nil && status < 500 && isAPIResponse(body) {
 			site.HasStructuredAPI = true
 			break
 		}
 	}
-	// Also probe api.{domain} for JSON responses — many AI tools serve APIs on subdomains.
+	// Probe api.{domain} and developer.{domain} for JSON/auth responses.
 	if !site.HasStructuredAPI && !strings.HasPrefix(site.Domain, "api.") {
-		apiBase := fmt.Sprintf("https://api.%s", site.Domain)
-		for _, path := range []string{"/", "/v1", "/v2"} {
-			if body, status, err := fetch(apiBase + path); err == nil && status < 500 && isAPIResponse(body) {
-				site.HasStructuredAPI = true
+		for _, sub := range []string{"api", "developer", "developers"} {
+			apiBase := fmt.Sprintf("https://%s.%s", sub, site.Domain)
+			for _, path := range []string{"/", "/v1", "/v2"} {
+				if body, status, err := fetch(apiBase + path); err == nil && status < 500 && isAPIResponse(body) {
+					site.HasStructuredAPI = true
+					break
+				}
+			}
+			if site.HasStructuredAPI {
 				break
 			}
 		}
 	}
+	// Doc-page fallback: check main domain + docs.{domain} subdomain for API documentation.
 	if !site.HasStructuredAPI {
 		apiIndicators := []string{"endpoint", "rest api", "graphql", "bearer token", "api key",
 			"rate limit", "access token", "curl -x", "curl --", "webhook", "oauth 2", "api reference",
 			"openapi", "swagger", "application/json", "sdk", "client library", "pip install",
 			"npm install", "x-api-key", "base url", "http method", "get /", "post /", "put /", "delete /"}
 		docPaths := []string{"/docs", "/docs/api", "/documentation", "/developer", "/developers",
-			"/api-docs", "/api", "/reference", "/api-reference", "/docs/reference"}
-		for _, path := range docPaths {
-			if body, status, err := fetch(base + path); err == nil && status == 200 {
-				bodyLower := strings.ToLower(body)
-				matches := 0
-				for _, indicator := range apiIndicators {
-					if strings.Contains(bodyLower, indicator) {
-						matches++
+			"/api-docs", "/api", "/reference", "/api-reference", "/docs/reference",
+			"/docs/guides", "/docs/quickstart", "/docs/rest-api"}
+		docBases := []string{base}
+		if !strings.HasPrefix(site.Domain, "docs.") {
+			docBases = append(docBases, fmt.Sprintf("https://docs.%s", site.Domain))
+		}
+		for _, docBase := range docBases {
+			for _, path := range docPaths {
+				if body, status, err := fetch(docBase + path); err == nil && status == 200 {
+					bodyLower := strings.ToLower(body)
+					matches := 0
+					for _, indicator := range apiIndicators {
+						if strings.Contains(bodyLower, indicator) {
+							matches++
+						}
+					}
+					if matches >= 5 {
+						site.HasStructuredAPI = true
+						break
 					}
 				}
-				if matches >= 5 {
-					site.HasStructuredAPI = true
-					break
-				}
+			}
+			if site.HasStructuredAPI {
+				break
 			}
 		}
 	}
