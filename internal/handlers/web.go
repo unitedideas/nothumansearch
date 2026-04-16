@@ -467,6 +467,7 @@ type ReportData struct {
 	MCP         int
 	SchemaOrg   int
 	RobotsAI    int
+	LlmsMCP     int
 	Categories  []CategoryStat
 	TopSites    []TopSite
 }
@@ -491,9 +492,11 @@ func (h *WebHandler) ReportPage(w http.ResponseWriter, r *http.Request) {
 		count(*) FILTER (WHERE has_llms_txt), count(*) FILTER (WHERE has_openapi),
 		count(*) FILTER (WHERE has_ai_plugin), count(*) FILTER (WHERE has_structured_api),
 		count(*) FILTER (WHERE has_mcp_server), count(*) FILTER (WHERE has_schema_org),
-		count(*) FILTER (WHERE has_robots_ai)
+		count(*) FILTER (WHERE has_robots_ai),
+		count(*) FILTER (WHERE has_llms_txt AND has_mcp_server)
 		FROM sites`).Scan(&data.Total, &data.HighScore, &data.MediumScore, &data.AvgScore,
-		&data.LlmsTxt, &data.OpenAPI, &data.AIPlugin, &data.API, &data.MCP, &data.SchemaOrg, &data.RobotsAI)
+		&data.LlmsTxt, &data.OpenAPI, &data.AIPlugin, &data.API, &data.MCP, &data.SchemaOrg, &data.RobotsAI,
+		&data.LlmsMCP)
 
 	rows, err := h.DB.Query(`SELECT category, count(*), round(avg(agentic_score)::numeric,1)
 		FROM sites GROUP BY category ORDER BY count(*) DESC LIMIT 12`)

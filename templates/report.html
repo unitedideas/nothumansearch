@@ -150,7 +150,7 @@
     </div>
 
     <div class="callout">
-        <strong>Key finding:</strong> 51% of sites publish llms.txt — but only 4% expose an OpenAPI spec. The agentic web is still mostly content, not APIs. Sites that pair llms.txt with an MCP server (334 sites) score dramatically higher than content-only sites.
+        <strong>Key finding:</strong> {{printf "%.0f" (divf (mulf (tof .LlmsTxt) 100) (tof .Total))}}% of sites publish llms.txt — but only {{printf "%.0f" (divf (mulf (tof .OpenAPI) 100) (tof .Total))}}% expose an OpenAPI spec. The agentic web is still mostly content, not APIs. Sites that pair llms.txt with an MCP server ({{.LlmsMCP}} sites) score dramatically higher than content-only sites.
     </div>
 
     <h2>Categories</h2>
