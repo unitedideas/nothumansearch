@@ -223,6 +223,50 @@ def from_llmstxt_site():
     return domains
 
 
+def from_apis_guru():
+    """Harvest domains from apis.guru — the OpenAPI directory."""
+    domains = set()
+    try:
+        body = http_get("https://api.apis.guru/v2/list.json")
+        data = json.loads(body)
+        for key in data:
+            for ver_key, ver in data[key].get("versions", {}).items():
+                info = ver.get("info", {})
+                contact = info.get("contact", {})
+                url = contact.get("url", "") or info.get("x-origin", [{}])[0].get("url", "") if isinstance(info.get("x-origin"), list) else ""
+                swagger_url = ver.get("swaggerUrl", "")
+                for u in (url, swagger_url):
+                    d = extract_domain(u)
+                    if d:
+                        domains.add(d)
+    except (HTTPError, URLError, json.JSONDecodeError) as e:
+        print(f"[apis.guru] fetch failed: {e}", file=sys.stderr)
+    print(f"[apis.guru] {len(domains)} candidate domains")
+    return domains
+
+
+def from_smithery():
+    """Harvest domains from smithery.ai MCP server registry."""
+    domains = set()
+    for page in range(1, 20):
+        try:
+            body = http_get(f"https://registry.smithery.ai/servers?page={page}&pageSize=100")
+            data = json.loads(body)
+            servers = data.get("servers", [])
+            if not servers:
+                break
+            for s in servers:
+                homepage = s.get("homepage", "")
+                d = extract_domain(homepage)
+                if d:
+                    domains.add(d)
+        except (HTTPError, URLError, json.JSONDecodeError) as e:
+            print(f"[smithery p{page}] fetch failed: {e}", file=sys.stderr)
+            break
+    print(f"[smithery] {len(domains)} candidate domains")
+    return domains
+
+
 def already_indexed(domain):
     """Return True if NHS already has this domain."""
     try:
@@ -264,6 +308,8 @@ def main():
     candidates |= from_pulsemcp()
     candidates |= from_mcpso()
     candidates |= from_llmstxt_site()
+    candidates |= from_apis_guru()
+    candidates |= from_smithery()
     print(f"Total unique candidates: {len(candidates)}")
 
     submitted = 0
