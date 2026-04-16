@@ -267,8 +267,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	// Check for structured API — require an actual JSON-ish / API-typical response.
 	// Redirects DON'T count: many sites 301 unknown paths to homepage.
 	// Status 200 alone is insufficient: sites with catch-all HTML routes hit everything.
-	apiPaths := []string{"/api/v1", "/api/v2", "/graphql"}
-	// API-subdomain sites (api.nasa.gov, api.fda.gov, etc.) expose their API at the root.
+	apiPaths := []string{"/api/v1", "/api/v2", "/api/v3", "/v1", "/v2", "/graphql"}
 	if strings.HasPrefix(strings.ToLower(site.Domain), "api.") {
 		apiPaths = append([]string{"/"}, apiPaths...)
 	}
@@ -278,12 +277,24 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 			break
 		}
 	}
+	// Also probe api.{domain} for JSON responses — many AI tools serve APIs on subdomains.
+	if !site.HasStructuredAPI && !strings.HasPrefix(site.Domain, "api.") {
+		apiBase := fmt.Sprintf("https://api.%s", site.Domain)
+		for _, path := range []string{"/", "/v1", "/v2"} {
+			if body, status, err := fetch(apiBase + path); err == nil && status < 500 && isAPIResponse(body) {
+				site.HasStructuredAPI = true
+				break
+			}
+		}
+	}
 	if !site.HasStructuredAPI {
-		// Developer-docs fallback: require strong API-doc evidence (multiple distinct signals).
 		apiIndicators := []string{"endpoint", "rest api", "graphql", "bearer token", "api key",
 			"rate limit", "access token", "curl -x", "curl --", "webhook", "oauth 2", "api reference",
-			"openapi", "swagger", "application/json"}
-		for _, path := range []string{"/api", "/docs/api", "/developer", "/developers", "/api-docs"} {
+			"openapi", "swagger", "application/json", "sdk", "client library", "pip install",
+			"npm install", "x-api-key", "base url", "http method", "get /", "post /", "put /", "delete /"}
+		docPaths := []string{"/docs", "/docs/api", "/documentation", "/developer", "/developers",
+			"/api-docs", "/api", "/reference", "/api-reference", "/docs/reference"}
+		for _, path := range docPaths {
 			if body, status, err := fetch(base + path); err == nil && status == 200 {
 				bodyLower := strings.ToLower(body)
 				matches := 0
@@ -292,8 +303,6 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 						matches++
 					}
 				}
-				// Raised from 3 → 5 indicators. Most false positives (e-commerce, blogs)
-				// have a few generic API words; real API docs have many.
 				if matches >= 5 {
 					site.HasStructuredAPI = true
 					break
@@ -522,7 +531,7 @@ func isAPIResponse(body string) bool {
 	// Some APIs return plain text error like "Unauthorized" — accept if it mentions
 	// auth/token/api and is short.
 	if len(trimmed) < 200 {
-		for _, hint := range []string{"\"message\"", "\"error\"", "\"data\"", "unauthorized", "authentication required", "api key", "bearer"} {
+		for _, hint := range []string{"\"message\"", "\"error\"", "\"data\"", "unauthorized", "authentication required", "api key", "api-key", "bearer", "forbidden", "not found", "invalid token"} {
 			if strings.Contains(strings.ToLower(trimmed), hint) {
 				return true
 			}
