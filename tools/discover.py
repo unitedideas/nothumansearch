@@ -12,6 +12,7 @@ requiring manual seed-list updates.
 """
 import json
 import re
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -300,6 +301,36 @@ def submit(domain):
         return False
 
 
+def crawl_via_ssh(domains):
+    """Pipe domains to the crawler on Fly via SSH, bypassing HTTP rate limits."""
+    if not domains:
+        return 0, 0
+    payload = "\n".join(domains) + "\n"
+    print(f"Piping {len(domains)} domains to crawler via fly ssh...")
+    try:
+        result = subprocess.run(
+            ["fly", "ssh", "console", "-a", "nothumansearch", "-C",
+             "/app/crawler -file /dev/stdin -workers 5"],
+            input=payload.encode(),
+            capture_output=True,
+            timeout=3600,
+        )
+        stdout = result.stdout.decode("utf-8", errors="replace")
+        stderr = result.stderr.decode("utf-8", errors="replace")
+        for line in stdout.splitlines():
+            print(f"  [crawler] {line}")
+        if stderr.strip():
+            for line in stderr.splitlines()[-5:]:
+                print(f"  [crawler:err] {line}")
+        return len(domains), 0 if result.returncode == 0 else len(domains)
+    except subprocess.TimeoutExpired:
+        print("  [crawler] SSH timeout after 1h")
+        return 0, len(domains)
+    except FileNotFoundError:
+        print("  [crawler] fly CLI not found, falling back to HTTP submit")
+        return -1, 0
+
+
 def main():
     print(f"=== NHS discovery run @ {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
     candidates = set()
@@ -312,21 +343,32 @@ def main():
     candidates |= from_smithery()
     print(f"Total unique candidates: {len(candidates)}")
 
-    submitted = 0
+    new_domains = []
     skipped = 0
-    errors = 0
-    for i, domain in enumerate(sorted(candidates)):
+    for domain in sorted(candidates):
         if already_indexed(domain):
             skipped += 1
             continue
-        if submit(domain):
-            submitted += 1
-            print(f"  [+] {domain}")
-        else:
-            errors += 1
-        # Gentle pacing — NHS has submitCrawlSem=4, don't want to starve it
-        if i % 10 == 9:
-            time.sleep(1.0)
+        new_domains.append(domain)
+
+    print(f"New domains to crawl: {len(new_domains)} (already indexed: {skipped})")
+
+    if not new_domains:
+        print("=== done: nothing new ===")
+        return 0
+
+    submitted, errors = crawl_via_ssh(new_domains)
+    if submitted == -1:
+        submitted = 0
+        errors = 0
+        for i, domain in enumerate(new_domains):
+            if submit(domain):
+                submitted += 1
+                print(f"  [+] {domain}")
+            else:
+                errors += 1
+            if i % 10 == 9:
+                time.sleep(1.0)
 
     print(f"=== done: submitted={submitted} already_indexed={skipped} errors={errors} ===")
     return 0 if errors == 0 else 1
