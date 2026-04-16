@@ -14,3 +14,7 @@ date,channel,target,ref,product,notes,status
 2026-04-16,github-pr,owainlewis/awesome-artificial-intelligence,#212,nothumansearch+8bc,13000 stars - Code & Dev Tools + Newsletters,open
 2026-04-16,github-pr,zudochkin/awesome-newsletters,#324,8bc,4300 stars - AI/ML section,open
 2026-04-16,github-pr-close,mahseema/awesome-ai-tools,#1109,nothumansearch,duplicate of #1123,closed
+2026-04-16,email,toollist.ai,05d092d7,nhs+aidevboard+8bc,directory submission - 3 products,sent
+2026-04-16,email,apideck.com/apitracker,9e3b5298,nothumansearch,API directory submission,sent
+2026-04-16,email,aidirectory.org,180239b7,nhs+aidevboard+8bc,directory submission - 3 products,sent
+2026-04-16,github-pr,academic/awesome-datascience,#597,nothumansearch,29000 stars - Tools section,open
