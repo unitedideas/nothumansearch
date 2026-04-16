@@ -29,3 +29,6 @@ date,channel,target,ref,product,notes,status
 2026-04-16T09:00:00Z,github-pr,felladrin/awesome-ai-web-search,https://github.com/felladrin/awesome-ai-web-search/pull/58,open,NHS in Closed Source (1.3k stars)
 2026-04-16T09:00:00Z,github-pr,WangRongsheng/awesome-LLM-resources,https://github.com/WangRongsheng/awesome-LLM-resources/pull/87,open,NHS in Search section (8k stars)
 2026-04-16T09:00:00Z,github-pr-blocked,appcypher/awesome-mcp-servers,n/a,blocked,PRs disabled on repo (5.4k stars)
+2026-04-16T13:00:00Z,github-pr,foss42/awesome-generative-ai-apis,https://github.com/foss42/awesome-generative-ai-apis/pull/373,open,NHS added to GenAI APIs table (214 stars)
+2026-04-16T13:00:00Z,github-pr,rohitg00/awesome-claude-code-toolkit,https://github.com/rohitg00/awesome-claude-code-toolkit/pull/287,open,NHS MCP added to Ecosystem (1.3k stars)
+2026-04-16T13:00:00Z,github-pr,business-science/awesome-generative-ai-data-scientist,https://github.com/business-science/awesome-generative-ai-data-scientist/pull/21,open,NHS added to Web Parsing section (1.5k stars)
