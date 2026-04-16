@@ -195,7 +195,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 
 	// Check OpenAPI spec — must be a real OpenAPI 3.x or Swagger 2.x document,
 	// not just any HTML page containing the word "openapi".
-	for _, path := range []string{"/openapi.yaml", "/openapi.json", "/api/openapi.yaml", "/api/openapi.json", "/swagger.json"} {
+	for _, path := range []string{"/openapi.yaml", "/openapi.json", "/api/openapi.yaml", "/api/openapi.json", "/swagger.json", "/api-docs.json", "/api/v1/openapi.json", "/api/v2/openapi.json", "/spec.json"} {
 		if body, status, err := fetch(base + path); err == nil && status == 200 && len(body) > 100 {
 			if isValidOpenAPI(body) {
 				site.HasOpenAPI = true
@@ -267,7 +267,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	// Check for structured API — require an actual JSON-ish / API-typical response.
 	// Redirects DON'T count: many sites 301 unknown paths to homepage.
 	// Status 200 alone is insufficient: sites with catch-all HTML routes hit everything.
-	apiPaths := []string{"/api/v1", "/api/v2", "/api/v3", "/v1", "/v2", "/graphql"}
+	apiPaths := []string{"/api/v1", "/api/v2", "/api/v3", "/api", "/v1", "/v2", "/v3", "/graphql", "/rest/v1", "/openai/v1"}
 	if strings.HasPrefix(strings.ToLower(site.Domain), "api.") {
 		apiPaths = append([]string{"/"}, apiPaths...)
 	}
@@ -281,7 +281,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	if !site.HasStructuredAPI && !strings.HasPrefix(site.Domain, "api.") {
 		for _, sub := range []string{"api", "developer", "developers"} {
 			apiBase := fmt.Sprintf("https://%s.%s", sub, site.Domain)
-			for _, path := range []string{"/", "/v1", "/v2"} {
+			for _, path := range []string{"/", "/api", "/api/v1", "/v1", "/v2"} {
 				if body, status, err := fetch(apiBase + path); err == nil && status < 500 && isAPIResponse(body) {
 					site.HasStructuredAPI = true
 					break
@@ -315,7 +315,7 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 							matches++
 						}
 					}
-					if matches >= 5 {
+					if matches >= 3 {
 						site.HasStructuredAPI = true
 						break
 					}
