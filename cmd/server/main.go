@@ -134,6 +134,7 @@ func main() {
 		w.Write([]byte(statusHTML))
 	})
 	mux.HandleFunc("/guide", webHandler.GuidePage)
+	mux.HandleFunc("/report", webHandler.ReportPage)
 	mux.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/#submit", http.StatusMovedPermanently)
 	})

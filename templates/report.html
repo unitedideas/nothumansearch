@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>State of the Agentic Web — Not Human Search</title>
+    <meta name="description" content="Live data on how well the web serves AI agents. Signal adoption rates, category breakdowns, and top-scoring sites across {{.Total}} indexed domains.">
+    <meta property="og:title" content="State of the Agentic Web">
+    <meta property="og:description" content="Live data on agentic readiness across {{.Total}} sites. Average score: {{.AvgScore}}/100. Only {{.HighScore}} sites score 70+.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://nothumansearch.ai/report">
+    <meta property="og:site_name" content="Not Human Search">
+    <meta property="og:image" content="https://nothumansearch.ai/static/img/og-default.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="State of the Agentic Web">
+    <meta name="twitter:description" content="Live data: only {{.HighScore}} of {{.Total}} sites score 70+ on agentic readiness.">
+    <link rel="canonical" href="https://nothumansearch.ai/report">
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "TechArticle",
+      "headline": "State of the Agentic Web",
+      "description": "Live data on how well the web serves AI agents across {{.Total}} indexed sites.",
+      "url": "https://nothumansearch.ai/report",
+      "publisher": {"@type": "Organization", "name": "Not Human Search", "url": "https://nothumansearch.ai"}
+    }
+    </script>
+    <style>
+        :root { --bg:#0d0d0e; --surface:#1a1a1b; --border:#2a2a2b; --text:#e5e5e5; --text-dim:#b0b0b0; --text-muted:#707070; --accent:#d97757; --green:#22c55e; --yellow:#eab308; --red:#ef4444; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+        .container { max-width:820px; margin:0 auto; padding:0 20px; }
+        header { padding:48px 0 32px; }
+        .logo { font-size:24px; font-weight:700; color:var(--text); letter-spacing:-1px; text-decoration:none; }
+        .logo span { color:var(--accent); }
+        nav { margin-top:12px; font-size:13px; }
+        nav a { color:var(--text-dim); text-decoration:none; margin-right:16px; }
+        nav a:hover { color:var(--accent); }
+        h1 { font-size:32px; font-weight:700; margin:0 0 8px; letter-spacing:-1px; }
+        .subtitle { color:var(--text-dim); font-size:15px; margin-bottom:40px; }
+        h2 { font-size:20px; font-weight:600; margin:40px 0 16px; color:var(--text); border-bottom:1px solid var(--border); padding-bottom:8px; }
+        p { font-size:15px; line-height:1.7; color:var(--text-dim); margin-bottom:16px; }
+        .hero-stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:16px; margin:32px 0 40px; }
+        .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px; text-align:center; }
+        .stat-value { font-size:28px; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--accent); }
+        .stat-label { font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:4px; }
+        .signal-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin:16px 0 32px; }
+        .signal { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+        .signal-name { font-size:13px; font-weight:600; margin-bottom:4px; }
+        .signal-bar { height:6px; background:var(--border); border-radius:3px; margin:8px 0 4px; overflow:hidden; }
+        .signal-fill { height:100%; background:var(--accent); border-radius:3px; }
+        .signal-pct { font-size:12px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; }
+        table { width:100%; border-collapse:collapse; margin:16px 0; font-size:14px; }
+        th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted); padding:8px 12px; border-bottom:1px solid var(--border); }
+        td { padding:8px 12px; border-bottom:1px solid var(--border); color:var(--text-dim); }
+        td:first-child { color:var(--text); }
+        .score-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:600; font-family:'IBM Plex Mono',monospace; }
+        .score-high { background:rgba(34,197,94,0.15); color:var(--green); }
+        .score-medium { background:rgba(234,179,8,0.15); color:var(--yellow); }
+        .score-low { background:rgba(239,68,68,0.15); color:var(--red); }
+        .callout { background:var(--surface); border-left:3px solid var(--accent); padding:14px 18px; margin:24px 0; border-radius:0 8px 8px 0; font-size:14px; color:var(--text-dim); line-height:1.6; }
+        .callout strong { color:var(--text); }
+        .cta { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:24px; margin:48px 0 32px; text-align:center; }
+        .cta h3 { color:var(--text); margin-bottom:8px; font-size:18px; }
+        .cta p { font-size:14px; margin-bottom:16px; }
+        .cta .btn { display:inline-block; background:var(--accent); color:#0d0d0e; padding:10px 20px; border-radius:6px; font-weight:600; text-decoration:none; font-size:14px; }
+        code { background:var(--surface); padding:2px 6px; border-radius:4px; font-family:'IBM Plex Mono',monospace; font-size:13px; }
+        footer { padding:32px 0; border-top:1px solid var(--border); margin-top:48px; font-size:12px; color:var(--text-muted); text-align:center; }
+        footer a { color:var(--text-dim); text-decoration:none; }
+        a { color:var(--accent); }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <a href="/" class="logo">not<span>human</span>search</a>
+        <nav>
+            <a href="/">Search</a>
+            <a href="/guide">Guide</a>
+            <a href="/score">Score a Site</a>
+            <a href="/report" style="color:var(--accent);">Report</a>
+        </nav>
+    </header>
+
+    <h1>State of the Agentic Web</h1>
+    <p class="subtitle">Live data on how well the web serves AI agents. Updated with every recrawl.</p>
+
+    <div class="hero-stats">
+        <div class="stat-card">
+            <div class="stat-value">{{.Total}}</div>
+            <div class="stat-label">Sites Indexed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{printf "%.1f" .AvgScore}}</div>
+            <div class="stat-label">Average Score</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.HighScore}}</div>
+            <div class="stat-label">Score 70+</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{.MCP}}</div>
+            <div class="stat-label">Live MCP Servers</div>
+        </div>
+    </div>
+
+    <h2>Signal Adoption</h2>
+    <p>How many of the {{.Total}} indexed sites expose each agentic signal. llms.txt leads adoption, but most sites stop there — only 4% pair it with a structured API.</p>
+
+    <div class="signal-grid">
+        <div class="signal">
+            <div class="signal-name">llms.txt</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .LlmsTxt) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.LlmsTxt}} sites ({{printf "%.1f" (divf (mulf (tof .LlmsTxt) 100) (tof .Total))}}%)</div>
+        </div>
+        <div class="signal">
+            <div class="signal-name">Schema.org</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .SchemaOrg) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.SchemaOrg}} sites ({{printf "%.1f" (divf (mulf (tof .SchemaOrg) 100) (tof .Total))}}%)</div>
+        </div>
+        <div class="signal">
+            <div class="signal-name">robots.txt AI rules</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .RobotsAI) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.RobotsAI}} sites ({{printf "%.1f" (divf (mulf (tof .RobotsAI) 100) (tof .Total))}}%)</div>
+        </div>
+        <div class="signal">
+            <div class="signal-name">MCP Server</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .MCP) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.MCP}} sites ({{printf "%.1f" (divf (mulf (tof .MCP) 100) (tof .Total))}}%)</div>
+        </div>
+        <div class="signal">
+            <div class="signal-name">OpenAPI Spec</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .OpenAPI) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.OpenAPI}} sites ({{printf "%.1f" (divf (mulf (tof .OpenAPI) 100) (tof .Total))}}%)</div>
+        </div>
+        <div class="signal">
+            <div class="signal-name">Structured API</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .API) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.API}} sites ({{printf "%.1f" (divf (mulf (tof .API) 100) (tof .Total))}}%)</div>
+        </div>
+        <div class="signal">
+            <div class="signal-name">ai-plugin.json</div>
+            <div class="signal-bar"><div class="signal-fill" style="width:{{printf "%.0f" (divf (mulf (tof .AIPlugin) 100) (tof .Total))}}%"></div></div>
+            <div class="signal-pct">{{.AIPlugin}} sites ({{printf "%.1f" (divf (mulf (tof .AIPlugin) 100) (tof .Total))}}%)</div>
+        </div>
+    </div>
+
+    <div class="callout">
+        <strong>Key finding:</strong> 51% of sites publish llms.txt — but only 4% expose an OpenAPI spec. The agentic web is still mostly content, not APIs. Sites that pair llms.txt with an MCP server (334 sites) score dramatically higher than content-only sites.
+    </div>
+
+    <h2>Categories</h2>
+    <table>
+        <tr><th>Category</th><th>Sites</th><th>Avg Score</th></tr>
+        {{range .Categories}}
+        <tr>
+            <td><a href="/{{.Name}}-apis">{{.Name}}</a></td>
+            <td>{{.Count}}</td>
+            <td><span class="score-badge {{if ge .AvgScore 70.0}}score-high{{else if ge .AvgScore 40.0}}score-medium{{else}}score-low{{end}}">{{printf "%.1f" .AvgScore}}</span></td>
+        </tr>
+        {{end}}
+    </table>
+
+    <h2>Top Scoring Sites</h2>
+    <table>
+        <tr><th>Domain</th><th>Score</th><th>Category</th></tr>
+        {{range .TopSites}}
+        <tr>
+            <td><a href="/site/{{.Domain}}">{{.Domain}}</a></td>
+            <td><span class="score-badge {{if ge .Score 70}}score-high{{else if ge .Score 40}}score-medium{{else}}score-low{{end}}">{{.Score}}</span></td>
+            <td>{{.Category}}</td>
+        </tr>
+        {{end}}
+    </table>
+
+    <h2>Methodology</h2>
+    <p>Every site is scored on 7 signals: llms.txt (25 pts), ai-plugin.json (20), OpenAPI spec (20), structured API (15), MCP server (10), robots.txt AI rules (5), Schema.org (5). All detections are content-verified — the crawler probes MCP endpoints with JSON-RPC, parses OpenAPI specs, and validates ai-plugin.json manifests.</p>
+    <p>The index grows via auto-discovery from the official MCP registry, PulseMCP, awesome-mcp-servers lists, and llms.txt directories. Sites are recrawled daily.</p>
+    <p>Full scoring methodology: <a href="/guide">Guide</a></p>
+
+    <div class="cta">
+        <h3>Check your site's agentic readiness</h3>
+        <p>Score any URL instantly and see which signals you're missing.</p>
+        <a href="/score" class="btn">Score Your Site</a>
+    </div>
+
+    <footer>
+        <a href="/">Not Human Search</a> &middot;
+        <a href="/guide">Guide</a> &middot;
+        <a href="/api/v1">API</a> &middot;
+        <a href="/llms.txt">llms.txt</a> &middot;
+        <a href="/openapi.yaml">OpenAPI</a>
+    </footer>
+</div>
+</body>
+</html>

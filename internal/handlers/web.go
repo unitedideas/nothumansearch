@@ -40,6 +40,14 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 		},
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		"tof": func(a int) float64 { return float64(a) },
+		"mulf": func(a, b float64) float64 { return a * b },
+		"divf": func(a, b float64) float64 {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
 		"initial": func(domain string) string {
 			// First alphabetic character of the domain, uppercased — for favicon fallback.
 			for _, r := range domain {
@@ -443,6 +451,75 @@ func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "site.html", site); err != nil {
 		log.Printf("template error: %v", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+
+type ReportData struct {
+	Total       int
+	HighScore   int
+	MediumScore int
+	AvgScore    float64
+	LlmsTxt    int
+	OpenAPI     int
+	AIPlugin    int
+	API         int
+	MCP         int
+	SchemaOrg   int
+	RobotsAI    int
+	Categories  []CategoryStat
+	TopSites    []TopSite
+}
+
+type CategoryStat struct {
+	Name     string
+	Count    int
+	AvgScore float64
+}
+
+type TopSite struct {
+	Domain string
+	Score  int
+	Category string
+}
+
+func (h *WebHandler) ReportPage(w http.ResponseWriter, r *http.Request) {
+	data := ReportData{}
+	h.DB.QueryRow(`SELECT count(*), count(*) FILTER (WHERE agentic_score >= 70),
+		count(*) FILTER (WHERE agentic_score >= 40 AND agentic_score < 70),
+		round(avg(agentic_score)::numeric, 1),
+		count(*) FILTER (WHERE has_llms_txt), count(*) FILTER (WHERE has_openapi),
+		count(*) FILTER (WHERE has_ai_plugin), count(*) FILTER (WHERE has_structured_api),
+		count(*) FILTER (WHERE has_mcp_server), count(*) FILTER (WHERE has_schema_org),
+		count(*) FILTER (WHERE has_robots_ai)
+		FROM sites`).Scan(&data.Total, &data.HighScore, &data.MediumScore, &data.AvgScore,
+		&data.LlmsTxt, &data.OpenAPI, &data.AIPlugin, &data.API, &data.MCP, &data.SchemaOrg, &data.RobotsAI)
+
+	rows, err := h.DB.Query(`SELECT category, count(*), round(avg(agentic_score)::numeric,1)
+		FROM sites GROUP BY category ORDER BY count(*) DESC LIMIT 12`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var c CategoryStat
+			rows.Scan(&c.Name, &c.Count, &c.AvgScore)
+			data.Categories = append(data.Categories, c)
+		}
+	}
+
+	rows2, err := h.DB.Query(`SELECT domain, agentic_score, category FROM sites ORDER BY agentic_score DESC LIMIT 20`)
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var t TopSite
+			rows2.Scan(&t.Domain, &t.Score, &t.Category)
+			data.TopSites = append(data.TopSites, t)
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if err := h.tmpl.ExecuteTemplate(w, "report.html", data); err != nil {
+		log.Printf("report template error: %v", err)
 		http.Error(w, "internal error", 500)
 	}
 }
