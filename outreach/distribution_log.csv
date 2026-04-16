@@ -44,3 +44,6 @@ date,channel,target,ref,product,notes,status
 2026-04-16,github-pr,amusi/awesome-ai-awesomeness,https://github.com/amusi/awesome-ai-awesomeness/pull/11,open,8bc in AI Career (975 stars)
 2026-04-16,github-pr,kaushikb11/awesome-llm-agents,https://github.com/kaushikb11/awesome-llm-agents/pull/181,open,NHS in Frameworks (1.4k stars)
 2026-04-16,skipped,VoltAgent/awesome-ai-agent-papers,n/a,skipped,arXiv papers only - NHS is a tool not a paper (591 stars)
+2026-04-16,github-pr,toolsdk-ai/toolsdk-mcp-registry,https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/286,open,NHS + aidevboard MCP entries
+2026-04-16,github-pr,docker/mcp-registry,https://github.com/docker/mcp-registry/pull/2712,open,NHS in Docker MCP Catalog (Docker Desktop reach)
+2026-04-16,email,hello@aitoolsdirectory.com,20191bdc,sent,NHS + aidevboard + 8bc directory submission
