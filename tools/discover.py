@@ -93,6 +93,34 @@ def extract_domain(raw_url):
     return host
 
 
+def from_mcp_registry():
+    """Pull websiteUrl + remote URL domains from the official MCP registry."""
+    url = "https://registry.modelcontextprotocol.io/v0/servers"
+    try:
+        body = http_get(url)
+    except (HTTPError, URLError) as e:
+        print(f"[mcp-registry] fetch failed: {e}", file=sys.stderr)
+        return set()
+    domains = set()
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError as e:
+        print(f"[mcp-registry] json error: {e}", file=sys.stderr)
+        return set()
+    for entry in data.get("servers", []):
+        srv = entry.get("server", {})
+        for field in ("websiteUrl",):
+            d = extract_domain(srv.get(field, ""))
+            if d:
+                domains.add(d)
+        for remote in srv.get("remotes", []):
+            d = extract_domain(remote.get("url", ""))
+            if d:
+                domains.add(d)
+    print(f"[mcp-registry] {len(domains)} candidate domains")
+    return domains
+
+
 def from_awesome_mcp():
     """Scrape domains from github.com/punkpeye/awesome-mcp-servers."""
     url = "https://raw.githubusercontent.com/punkpeye/awesome-mcp-servers/main/README.md"
@@ -231,6 +259,7 @@ def submit(domain):
 def main():
     print(f"=== NHS discovery run @ {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
     candidates = set()
+    candidates |= from_mcp_registry()
     candidates |= from_awesome_mcp()
     candidates |= from_pulsemcp()
     candidates |= from_mcpso()
