@@ -1,4 +1,6 @@
 date,channel,target,ref,product,notes,status
+2026-04-16,github-pr,felladrin/awesome-ai-web-search,#58,nothumansearch,1300 stars - closed source section,open
+2026-04-16,github-pr-blocked,appcypher/awesome-mcp-servers,n/a,nothumansearch+aidevboard,5400 stars - PRs disabled on repo (HTTP 410),blocked
 2026-04-16,github-pr,lukasz-madon/awesome-remote-job,#1033,aidevboard,45000 stars,open
 2026-04-16,github-pr,Hannibal046/Awesome-LLM,#485,nothumansearch,26700 stars,open
 2026-04-16,github-pr,ikaijua/Awesome-AITools,#462,nothumansearch+8bc,5800 stars,open
@@ -19,3 +21,11 @@ date,channel,target,ref,product,notes,status
 2026-04-16,email,aidirectory.org,180239b7,nhs+aidevboard+8bc,directory submission - 3 products,sent
 2026-04-16,github-pr,academic/awesome-datascience,#597,nothumansearch,29000 stars - Tools section,open
 2026-04-16,email,popularaitools.ai,f2b31f09,nothumansearch,MCP directory submission,sent
+2026-04-16T09:00:00Z,github-pr,e2b-dev/awesome-ai-agents,https://github.com/e2b-dev/awesome-ai-agents/pull/805,open,NHS agent-first search engine (27k stars)
+2026-04-16T09:00:00Z,github-pr,tensorchord/Awesome-LLMOps,https://github.com/tensorchord/Awesome-LLMOps/pull/388,open,NHS in Search section (5.7k stars)
+2026-04-16T09:00:00Z,github-pr,jamesmurdza/awesome-ai-devtools,https://github.com/jamesmurdza/awesome-ai-devtools/pull/433,open,NHS in Code Search (3.7k stars)
+2026-04-16T09:00:00Z,github-pr,aishwaryanr/awesome-generative-ai-guide,https://github.com/aishwaryanr/awesome-generative-ai-guide/pull/120,open,NHS + 8bc added (26k stars)
+2026-04-16T09:00:00Z,github-pr,filipecalegario/awesome-generative-ai,https://github.com/filipecalegario/awesome-generative-ai/pull/467,open,NHS in Searching tools (3.4k stars)
+2026-04-16T09:00:00Z,github-pr,felladrin/awesome-ai-web-search,https://github.com/felladrin/awesome-ai-web-search/pull/58,open,NHS in Closed Source (1.3k stars)
+2026-04-16T09:00:00Z,github-pr,WangRongsheng/awesome-LLM-resources,https://github.com/WangRongsheng/awesome-LLM-resources/pull/87,open,NHS in Search section (8k stars)
+2026-04-16T09:00:00Z,github-pr-blocked,appcypher/awesome-mcp-servers,n/a,blocked,PRs disabled on repo (5.4k stars)
