@@ -280,3 +280,19 @@ func (h *APIHandler) Categories(w http.ResponseWriter, r *http.Request) {
 		"categories": cats,
 	})
 }
+
+func (h *APIHandler) TrafficAnalytics(w http.ResponseWriter, r *http.Request) {
+	days := 14
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+	data, err := models.GetTrafficAnalytics(h.DB, days)
+	if err != nil {
+		h.writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	data["days"] = days
+	h.writeJSON(w, 200, data)
+}

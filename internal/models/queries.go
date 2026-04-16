@@ -345,3 +345,77 @@ func TopTags(db *sql.DB, limit int) ([]TagCount, error) {
 	}
 	return tags, rows.Err()
 }
+
+func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
+	if days <= 0 {
+		days = 14
+	}
+	result := map[string]interface{}{}
+
+	type dayRow struct {
+		Day       string `json:"day"`
+		Total     int    `json:"total"`
+		Humans    int    `json:"humans"`
+		Bots      int    `json:"bots"`
+		UniqueIPs int    `json:"unique_ips"`
+	}
+	daily := []dayRow{}
+	rows, err := db.Query(`
+		SELECT date_trunc('day', created_at)::date::text AS day,
+			count(*) AS total,
+			count(*) FILTER (WHERE NOT is_bot) AS humans,
+			count(*) FILTER (WHERE is_bot) AS bots,
+			count(DISTINCT ip_hash) AS unique_ips
+		FROM page_views
+		WHERE created_at >= NOW() - $1::int * INTERVAL '1 day'
+		GROUP BY 1 ORDER BY 1`, days)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var d dayRow
+			rows.Scan(&d.Day, &d.Total, &d.Humans, &d.Bots, &d.UniqueIPs)
+			daily = append(daily, d)
+		}
+	}
+	result["daily"] = daily
+
+	type pageRow struct {
+		Path  string `json:"path"`
+		Count int    `json:"count"`
+	}
+	pages := []pageRow{}
+	rows2, err := db.Query(`
+		SELECT path, count(*) AS cnt FROM page_views
+		WHERE NOT is_bot AND created_at >= NOW() - $1::int * INTERVAL '1 day'
+		GROUP BY path ORDER BY cnt DESC LIMIT 25`, days)
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var p pageRow
+			rows2.Scan(&p.Path, &p.Count)
+			pages = append(pages, p)
+		}
+	}
+	result["top_pages"] = pages
+
+	type refRow struct {
+		Referer string `json:"referer"`
+		Count   int    `json:"count"`
+	}
+	refs := []refRow{}
+	rows3, err := db.Query(`
+		SELECT referer, count(*) AS cnt FROM page_views
+		WHERE NOT is_bot AND referer != '' AND created_at >= NOW() - $1::int * INTERVAL '1 day'
+		GROUP BY referer ORDER BY cnt DESC LIMIT 25`, days)
+	if err == nil {
+		defer rows3.Close()
+		for rows3.Next() {
+			var r refRow
+			rows3.Scan(&r.Referer, &r.Count)
+			refs = append(refs, r)
+		}
+	}
+	result["top_referrers"] = refs
+
+	return result, nil
+}

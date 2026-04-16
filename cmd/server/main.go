@@ -2,6 +2,8 @@ package main
 
 import (
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"io"
 	"log"
@@ -182,6 +184,7 @@ func main() {
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
+	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
 	mux.Handle("/api/v1/check", checkHandler)
 
 	// Embeddable score badges: /badge/{domain}.svg
@@ -212,9 +215,38 @@ func main() {
 	}
 }
 
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (sw *statusWriter) WriteHeader(code int) {
+	sw.status = code
+	sw.ResponseWriter.WriteHeader(code)
+}
+
+var botPatterns = []string{
+	"bot", "crawl", "spider", "slurp", "archive", "curl/", "wget",
+	"python-requests", "go-http-client", "httpx", "scrapy", "fetch",
+	"lighthouse", "pagespeed", "headlesschrome", "phantomjs",
+	"semrush", "ahrefs", "mj12bot", "dotbot", "petalbot", "bytespider",
+	"gptbot", "chatgpt", "claudebot", "anthropic", "meta-externalagent",
+	"oai-searchbot", "amazonbot", "diffbot", "youbot", "duckassistbot",
+	"ccbot", "firecrawl",
+}
+
+func isBotUA(ua string) bool {
+	lower := strings.ToLower(ua)
+	for _, p := range botPatterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Skip static assets and Fly health checks from logging
 		if strings.HasPrefix(r.URL.Path, "/static/") {
 			next.ServeHTTP(w, r)
 			return
@@ -224,8 +256,25 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s %s", r.Method, r.URL.RequestURI(), r.UserAgent(), time.Since(start).Round(time.Millisecond))
+		sw := &statusWriter{ResponseWriter: w, status: 200}
+		next.ServeHTTP(sw, r)
+		dur := time.Since(start)
+		log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.status, r.UserAgent(), dur.Round(time.Millisecond))
+
+		if database.DB != nil {
+			ip := r.RemoteAddr
+			if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+				ip = strings.TrimSpace(strings.Split(fwd, ",")[0])
+			}
+			ip = strings.Split(ip, ":")[0]
+			h := sha256.Sum256([]byte(ip))
+			ipHash := hex.EncodeToString(h[:16])
+			ua := r.UserAgent()
+			ref := r.Referer()
+			bot := isBotUA(ua)
+			go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+				r.URL.Path, r.Method, sw.status, ipHash, ua, ref, dur.Milliseconds(), bot)
+		}
 	})
 }
 
