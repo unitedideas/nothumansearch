@@ -9,3 +9,8 @@ date,channel,target,ref,product,notes,status
 2026-04-16,indexnow,nothumansearch.ai,report+status+monitor,nothumansearch,3 URLs,202
 2026-04-16,github-pr-update,punkpeye/awesome-mcp-servers,#4832,nothumansearch,glama badge added,updated
 2026-04-16,github-pr-close,punkpeye/awesome-mcp-servers,#4872,nothumansearch,duplicate of #4832,closed
+2026-04-16,github-pr,josephmisiti/awesome-machine-learning,#1285,nothumansearch,72000 stars - Tools Misc,open
+2026-04-16,github-pr,ComposioHQ/awesome-claude-skills,#677,nothumansearch,54000 stars - Data & Analysis,open
+2026-04-16,github-pr,owainlewis/awesome-artificial-intelligence,#212,nothumansearch+8bc,13000 stars - Code & Dev Tools + Newsletters,open
+2026-04-16,github-pr,zudochkin/awesome-newsletters,#324,8bc,4300 stars - AI/ML section,open
+2026-04-16,github-pr-close,mahseema/awesome-ai-tools,#1109,nothumansearch,duplicate of #1123,closed
