@@ -430,5 +430,29 @@ func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
 	}
 	result["top_referrers"] = refs
 
+	// Error rates (5xx responses)
+	type errRow struct {
+		Status int `json:"status"`
+		Count  int `json:"count"`
+	}
+	errors := []errRow{}
+	rows4, err := db.Query(`
+		SELECT status, count(*) AS cnt FROM page_views
+		WHERE status >= 500 AND created_at >= NOW() - $1::int * INTERVAL '1 day'
+		GROUP BY status ORDER BY cnt DESC`, days)
+	if err == nil {
+		defer rows4.Close()
+		for rows4.Next() {
+			var e errRow
+			rows4.Scan(&e.Status, &e.Count)
+			errors = append(errors, e)
+		}
+	}
+	result["errors"] = errors
+
+	var errorsLastHour int
+	db.QueryRow(`SELECT count(*) FROM page_views WHERE status >= 500 AND created_at >= NOW() - INTERVAL '1 hour'`).Scan(&errorsLastHour)
+	result["errors_last_hour"] = errorsLastHour
+
 	return result, nil
 }
