@@ -308,8 +308,9 @@ def crawl_via_ssh(domains):
     payload = "\n".join(domains) + "\n"
     print(f"Piping {len(domains)} domains to crawler via fly ssh...")
     try:
+        fly_bin = "/opt/homebrew/bin/fly"
         result = subprocess.run(
-            ["fly", "ssh", "console", "-a", "nothumansearch", "-C",
+            [fly_bin, "ssh", "console", "-a", "nothumansearch", "-C",
              "/app/crawler -file /dev/stdin -workers 5"],
             input=payload.encode(),
             capture_output=True,
