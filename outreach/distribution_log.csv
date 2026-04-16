@@ -47,3 +47,6 @@ date,channel,target,ref,product,notes,status
 2026-04-16,github-pr,toolsdk-ai/toolsdk-mcp-registry,https://github.com/toolsdk-ai/toolsdk-mcp-registry/pull/286,open,NHS + aidevboard MCP entries
 2026-04-16,github-pr,docker/mcp-registry,https://github.com/docker/mcp-registry/pull/2712,open,NHS in Docker MCP Catalog (Docker Desktop reach)
 2026-04-16,email,hello@aitoolsdirectory.com,20191bdc,sent,NHS + aidevboard + 8bc directory submission
+2026-04-16,github-pr,VoltAgent/awesome-agent-skills,https://github.com/VoltAgent/awesome-agent-skills/pull/443,open,NHS + aidevboard MCP skills (15.9k stars)
+2026-04-16,github-pr,frutik/awesome-search,https://github.com/frutik/awesome-search/pull/49,open,NHS in Agentic search + Search Engines (1.5k stars)
+2026-04-16,github-pr,nibzard/awesome-agentic-patterns,https://github.com/nibzard/awesome-agentic-patterns/pull/75,open,NHS agent-first tool discovery pattern (4.3k stars)
