@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -282,6 +283,16 @@ func (h *APIHandler) Categories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *APIHandler) TrafficAnalytics(w http.ResponseWriter, r *http.Request) {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		h.writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
+		return
+	}
+	auth := r.Header.Get("Authorization")
+	if auth != "Bearer "+adminKey {
+		h.writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+		return
+	}
 	days := 14
 	if d := r.URL.Query().Get("days"); d != "" {
 		if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 90 {
