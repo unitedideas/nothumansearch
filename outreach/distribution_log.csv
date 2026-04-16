@@ -1,0 +1,11 @@
+date,channel,target,ref,product,notes,status
+2026-04-16,github-pr,lukasz-madon/awesome-remote-job,#1033,aidevboard,45000 stars,open
+2026-04-16,github-pr,Hannibal046/Awesome-LLM,#485,nothumansearch,26700 stars,open
+2026-04-16,github-pr,ikaijua/Awesome-AITools,#462,nothumansearch+8bc,5800 stars,open
+2026-04-16,github-pr,tramcar/awesome-job-boards,#260,aidevboard,1700 stars,open
+2026-04-16,github-pr,kyrolabs/awesome-agents,#382,nothumansearch,2200 stars,open
+2026-04-16,github-pr,mahseema/awesome-ai-tools,#1123,nothumansearch,4800 stars,open
+2026-04-16,email,mcpserverfinder.com,b151d257,nhs+aidevboard,directory submission,sent
+2026-04-16,indexnow,nothumansearch.ai,report+status+monitor,nothumansearch,3 URLs,202
+2026-04-16,github-pr-update,punkpeye/awesome-mcp-servers,#4832,nothumansearch,glama badge added,updated
+2026-04-16,github-pr-close,punkpeye/awesome-mcp-servers,#4872,nothumansearch,duplicate of #4832,closed
