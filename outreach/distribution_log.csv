@@ -32,3 +32,5 @@ date,channel,target,ref,product,notes,status
 2026-04-16T13:00:00Z,github-pr,foss42/awesome-generative-ai-apis,https://github.com/foss42/awesome-generative-ai-apis/pull/373,open,NHS added to GenAI APIs table (214 stars)
 2026-04-16T13:00:00Z,github-pr,rohitg00/awesome-claude-code-toolkit,https://github.com/rohitg00/awesome-claude-code-toolkit/pull/287,open,NHS MCP added to Ecosystem (1.3k stars)
 2026-04-16T13:00:00Z,github-pr,business-science/awesome-generative-ai-data-scientist,https://github.com/business-science/awesome-generative-ai-data-scientist/pull/21,open,NHS added to Web Parsing section (1.5k stars)
+2026-04-16,github-pr,keon/awesome-nlp,https://github.com/keon/awesome-nlp/pull/366,open,NHS in Services (18.4k stars)
+2026-04-16,github-pr,kyrolabs/awesome-agents,https://github.com/kyrolabs/awesome-agents/pull/382,open,NHS in Knowledge Management (2.2k stars)
