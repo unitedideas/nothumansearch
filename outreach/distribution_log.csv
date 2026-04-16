@@ -18,3 +18,4 @@ date,channel,target,ref,product,notes,status
 2026-04-16,email,apideck.com/apitracker,9e3b5298,nothumansearch,API directory submission,sent
 2026-04-16,email,aidirectory.org,180239b7,nhs+aidevboard+8bc,directory submission - 3 products,sent
 2026-04-16,github-pr,academic/awesome-datascience,#597,nothumansearch,29000 stars - Tools section,open
+2026-04-16,email,popularaitools.ai,f2b31f09,nothumansearch,MCP directory submission,sent
