@@ -23,12 +23,12 @@ Every indexed site is scored 0-100 on 7 agentic signals:
 - robots.txt AI crawler rules (5)
 - Schema.org (5)
 
-960+ sites indexed so far. The crawler auto-discovers new domains from the official MCP registry + awesome-mcp lists + llms.txt directories.
+8,600+ sites indexed so far. The crawler auto-discovers new domains from the official MCP registry, PulseMCP, awesome-mcp lists, and llms.txt directories.
 
 NHS is itself an MCP server:
   claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
 
-Tools: search_agents, get_site_details, get_stats, submit_site, register_monitor.
+Tools: search_agents, get_site_details, get_stats, submit_site, register_monitor, verify_mcp.
 
 There's also a REST API (openapi.yaml, ai-plugin.json, llms.txt all served) and a /score endpoint that rates any URL on demand.
 
@@ -49,7 +49,7 @@ Happy to answer questions about the crawler, categorization, or why "agent-first
 ```
 Google indexes ~50B pages for humans. But AI agents don't read pages — they read APIs, OpenAPI specs, llms.txt manifests, and MCP tool definitions. There's a growing corpus of "agent-first" sites whose value is invisible to Google because Google doesn't score the right signals.
 
-So I built nothumansearch.ai. 960+ sites indexed so far, each scored 0-100 on 7 agentic signals: llms.txt, ai-plugin.json, OpenAPI, structured API, MCP, robots.txt AI rules, Schema.org.
+So I built nothumansearch.ai. 8,600+ sites indexed so far, each scored 0-100 on 7 agentic signals: llms.txt, ai-plugin.json, OpenAPI, structured API, MCP, robots.txt AI rules, Schema.org.
 
 The index grows via:
 - Auto-discovery from the official MCP registry
@@ -60,9 +60,10 @@ NHS is itself accessible as an MCP server at nothumansearch.ai/mcp — so agents
   claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
 
 Interesting observations so far:
-- 90% of sites publishing an llms.txt don't also expose an OpenAPI spec; most are content sites, not APIs.
-- The 10% of sites scoring 70+ are disproportionately AI-tools and developer-APIs categories.
-- Most sites claiming "AI-friendly" in their copy have zero programmatic signals.
+- 51% of sites publish llms.txt, but only 4% expose an OpenAPI spec — the agentic web is still mostly content, not APIs.
+- Only 0.7% of sites score 70+ (59 out of 8,632). The top scorers are disproportionately AI-tools and developer-APIs.
+- 5.8% of sites serve a live MCP endpoint (498 verified via JSON-RPC probe, not just text mention).
+- Finance and security categories have the highest average scores (~24/100) — they invest most in programmatic interfaces.
 
 Happy to go deep on crawler design, scoring methodology, or why I think a separate index for agents is a real long-term category.
 ```
@@ -85,7 +86,7 @@ Detection gotchas I hit:
 - MCP detection at /mcp requires a JSON-RPC `initialize` call; just probing for 200 gives too many false positives.
 - robots.txt AI rules: scoring explicit allows/denies for GPTBot, ClaudeBot, PerplexityBot, CCBot etc. not generic `User-agent: *`.
 
-Aggregate results at nothumansearch.ai. 960+ sites indexed. Full scoring details at /guide, REST API at /api/v1, OpenAPI at /openapi.yaml, and NHS is itself an MCP server at /mcp.
+Aggregate results at nothumansearch.ai. 8,600+ sites indexed. Full scoring details at /guide, REST API at /api/v1, OpenAPI at /openapi.yaml, and NHS is itself an MCP server at /mcp.
 
 Agent-first filter in the DB layer means a site only shows up in results if it has at least one programmatic signal agents can discover at build time. Schema.org + robots.txt alone don't qualify.
 
