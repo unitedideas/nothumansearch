@@ -61,7 +61,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"description": "MCP server for Not Human Search — search the agentic web.",
 			"transport":   "streamable-http",
 			"endpoint":    h.BaseURL + "/mcp",
-			"tools":       []string{"search_agents", "get_site_details", "get_stats", "submit_site", "register_monitor", "verify_mcp"},
+			"tools":       []string{"search_agents", "get_site_details", "get_stats", "list_categories", "get_top_sites", "submit_site", "register_monitor", "verify_mcp"},
 			"setup": map[string]string{
 				"claude_code": "claude mcp add --transport http nothumansearch " + h.BaseURL + "/mcp",
 			},
@@ -233,6 +233,35 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 				"required": []string{"email", "domain"},
 			},
 		},
+		{
+			"name":        "list_categories",
+			"title":       "List Index Categories",
+			"description": "List all categories in the Not Human Search index with site counts and average agentic scores. Use this to understand what kinds of agent-ready services exist before searching — e.g. discover that 'developer' has 400+ sites while 'health' has 50.",
+			"inputSchema": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{},
+			},
+		},
+		{
+			"name":        "get_top_sites",
+			"title":       "Get Top Scored Sites",
+			"description": "Get the highest-scored agent-ready sites in the index, optionally filtered by category. Returns sites ranked by agentic readiness score (100 = perfect agent support). Use this to discover the most agent-ready services overall or in a specific domain like 'finance' or 'developer'.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"category": map[string]any{
+						"type":        "string",
+						"description": "Filter by category (e.g. 'developer', 'finance', 'ai-tools'). Omit for all categories.",
+					},
+					"limit": map[string]any{
+						"type":        "integer",
+						"description": "Max results (default 10, max 50)",
+						"minimum":     1,
+						"maximum":     50,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -259,6 +288,10 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 		h.toolRegisterMonitor(w, req.ID, params.Arguments)
 	case "verify_mcp":
 		h.toolVerifyMCP(w, req.ID, params.Arguments)
+	case "list_categories":
+		h.toolListCategories(w, req.ID)
+	case "get_top_sites":
+		h.toolGetTopSites(w, req.ID, params.Arguments)
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
@@ -523,6 +556,90 @@ func (h *MCPHandler) toolVerifyMCP(w http.ResponseWriter, id json.RawMessage, ar
 			"verified": verified,
 			"endpoint": raw,
 			"note":     note,
+		},
+	})
+}
+
+func (h *MCPHandler) toolListCategories(w http.ResponseWriter, id json.RawMessage) {
+	cats, err := models.GetCategories(h.DB)
+	if err != nil {
+		h.writeToolError(w, id, "failed to list categories: "+err.Error())
+		return
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d categories in the index:\n\n", len(cats))
+	for _, c := range cats {
+		fmt.Fprintf(&b, "  %-20s %4d sites  (avg score %d)\n", c.Name, c.Count, c.AvgScore)
+	}
+
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": b.String()},
+		},
+		"structuredContent": map[string]any{
+			"categories": cats,
+		},
+	})
+}
+
+func (h *MCPHandler) toolGetTopSites(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	category := asString(args["category"])
+	limit := asInt(args["limit"])
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+
+	sites, err := models.GetTopSites(h.DB, category, limit)
+	if err != nil {
+		h.writeToolError(w, id, "query failed: "+err.Error())
+		return
+	}
+
+	var b strings.Builder
+	label := "all categories"
+	if category != "" {
+		label = category
+	}
+	fmt.Fprintf(&b, "Top %d agent-ready sites (%s):\n\n", len(sites), label)
+	for i, s := range sites {
+		name := s.Name
+		if name == "" {
+			name = s.Domain
+		}
+		fmt.Fprintf(&b, "%d. %s [%d/100] — %s (%s)\n", i+1, name, s.AgenticScore, s.Domain, s.Category)
+		if s.Description != "" {
+			fmt.Fprintf(&b, "   %s\n", s.Description)
+		}
+		var signals []string
+		if s.HasLLMsTxt {
+			signals = append(signals, "llms.txt")
+		}
+		if s.HasAIPlugin {
+			signals = append(signals, "ai-plugin")
+		}
+		if s.HasOpenAPI {
+			signals = append(signals, "openapi")
+		}
+		if s.HasStructuredAPI {
+			signals = append(signals, "api")
+		}
+		if s.HasMCPServer {
+			signals = append(signals, "mcp")
+		}
+		if len(signals) > 0 {
+			fmt.Fprintf(&b, "   Signals: %s\n", strings.Join(signals, ", "))
+		}
+		fmt.Fprintf(&b, "   URL: %s\n\n", s.URL)
+	}
+
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": b.String()},
+		},
+		"structuredContent": map[string]any{
+			"category": category,
+			"results":  sites,
 		},
 	})
 }

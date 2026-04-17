@@ -300,7 +300,7 @@ func LogSearch(db *sql.DB, query string, resultsCount int, userAgent, ipHash str
 // GetCategories returns all categories with their site counts, ordered by count desc.
 func GetCategories(db *sql.DB) ([]CategoryCount, error) {
 	rows, err := db.Query(`
-		SELECT category, count(*) as cnt
+		SELECT category, count(*) as cnt, COALESCE(AVG(agentic_score)::int, 0) as avg
 		FROM sites WHERE ` + AgentFirstFilter + `
 		GROUP BY category ORDER BY cnt DESC`)
 	if err != nil {
@@ -311,7 +311,7 @@ func GetCategories(db *sql.DB) ([]CategoryCount, error) {
 	var cats []CategoryCount
 	for rows.Next() {
 		var c CategoryCount
-		if err := rows.Scan(&c.Name, &c.Count); err != nil {
+		if err := rows.Scan(&c.Name, &c.Count, &c.AvgScore); err != nil {
 			continue
 		}
 		cats = append(cats, c)
@@ -320,8 +320,46 @@ func GetCategories(db *sql.DB) ([]CategoryCount, error) {
 }
 
 type CategoryCount struct {
-	Name  string `json:"name"`
-	Count int    `json:"count"`
+	Name     string `json:"name"`
+	Count    int    `json:"count"`
+	AvgScore int    `json:"avg_score"`
+}
+
+func GetTopSites(db *sql.DB, category string, limit int) ([]Site, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	q := `SELECT id, domain, url, name, description,
+	             has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai,
+	             has_structured_api, has_mcp_server, has_schema_org,
+	             agentic_score, category, tags
+	      FROM sites WHERE ` + AgentFirstFilter
+	var args []any
+	if category != "" {
+		q += ` AND category = $1`
+		args = append(args, category)
+	}
+	q += ` ORDER BY agentic_score DESC, domain ASC LIMIT ` + fmt.Sprintf("%d", limit)
+
+	rows, err := db.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sites []Site
+	for rows.Next() {
+		var s Site
+		err := rows.Scan(&s.ID, &s.Domain, &s.URL, &s.Name, &s.Description,
+			&s.HasLLMsTxt, &s.HasAIPlugin, &s.HasOpenAPI, &s.HasRobotsAI,
+			&s.HasStructuredAPI, &s.HasMCPServer, &s.HasSchemaOrg,
+			&s.AgenticScore, &s.Category, &s.Tags)
+		if err != nil {
+			continue
+		}
+		sites = append(sites, s)
+	}
+	return sites, rows.Err()
 }
 
 // TagCount is a single tag and the number of agent-first sites carrying it.
