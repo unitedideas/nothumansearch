@@ -229,16 +229,21 @@ func (sw *statusWriter) WriteHeader(code int) {
 
 var botPatterns = []string{
 	"bot", "crawl", "spider", "slurp", "archive", "curl/", "wget",
-	"python-requests", "go-http-client", "httpx", "scrapy", "fetch",
+	"python-requests", "python-urllib", "go-http-client", "httpx", "scrapy", "fetch",
 	"lighthouse", "pagespeed", "headlesschrome", "phantomjs",
 	"semrush", "ahrefs", "mj12bot", "dotbot", "petalbot", "bytespider",
 	"gptbot", "chatgpt", "claudebot", "anthropic", "meta-externalagent",
 	"oai-searchbot", "amazonbot", "diffbot", "youbot", "duckassistbot",
-	"ccbot", "firecrawl",
+	"ccbot", "firecrawl", "chiark", "agentdiscoveryindex", "montexi",
+	"dataforseo", "wp-admin/setup-config", "wlwmanifest",
+	"java/", "libwww", "lwp-trivial", "nutch", "httpie",
 }
 
 func isBotUA(ua string) bool {
 	lower := strings.ToLower(ua)
+	if lower == "node" || lower == "" {
+		return true
+	}
 	for _, p := range botPatterns {
 		if strings.Contains(lower, p) {
 			return true
