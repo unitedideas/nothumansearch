@@ -180,7 +180,9 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/site/:domain
 func (h *APIHandler) GetSite(w http.ResponseWriter, r *http.Request) {
-	domain := r.URL.Path[len("/api/v1/site/"):]
+	domain := strings.TrimPrefix(r.URL.Path, "/api/v1/site/")
+	domain = strings.TrimPrefix(domain, "sites/")
+	domain = strings.TrimPrefix(domain, "/api/v1/sites/")
 	if domain == "" {
 		h.writeJSON(w, 400, map[string]string{"error": "domain required"})
 		return
