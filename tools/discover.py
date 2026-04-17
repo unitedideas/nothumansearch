@@ -268,6 +268,44 @@ def from_smithery():
     return domains
 
 
+def from_github_mcp_topic(max_pages=33):
+    """Harvest homepage domains from GitHub repos tagged with MCP topics.
+
+    Two topics: `model-context-protocol` (7k+ repos) and `mcp-server`.
+    Unauthenticated GitHub search: 10 rpm limit, 30 results/page, 1000 max.
+    Many MCP server repos list their product's homepage — stronger signal
+    than the README scrape used by `from_awesome_mcp`.
+    """
+    domains = set()
+    for topic in ("model-context-protocol", "mcp-server"):
+        for page in range(1, max_pages + 1):
+            url = (
+                f"https://api.github.com/search/repositories?"
+                f"q=topic:{topic}&sort=stars&order=desc&per_page=30&page={page}"
+            )
+            try:
+                body = http_get(url)
+            except (HTTPError, URLError) as e:
+                print(f"[github:{topic} p{page}] fetch failed: {e}", file=sys.stderr)
+                break
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError as e:
+                print(f"[github:{topic} p{page}] json error: {e}", file=sys.stderr)
+                break
+            items = data.get("items", [])
+            if not items:
+                break
+            for x in items:
+                hp = x.get("homepage") or ""
+                d = extract_domain(hp)
+                if d:
+                    domains.add(d)
+            time.sleep(6.5)  # stay under 10 rpm unauth limit
+    print(f"[github] {len(domains)} candidate domains")
+    return domains
+
+
 def already_indexed(domain):
     """Return True if NHS already has this domain."""
     try:
@@ -342,6 +380,7 @@ def main():
     candidates |= from_llmstxt_site()
     candidates |= from_apis_guru()
     candidates |= from_smithery()
+    candidates |= from_github_mcp_topic()
     print(f"Total unique candidates: {len(candidates)}")
 
     new_domains = []
