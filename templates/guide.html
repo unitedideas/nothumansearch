@@ -237,6 +237,14 @@ Allow: /
         <p>Or paste your URL on the <a href="/">homepage</a>. The crawler runs immediately, scores all 7 signals, and your site appears in the index within seconds. Re-submitting after fixing signals re-scores in place.</p>
         <p>You can also embed your live score badge anywhere with <code>&lt;img src="https://nothumansearch.ai/badge/yoursite.com.svg"&gt;</code>.</p>
 
+        <h2 id="ci">Protect your score in CI</h2>
+        <p>If you have a public GitHub repo for your site, wire up the free <a href="https://github.com/unitedideas/nhs-score-check-action" target="_blank" rel="noopener">NHS score-check GitHub Action</a> to fail your build if a deploy accidentally regresses your agentic signals:</p>
+<pre><code>- uses: unitedideas/nhs-score-check-action@v1
+  with:
+    domain: yoursite.com
+    min-score: 75</code></pre>
+        <p>Runs daily by default. Posts a full signal breakdown to the workflow summary. Zero config beyond the domain.</p>
+
         <div class="cta">
             <h3>Score your site right now</h3>
             <p>The <a href="/score">/score</a> tool runs the full 7-signal check live &mdash; no submission required.</p>
