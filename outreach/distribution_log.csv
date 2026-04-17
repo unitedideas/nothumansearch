@@ -163,3 +163,4 @@ date,channel,target,ref,product,notes,status
 2026-04-17,public-gist,enterprise-ai-audit-checklist,https://gist.github.com/unitedideas/8dde93c1262b54c331bb043296081aea,live
 2026-04-17,public-gist,sourcing-agent-50-lines,https://gist.github.com/unitedideas/4a0171362f7ff28963d26cbc1951ebc8,live
 2026-04-17,github-release,nhs-score-check-action,https://github.com/unitedideas/nhs-score-check-action/releases/tag/v1.0.0,published
+2026-04-17,email-pitch,submissions@devtools.fm,resend:23feb704-295c-403f-959d-b3d64c77e28a,sent-nhs-tool-suggestion
