@@ -170,3 +170,4 @@ date,channel,target,ref,product,notes,status
 2026-04-17,email-pitch,swillison@gmail.com,resend:1b6ccefc-0e42-4250-af61-9908ef9efc53,sent-simon-willison-mcp-verification-gap
 2026-04-17,email-pitch,editor@theregister.com,resend:8a2a5c94-9783-4b5e-96bf-055913d235e7,sent-the-register-mcp-broken-90pct
 2026-04-17,email-pitch,swyx@latent.space,resend:8a40718c-2c3a-42a5-bec1-e4bfd5253d9b,sent-swyx-latent-space-mcp-data
+2026-04-17,public-gist,mcp-ecosystem-health-dataset,https://gist.github.com/unitedideas/c93bd6d9984729070c59b2ea6c6b301b,md+csv-10-new-mcp-this-week
