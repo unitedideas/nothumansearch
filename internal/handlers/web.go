@@ -228,6 +228,20 @@ func (h *WebHandler) OpenAPIPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// NewestPage: /newest — sites most recently added to the index. Fresh content,
+// shareable feed that updates daily as the discovery pipeline runs.
+func (h *WebHandler) NewestPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "newest",
+		Path:       "/newest",
+		Title:      "Newest Agent-Ready Sites — Recently Added to Not Human Search",
+		Desc:       "The most recently added agent-ready sites in our index. Fresh picks from the discovery pipeline — all verified as LLM/agent-usable (llms.txt, OpenAPI, ai-plugin, MCP, or structured API).",
+		Heading:    "Newest Agent-Ready Sites",
+		Subheading: "Recently indexed, verified agent-first. Check back weekly — discovery runs every Monday.",
+		Params:     models.SearchParams{OrderNewest: true, Limit: 50},
+	})
+}
+
 // TopPage: /top — evergreen leaderboard of the 100 highest-scoring agent-ready sites.
 // Designed as a shareable, linkable reference — "the 100 sites that actually work with AI agents".
 func (h *WebHandler) TopPage(w http.ResponseWriter, r *http.Request) {

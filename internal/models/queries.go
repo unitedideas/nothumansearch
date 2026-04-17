@@ -76,6 +76,7 @@ type SearchParams struct {
 	HasMCP      bool
 	HasOpenAPI  bool
 	HasLLMsTxt  bool
+	OrderNewest bool // when true, sorts by created_at DESC instead of score
 	Limit       int
 	Page        int
 }
@@ -201,6 +202,8 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 		orderBy = fmt.Sprintf(
 			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, is_featured DESC, agentic_score DESC",
 			tsQueryArg+1, tsQueryArg)
+	} else if p.OrderNewest {
+		orderBy = "ORDER BY created_at DESC, agentic_score DESC"
 	} else {
 		orderBy = "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
 	}

@@ -148,6 +148,9 @@ func main() {
 	mux.HandleFunc("/top", webHandler.TopPage)
 	mux.HandleFunc("/top-100", webHandler.TopPage)
 	mux.HandleFunc("/leaderboard", webHandler.TopPage)
+	mux.HandleFunc("/newest", webHandler.NewestPage)
+	mux.HandleFunc("/latest", webHandler.NewestPage)
+	mux.HandleFunc("/new", webHandler.NewestPage)
 	webHandler.RegisterCategoryLandings(mux)
 
 	// Classic URL synonyms — 301 to canonical pages so agents pattern-matching
