@@ -1,0 +1,20 @@
+name: Agentic Readiness
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'templates/**'
+      - 'internal/handlers/seo.go'
+      - 'internal/handlers/mcp.go'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: unitedideas/nhs-score-check-action@v1
+        with:
+          domain: nothumansearch.ai
+          min-score: 95
