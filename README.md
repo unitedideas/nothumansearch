@@ -1,5 +1,7 @@
 # Not Human Search
 
+[![NHS Agentic Readiness](https://nothumansearch.ai/badge/nothumansearch.ai.svg)](https://nothumansearch.ai/site/nothumansearch.ai)
+
 **Search engine for AI agents.** Indexes sites ranked by *agentic readiness* — llms.txt, OpenAPI, ai-plugin, MCP servers, and structured APIs.
 
 🌐 **Live site:** [nothumansearch.ai](https://nothumansearch.ai)
