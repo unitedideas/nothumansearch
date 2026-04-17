@@ -147,3 +147,5 @@ date,channel,target,ref,product,notes,status
 2026-04-17T18:01:36Z,github-pr,dariubs/awesome-workflow-automation,https://github.com/dariubs/awesome-workflow-automation/pull/79,submitted,PR #79 — multi-resource add (NHS to Core MCP Resources + Resources & Directories, ADB to Resources & Directories, 8BC to Articles & Guides/AI Agents) to 902 star list
 2026-04-17T19:15:00Z,github-pr,0xNyk/awesome-hermes-agent,https://github.com/0xNyk/awesome-hermes-agent/pull/35,nothumansearch,Added NHS under Integrations & Bridges (MCP servers) - 1361 star Hermes Agent awesome list - MCP discovery for self-improving agent,submitted
 2026-04-17T18:06:25Z,github-pr,superiorlu/AITreasureBox,https://github.com/superiorlu/AITreasureBox/pull/16,submitted,PR #16 — added NHS (Tools+Websites) ADB (Websites) 8BC (Reports&Papers) to 785 star AI resource list
+2026-04-17,content-asset,claude-skills-repo,https://github.com/unitedideas/claude-skills-foundry,public
+2026-04-17,org-readme-update,unitedideas/unitedideas,https://github.com/unitedideas,added-examples-and-skills-section
