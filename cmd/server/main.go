@@ -145,6 +145,9 @@ func main() {
 	mux.HandleFunc("/developer-apis", webHandler.DeveloperPage)
 	mux.HandleFunc("/openapi-apis", webHandler.OpenAPIPage)
 	mux.HandleFunc("/llms-txt-sites", webHandler.LLMsTxtPage)
+	mux.HandleFunc("/top", webHandler.TopPage)
+	mux.HandleFunc("/top-100", webHandler.TopPage)
+	mux.HandleFunc("/leaderboard", webHandler.TopPage)
 	webHandler.RegisterCategoryLandings(mux)
 
 	// Classic URL synonyms — 301 to canonical pages so agents pattern-matching

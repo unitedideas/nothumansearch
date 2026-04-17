@@ -228,6 +228,20 @@ func (h *WebHandler) OpenAPIPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// TopPage: /top — evergreen leaderboard of the 100 highest-scoring agent-ready sites.
+// Designed as a shareable, linkable reference — "the 100 sites that actually work with AI agents".
+func (h *WebHandler) TopPage(w http.ResponseWriter, r *http.Request) {
+	h.renderCategoryLanding(w, r, categoryLanding{
+		Mode:       "top",
+		Path:       "/top",
+		Title:      "Top 100 Agent-Ready Sites — Ranked by Agentic Readiness | Not Human Search",
+		Desc:       "The 100 highest-scoring agent-ready sites on the internet. Ranked by llms.txt, OpenAPI, ai-plugin, MCP, and other signals AI agents use at runtime.",
+		Heading:    "Top 100 Agent-Ready Sites",
+		Subheading: "The sites AI agents can actually use. Ranked by agentic readiness — publish llms.txt, OpenAPI, ai-plugin, MCP, or a structured API to appear here.",
+		Params:     models.SearchParams{Limit: 100},
+	})
+}
+
 // LLMsTxtPage: /llms-txt-sites — surfaces every site publishing an llms.txt manifest.
 func (h *WebHandler) LLMsTxtPage(w http.ResponseWriter, r *http.Request) {
 	h.renderCategoryLanding(w, r, categoryLanding{
