@@ -158,3 +158,4 @@ date,channel,target,ref,product,notes,status
 2026-04-17,infra-content,digest-endpoint,https://nothumansearch.ai/digest,shipped
 2026-04-17,rss-aggregator-update,foorilla/allainews_sources,https://github.com/foorilla/allainews_sources/pull/7,added-digest-and-weekly-hiring-feeds
 2026-04-17,rss-aggregator-update,RSS-Renaissance/awesome-AI-feeds,https://github.com/RSS-Renaissance/awesome-AI-feeds/pull/2,added-digest-and-weekly-hiring-feeds
+2026-04-17,nhs-dogfood-submit,nothumansearch.ai,https://nothumansearch.ai/digest,submitted-to-own-index-201
