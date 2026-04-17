@@ -149,3 +149,8 @@ date,channel,target,ref,product,notes,status
 2026-04-17T18:06:25Z,github-pr,superiorlu/AITreasureBox,https://github.com/superiorlu/AITreasureBox/pull/16,submitted,PR #16 — added NHS (Tools+Websites) ADB (Websites) 8BC (Reports&Papers) to 785 star AI resource list
 2026-04-17,content-asset,claude-skills-repo,https://github.com/unitedideas/claude-skills-foundry,public
 2026-04-17,org-readme-update,unitedideas/unitedideas,https://github.com/unitedideas,added-examples-and-skills-section
+2026-04-17T18:14:53Z,github-pr,heilcheng/awesome-agent-skills,https://github.com/heilcheng/awesome-agent-skills/pull/192,submitted,"Added unitedideas/claude-skills-foundry (3 SKILL.md files) to Community Skills > Development and Testing - 4.1k star repo"
+2026-04-17,email-newsletter,submissions@tldr.tech,4fe46355-06bc-475d-919f-6e517e564ade,sent
+2026-04-17,email-newsletter,ks@turingpost.com,8556e7ea-9124-4cdc-b6ff-b0b3eb4e2650,sent
+2026-04-17,email-podcast,editors@changelog.com,ece8de31-32c6-497f-b68e-823b95163fee,sent
+2026-04-17,email-directory,hello@aitoolsdirectory.com,a0ea5110-4e97-48bc-89e5-c41989259396,sent
