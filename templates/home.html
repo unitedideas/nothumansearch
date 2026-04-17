@@ -247,33 +247,19 @@
         {{if not .Heading}}
         <div class="example-queries">
             Try: <a href="/?q=AI+jobs">AI jobs</a> <a href="/?q=payment+API">payment API</a> <a href="/?q=ecommerce">ecommerce</a> <a href="/?q=weather+data">weather data</a> <a href="/?q=authentication">authentication</a> <a href="/?q=code+hosting">code hosting</a>
-            <br><a href="/mcp-servers">MCP Servers</a> &middot; <a href="/ai-tools">AI Tools</a> &middot; <a href="/developer-apis">Developer APIs</a> &middot; <a href="/openapi-apis">OpenAPI</a> &middot; <a href="/llms-txt-sites">llms.txt</a>
         </div>
-        {{end}}
 
-        {{if not .Heading}}
         <div class="filters">
             <a href="/" class="filter-btn {{if eq .Category ""}}active{{end}}">All</a>
+            <a href="/mcp-servers" class="filter-btn">MCP Servers</a>
             <a href="/?category=ai-tools" class="filter-btn {{if eq .Category "ai-tools"}}active{{end}}">AI Tools</a>
             <a href="/?category=developer" class="filter-btn {{if eq .Category "developer"}}active{{end}}">Developer</a>
             <a href="/?category=data" class="filter-btn {{if eq .Category "data"}}active{{end}}">Data</a>
-            <a href="/?category=jobs" class="filter-btn {{if eq .Category "jobs"}}active{{end}}">Jobs</a>
             <a href="/?category=finance" class="filter-btn {{if eq .Category "finance"}}active{{end}}">Finance</a>
             <a href="/?category=ecommerce" class="filter-btn {{if eq .Category "ecommerce"}}active{{end}}">E-Commerce</a>
-            <a href="/?category=communication" class="filter-btn {{if eq .Category "communication"}}active{{end}}">Communication</a>
             <a href="/?category=productivity" class="filter-btn {{if eq .Category "productivity"}}active{{end}}">Productivity</a>
             <a href="/?category=security" class="filter-btn {{if eq .Category "security"}}active{{end}}">Security</a>
             <a href="/?category=health" class="filter-btn {{if eq .Category "health"}}active{{end}}">Health</a>
-            <a href="/?category=education" class="filter-btn {{if eq .Category "education"}}active{{end}}">Education</a>
-        </div>
-        {{end}}
-
-        {{if .PopularTags}}
-        <div class="popular-tags" style="margin: 18px 0 24px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
-            <span style="color: var(--text-dim); font-size: 12px; margin-right: 4px;">Popular tags:</span>
-            {{range .PopularTags}}
-            <a href="/tag/{{.Name}}" class="tag-pill" style="font-size: 12px; padding: 3px 9px; border: 1px solid var(--border); border-radius: 12px; color: var(--text-dim); text-decoration: none; transition: all .15s;">{{.Name}} <span style="opacity:.5;">{{.Count}}</span></a>
-            {{end}}
         </div>
         {{end}}
 
