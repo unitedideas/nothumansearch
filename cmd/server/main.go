@@ -68,6 +68,10 @@ func main() {
 	mcpHandler := handlers.NewMCPHandler(database.DB, baseURL)
 	checkHandler := handlers.NewCheckHandler(database.DB)
 	badgeHandler := handlers.NewBadgeHandler(database.DB)
+	digestHandler, err := handlers.NewDigestHandler(database.DB, baseURL, templatesDir)
+	if err != nil {
+		log.Fatalf("digest template: %v", err)
+	}
 
 	mux := http.NewServeMux()
 
@@ -120,6 +124,11 @@ func main() {
 	mux.HandleFunc("/feed.xml", seoHandler.Feed)
 	mux.HandleFunc("/rss.xml", seoHandler.Feed)
 	mux.HandleFunc("/feed/", seoHandler.Feed) // /feed/{category}.xml
+
+	// Weekly MCP ecosystem digest — HTML (/digest), JSON (/digest.json), RSS (/digest.rss).
+	mux.HandleFunc("/digest", digestHandler.HTMLHandler)
+	mux.HandleFunc("/digest.json", digestHandler.JSONHandler)
+	mux.HandleFunc("/digest.rss", digestHandler.RSSHandler)
 
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)

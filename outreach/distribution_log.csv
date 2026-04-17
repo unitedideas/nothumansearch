@@ -155,3 +155,4 @@ date,channel,target,ref,product,notes,status
 2026-04-17,email-podcast,editors@changelog.com,ece8de31-32c6-497f-b68e-823b95163fee,sent
 2026-04-17,email-directory,hello@aitoolsdirectory.com,a0ea5110-4e97-48bc-89e5-c41989259396,sent
 2026-04-17,awesome-list-pr,Code-and-Sorts/awesome-copilot-agents,https://github.com/Code-and-Sorts/awesome-copilot-agents/pull/44,submitted
+2026-04-17,infra-content,digest-endpoint,https://nothumansearch.ai/digest,shipped

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly MCP Ecosystem Digest — Not Human Search</title>
+    <meta name="description" content="Weekly snapshot of the MCP ecosystem — top new servers, top verified servers, category distribution, and ecosystem health. Updated every hour.">
+    <meta property="og:title" content="Weekly MCP Ecosystem Digest — Not Human Search">
+    <meta property="og:description" content="Top new MCP servers of the week, top verified servers, and ecosystem health metrics. Shareable snapshot of the agentic web.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="{{.Canonical}}">
+    <meta property="og:site_name" content="Not Human Search">
+    <meta property="og:image" content="{{.BaseURL}}/static/img/og-default.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Weekly MCP Ecosystem Digest — Not Human Search">
+    <meta name="twitter:description" content="Top new MCP servers of the week, top verified servers, and ecosystem health metrics.">
+    <meta name="twitter:image" content="{{.BaseURL}}/static/img/og-default.png">
+    <link rel="canonical" href="{{.Canonical}}">
+    <link rel="alternate" type="application/rss+xml" title="NHS — Weekly MCP Ecosystem Digest" href="{{.BaseURL}}/digest.rss">
+    <link rel="alternate" type="application/json" title="NHS — Weekly MCP Ecosystem Digest (JSON)" href="{{.BaseURL}}/digest.json">
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Report",
+      "name": "Weekly MCP Ecosystem Digest",
+      "datePublished": "{{.GeneratedAt.Format "2006-01-02"}}",
+      "url": "{{.Canonical}}",
+      "publisher": {"@type": "Organization", "name": "Not Human Search", "url": "{{.BaseURL}}"},
+      "description": "Weekly public snapshot of the MCP ecosystem — top new servers, top verified servers, category distribution, and ecosystem health metrics."
+    }
+    </script>
+    <style>
+        :root {
+            --bg: #0d0d0e;
+            --surface: #141416;
+            --border: #1f1f23;
+            --text: #e0e0e0;
+            --text-muted: #888;
+            --accent: #d97757;
+            --accent-dim: #b8613e;
+            --green: #4ade80;
+            --yellow: #facc15;
+            --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; line-height:1.6; }
+        a { color:var(--accent); text-decoration:none; }
+        a:hover { color:var(--accent-dim); }
+        .container { max-width:960px; margin:0 auto; padding:0 20px; }
+
+        header { padding:48px 0 24px; text-align:center; }
+        .eyebrow { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--accent); letter-spacing:2px; text-transform:uppercase; margin-bottom:12px; }
+        h1 { font-size:36px; font-weight:700; letter-spacing:-0.5px; color:var(--text); }
+        .sub { color:var(--text-muted); font-size:15px; margin-top:8px; }
+        .date-line { color:var(--text-muted); font-size:13px; margin-top:16px; font-family:'IBM Plex Mono',monospace; }
+
+        .health-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:32px 0; }
+        .health-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; text-align:center; }
+        .health-num { font-size:26px; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--accent); }
+        .health-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-top:6px; }
+        .health-sub { font-size:11px; color:var(--text-muted); margin-top:4px; font-family:'IBM Plex Mono',monospace; }
+
+        section { margin:40px 0; }
+        h2 { font-size:22px; font-weight:600; margin-bottom:8px; color:var(--text); letter-spacing:-0.3px; }
+        .section-sub { color:var(--text-muted); font-size:14px; margin-bottom:18px; }
+
+        .site-row {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; padding:16px 20px; margin-bottom:10px;
+            display:flex; gap:14px; align-items:flex-start; transition:border-color 0.2s;
+        }
+        .site-row:hover { border-color:var(--accent); }
+        .rank { font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--text-muted); font-weight:500; min-width:28px; padding-top:4px; }
+        .row-main { flex:1; min-width:0; }
+        .row-name { font-size:15px; font-weight:600; }
+        .row-name a { color:var(--text); }
+        .row-name a:hover { color:var(--accent); }
+        .row-domain { color:var(--text-muted); font-size:13px; font-family:'IBM Plex Mono',monospace; margin-top:2px; }
+        .row-desc { color:var(--text-muted); font-size:13px; margin-top:6px; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+        .row-badges { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+        .badge { padding:2px 8px; border-radius:4px; font-size:10px; font-family:'IBM Plex Mono',monospace; font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
+        .badge-signal { background:#1a2e1a; color:var(--green); }
+        .badge-category { background:#1a1a2e; color:#818cf8; }
+        .row-score {
+            flex-shrink:0; width:52px; height:52px; border-radius:8px;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:16px;
+        }
+        .row-score.high { background:#1a2e1a; color:var(--green); }
+        .row-score.medium { background:#2e2a1a; color:var(--yellow); }
+        .row-score.low { background:#2e1a1a; color:var(--red); }
+        .row-score small { font-size:9px; font-weight:400; margin-top:2px; opacity:0.7; }
+
+        .empty { background:var(--surface); border:1px dashed var(--border); border-radius:8px; padding:24px; text-align:center; color:var(--text-muted); font-size:14px; }
+
+        .cat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+        .cat-chip {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:6px; padding:12px 14px;
+            display:flex; justify-content:space-between; align-items:center; gap:10px;
+            font-size:14px;
+        }
+        .cat-chip:hover { border-color:var(--accent); }
+        .cat-name { color:var(--text); }
+        .cat-name a { color:inherit; }
+        .cat-count { font-family:'IBM Plex Mono',monospace; color:var(--accent); font-weight:600; }
+
+        .share-box {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:8px; padding:20px 24px; margin-top:40px;
+            display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+        }
+        .share-box strong { color:var(--text); }
+        .share-btn {
+            padding:8px 14px; background:var(--bg); border:1px solid var(--border);
+            border-radius:6px; color:var(--text); font-size:13px;
+            font-family:'IBM Plex Mono',monospace;
+        }
+        .share-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+        footer { margin:48px 0 32px; padding-top:24px; border-top:1px solid var(--border); text-align:center; color:var(--text-muted); font-size:13px; }
+        footer a { color:var(--accent); }
+        footer p { margin:6px 0; }
+
+        @media (max-width:640px) {
+            h1 { font-size:28px; }
+            .row-desc { -webkit-line-clamp:3; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+<header>
+    <div class="eyebrow">Weekly Digest</div>
+    <h1>The MCP Ecosystem, This Week</h1>
+    <p class="sub">Top new MCP servers, top verified servers, and ecosystem health — a shareable snapshot of the agentic web.</p>
+    <p class="date-line">Generated {{.GeneratedAt.Format "Mon, 02 Jan 2006 15:04 UTC"}} &middot; Covers {{.WeekStart.Format "Jan 02"}} → {{.GeneratedAt.Format "Jan 02"}} &middot; <a href="/digest.json">JSON</a> &middot; <a href="/digest.rss">RSS</a></p>
+</header>
+
+<section>
+    <div class="health-grid">
+        <div class="health-card">
+            <div class="health-num">{{.TotalSites}}</div>
+            <div class="health-label">Agent-First Sites</div>
+        </div>
+        <div class="health-card">
+            <div class="health-num">{{.MCPVerified}}</div>
+            <div class="health-label">MCP-Verified</div>
+            <div class="health-sub">{{.PctMCP}}%</div>
+        </div>
+        <div class="health-card">
+            <div class="health-num">{{.LlmsTxtCount}}</div>
+            <div class="health-label">Publish llms.txt</div>
+            <div class="health-sub">{{.PctLlmsTxt}}%</div>
+        </div>
+        <div class="health-card">
+            <div class="health-num">{{.OpenAPICount}}</div>
+            <div class="health-label">Publish OpenAPI</div>
+            <div class="health-sub">{{.PctOpenAPI}}%</div>
+        </div>
+        <div class="health-card">
+            <div class="health-num">{{.SubmissionsWeek}}</div>
+            <div class="health-label">Submissions (7d)</div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Top 10 New MCP Servers This Week</h2>
+    <p class="section-sub">Fresh additions in the last 7 days, ordered by agentic readiness score.</p>
+    {{if .NewMCP}}
+        {{range $i, $s := .NewMCP}}
+        <div class="site-row">
+            <div class="rank">#{{add $i 1}}</div>
+            <div class="row-main">
+                <div class="row-name"><a href="/site/{{$s.Domain}}">{{$s.Name}}</a></div>
+                <div class="row-domain">{{$s.Domain}}</div>
+                {{if $s.Description}}<div class="row-desc">{{$s.Description}}</div>{{end}}
+                <div class="row-badges">
+                    <span class="badge badge-category">{{$s.Category}}</span>
+                    {{if $s.HasMCP}}<span class="badge badge-signal">MCP</span>{{end}}
+                    {{if $s.HasLlmsTxt}}<span class="badge badge-signal">llms.txt</span>{{end}}
+                    {{if $s.HasOpenAPI}}<span class="badge badge-signal">OpenAPI</span>{{end}}
+                </div>
+            </div>
+            <div class="row-score {{scoreClass $s.Score}}">{{$s.Score}}<small>/100</small></div>
+        </div>
+        {{end}}
+    {{else}}
+        <div class="empty">No new MCP servers indexed in the last 7 days yet. <a href="/submit">Submit one</a> or check back soon.</div>
+    {{end}}
+</section>
+
+<section>
+    <h2>Top 10 Verified MCP Servers (All-Time)</h2>
+    <p class="section-sub">The highest-scoring MCP servers in the index, verified by our crawler.</p>
+    {{if .TopMCP}}
+        {{range $i, $s := .TopMCP}}
+        <div class="site-row">
+            <div class="rank">#{{add $i 1}}</div>
+            <div class="row-main">
+                <div class="row-name"><a href="/site/{{$s.Domain}}">{{$s.Name}}</a></div>
+                <div class="row-domain">{{$s.Domain}}</div>
+                {{if $s.Description}}<div class="row-desc">{{$s.Description}}</div>{{end}}
+                <div class="row-badges">
+                    <span class="badge badge-category">{{$s.Category}}</span>
+                    {{if $s.HasMCP}}<span class="badge badge-signal">MCP</span>{{end}}
+                    {{if $s.HasLlmsTxt}}<span class="badge badge-signal">llms.txt</span>{{end}}
+                    {{if $s.HasOpenAPI}}<span class="badge badge-signal">OpenAPI</span>{{end}}
+                </div>
+            </div>
+            <div class="row-score {{scoreClass $s.Score}}">{{$s.Score}}<small>/100</small></div>
+        </div>
+        {{end}}
+    {{else}}
+        <div class="empty">No verified MCP servers yet.</div>
+    {{end}}
+</section>
+
+<section>
+    <h2>Category Distribution</h2>
+    <p class="section-sub">Where agent-first sites live in the index.</p>
+    <div class="cat-grid">
+        {{range .Categories}}
+        <div class="cat-chip">
+            <div class="cat-name"><a href="/tag/{{.Name}}">{{.Name}}</a></div>
+            <div class="cat-count">{{.Count}}</div>
+        </div>
+        {{end}}
+    </div>
+</section>
+
+<div class="share-box">
+    <strong>Share this digest:</strong>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=The%20weekly%20MCP%20ecosystem%20digest%20from%20Not%20Human%20Search%20%E2%80%94%20top%20new%20servers%2C%20ecosystem%20health%2C%20and%20more.&url={{.Canonical}}" target="_blank" rel="noopener">Twitter / X</a>
+    <a class="share-btn" href="https://www.linkedin.com/sharing/share-offsite/?url={{.Canonical}}" target="_blank" rel="noopener">LinkedIn</a>
+    <a class="share-btn" href="https://news.ycombinator.com/submitlink?u={{.Canonical}}&t=Weekly+MCP+Ecosystem+Digest" target="_blank" rel="noopener">Hacker News</a>
+    <a class="share-btn" href="https://reddit.com/submit?url={{.Canonical}}&title=Weekly+MCP+Ecosystem+Digest" target="_blank" rel="noopener">Reddit</a>
+    <a class="share-btn" href="mailto:?subject=Weekly%20MCP%20Ecosystem%20Digest&body=Check%20out%20the%20latest%20weekly%20digest%20from%20Not%20Human%20Search%3A%20{{.Canonical}}">Email</a>
+</div>
+
+<section>
+    <h2>Track any indexed site</h2>
+    <p class="section-sub">
+        <a href="/monitor">Subscribe to /monitor</a> for free email alerts any time an indexed site's agentic readiness score drops.
+        Or wire NHS in as an MCP server yourself: <code style="font-family:'IBM Plex Mono',monospace;background:var(--surface);padding:2px 8px;border-radius:4px;color:var(--accent);">claude mcp add --transport http nothumansearch {{.BaseURL}}/mcp</code>
+    </p>
+</section>
+
+<footer>
+    <p>
+        <a href="/">Not Human Search</a> &middot;
+        <a href="/top">Top 100</a> &middot;
+        <a href="/newest">Newest</a> &middot;
+        <a href="/mcp-servers">MCP Servers</a> &middot;
+        <a href="/score">Score your site</a> &middot;
+        <a href="/guide">Agent-Ready Guide</a> &middot;
+        <a href="/monitor">Monitor</a> &middot;
+        <a href="/about">About</a>
+    </p>
+    <p>
+        <a href="/digest.json">Digest JSON</a> &middot;
+        <a href="/digest.rss">Digest RSS</a> &middot;
+        <a href="/feed.xml">All New Sites (RSS)</a>
+    </p>
+    <p>&copy; 2026 Not Human Search &middot; Built for agents, by agents.</p>
+</footer>
+
+</div>
+</body>
+</html>

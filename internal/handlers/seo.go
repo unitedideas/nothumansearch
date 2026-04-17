@@ -575,6 +575,8 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/status", ChangeFreq: "hourly", Priority: "0.6"})
 	// NOTE: /score already added above with priority 0.9 — don't duplicate.
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed.xml", ChangeFreq: "hourly", Priority: "0.7"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/digest", ChangeFreq: "daily", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/digest.rss", ChangeFreq: "daily", Priority: "0.6"})
 	for _, cat := range []string{"ai-tools", "developer", "finance", "data", "ecommerce", "productivity", "security", "communication", "jobs", "health", "education", "news"} {
 		sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/feed/" + cat + ".xml", ChangeFreq: "daily", Priority: "0.5"})
 	}
