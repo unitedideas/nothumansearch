@@ -164,3 +164,6 @@ date,channel,target,ref,product,notes,status
 2026-04-17,public-gist,sourcing-agent-50-lines,https://gist.github.com/unitedideas/4a0171362f7ff28963d26cbc1951ebc8,live
 2026-04-17,github-release,nhs-score-check-action,https://github.com/unitedideas/nhs-score-check-action/releases/tag/v1.0.0,published
 2026-04-17,email-pitch,submissions@devtools.fm,resend:23feb704-295c-403f-959d-b3d64c77e28a,sent-nhs-tool-suggestion
+2026-04-17,email-pitch,submit@pointer.io,resend:aa22b468-0bd3-4204-98b1-c53ff17acc6f,sent-nhs-devtools-weekly
+2026-04-17,email-pitch,jack@jack-clark.net,resend:3dd4a19f-9bb9-4f65-a60c-458336edf656,sent-import-ai-ecosystem-signal
+2026-04-17,email-pitch,hi@bytes.dev,resend:36ae19fa-a53f-4405-9774-7c3f9991a633,sent-bytes-typescript-mcp
