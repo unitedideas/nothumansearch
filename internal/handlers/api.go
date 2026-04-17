@@ -282,6 +282,32 @@ func (h *APIHandler) Categories(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *APIHandler) MCPAnalytics(w http.ResponseWriter, r *http.Request) {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		h.writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
+		return
+	}
+	auth := r.Header.Get("Authorization")
+	if auth != "Bearer "+adminKey {
+		h.writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+		return
+	}
+	days := 14
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+	data, err := models.GetMCPAnalytics(h.DB, days)
+	if err != nil {
+		h.writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	data["days"] = days
+	h.writeJSON(w, 200, data)
+}
+
 func (h *APIHandler) TrafficAnalytics(w http.ResponseWriter, r *http.Request) {
 	adminKey := os.Getenv("ADMIN_API_KEY")
 	if adminKey == "" {

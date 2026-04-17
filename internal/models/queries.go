@@ -359,6 +359,111 @@ func TopTags(db *sql.DB, limit int) ([]TagCount, error) {
 	return tags, rows.Err()
 }
 
+// LogMCPRequest records an MCP JSON-RPC request for analytics. Called as a
+// goroutine so it never blocks the handler response.
+func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, resultCount int, userAgent, ipHash string, durationMs int) {
+	var args *string
+	if len(arguments) > 0 {
+		s := string(arguments)
+		args = &s
+	}
+	var rc *int
+	if resultCount >= 0 {
+		rc = &resultCount
+	}
+	db.Exec(`INSERT INTO mcp_requests (method, tool_name, arguments, result_count, user_agent, ip_hash, duration_ms)
+		VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)`,
+		method, toolName, args, rc, userAgent, ipHash, durationMs)
+}
+
+// GetMCPAnalytics returns aggregated MCP request data: tool breakdown, method
+// breakdown, top agent user-agents, and top search queries.
+func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
+	result := map[string]any{}
+
+	rows, err := db.Query(`
+		SELECT tool_name, COUNT(*) as calls
+		FROM mcp_requests
+		WHERE tool_name IS NOT NULL AND tool_name != '' AND created_at > NOW() - make_interval(days => $1)
+		GROUP BY tool_name ORDER BY calls DESC`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var toolBreakdown []map[string]any
+	for rows.Next() {
+		var name string
+		var count int
+		rows.Scan(&name, &count)
+		toolBreakdown = append(toolBreakdown, map[string]any{"tool": name, "calls": count})
+	}
+	result["tools"] = toolBreakdown
+
+	rows2, err := db.Query(`
+		SELECT method, COUNT(*) as calls
+		FROM mcp_requests
+		WHERE created_at > NOW() - make_interval(days => $1)
+		GROUP BY method ORDER BY calls DESC`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows2.Close()
+	var methodBreakdown []map[string]any
+	for rows2.Next() {
+		var m string
+		var c int
+		rows2.Scan(&m, &c)
+		methodBreakdown = append(methodBreakdown, map[string]any{"method": m, "calls": c})
+	}
+	result["methods"] = methodBreakdown
+
+	rows3, err := db.Query(`
+		SELECT user_agent, COUNT(*) as calls
+		FROM mcp_requests
+		WHERE created_at > NOW() - make_interval(days => $1)
+		GROUP BY user_agent ORDER BY calls DESC LIMIT 20`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows3.Close()
+	var agentBreakdown []map[string]any
+	for rows3.Next() {
+		var ua sql.NullString
+		var c int
+		rows3.Scan(&ua, &c)
+		agentBreakdown = append(agentBreakdown, map[string]any{"user_agent": ua.String, "calls": c})
+	}
+	result["agents"] = agentBreakdown
+
+	// Top search queries via MCP (search_agents tool)
+	rows4, err := db.Query(`
+		SELECT arguments->>'query' as q, COUNT(*) as cnt
+		FROM mcp_requests
+		WHERE tool_name = 'search_agents' AND arguments->>'query' IS NOT NULL AND arguments->>'query' != ''
+			AND created_at > NOW() - make_interval(days => $1)
+		GROUP BY q ORDER BY cnt DESC LIMIT 30`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows4.Close()
+	var topQueries []map[string]any
+	for rows4.Next() {
+		var q string
+		var c int
+		rows4.Scan(&q, &c)
+		topQueries = append(topQueries, map[string]any{"query": q, "count": c})
+	}
+	result["top_queries"] = topQueries
+
+	var totalReqs, uniqueAgents int
+	db.QueryRow(`SELECT COUNT(*) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&totalReqs)
+	db.QueryRow(`SELECT COUNT(DISTINCT ip_hash) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&uniqueAgents)
+	result["total_requests"] = totalReqs
+	result["unique_agents"] = uniqueAgents
+
+	return result, nil
+}
+
 func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
 	if days <= 0 {
 		days = 14

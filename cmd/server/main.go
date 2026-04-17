@@ -186,6 +186,7 @@ func main() {
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
+	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.Handle("/api/v1/check", checkHandler)
 
 	// Embeddable score badges: /badge/{domain}.svg

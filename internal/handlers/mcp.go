@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -77,6 +80,16 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	start := time.Now()
+	ua := r.UserAgent()
+	ip := r.RemoteAddr
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		ip = strings.TrimSpace(strings.Split(fwd, ",")[0])
+	}
+	ip = strings.Split(ip, ":")[0]
+	ipSum := sha256.Sum256([]byte(ip))
+	ipHash := hex.EncodeToString(ipSum[:8])
+
 	// Notifications (no id) expect no response body, just 202 Accepted.
 	if len(req.ID) == 0 {
 		w.WriteHeader(http.StatusAccepted)
@@ -97,6 +110,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			},
 			"instructions": "Search engine for AI agents. Use search_agents to find agent-ready tools, APIs, and services ranked by agentic readiness score (0-100). Use get_site_details for a full readiness report on a specific domain.",
 		})
+		go models.LogMCPRequest(h.DB, "initialize", "", nil, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 
 	case "ping":
 		h.writeResult(w, req.ID, map[string]any{})
@@ -105,9 +119,10 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeResult(w, req.ID, map[string]any{
 			"tools": h.toolDefinitions(),
 		})
+		go models.LogMCPRequest(h.DB, "tools/list", "", nil, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 
 	case "tools/call":
-		h.handleToolCall(w, req)
+		h.handleToolCall(w, req, start, ua, ipHash)
 
 	default:
 		h.writeError(w, req.ID, -32601, "method not found: "+req.Method)
@@ -221,7 +236,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 	}
 }
 
-func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest) {
+func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start time.Time, ua, ipHash string) {
 	var params struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
@@ -247,6 +262,9 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest) {
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
+
+	argsJSON, _ := json.Marshal(params.Arguments)
+	go models.LogMCPRequest(h.DB, "tools/call", params.Name, argsJSON, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 }
 
 // toolRegisterMonitor wraps the /api/v1/monitor/register REST handler so
