@@ -195,6 +195,7 @@ Report: %s/report
 - AI Dev Jobs companion MCP:
     curl -fsSL https://aidevboard.com/install | sh
 - Verify any MCP server in 3 curls: https://gist.github.com/unitedideas/ce709323717b95eb56f7be7392a0a557
+- Q2 2026 agent-ready sites curation (120 categorized): https://gist.github.com/unitedideas/c60bb35943ef609f99123bdfae146e55
 - NHS Score Check GitHub Action (fail CI on score drop): https://github.com/unitedideas/nhs-score-check-action
 - Q2 2026 MCP Ecosystem Health data + methodology: https://8bitconcepts.com/research/q2-2026-mcp-ecosystem-health.html
 `, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
