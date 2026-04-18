@@ -354,6 +354,30 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SecurityTxt serves RFC 9116 /.well-known/security.txt — the standard file
+// security researchers check before reporting vulnerabilities. Required by
+// some compliance frameworks + scanned by automated security bots.
+// Expires field MUST be ≤ 1 year in the future per RFC 9116 §2.5.5.
+func (h *SEOHandler) SecurityTxt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	// Expires one year from now, updated on each deploy.
+	expires := time.Now().UTC().AddDate(1, 0, 0).Format(time.RFC3339)
+	fmt.Fprintf(w, `Contact: mailto:security@nothumansearch.ai
+Contact: https://github.com/unitedideas/nothumansearch/issues
+Expires: %s
+Preferred-Languages: en
+Canonical: https://nothumansearch.ai/.well-known/security.txt
+Policy: https://github.com/unitedideas/nothumansearch/blob/main/SECURITY.md
+
+# Not Human Search — security contact
+# Report vulnerabilities privately via the Contact addresses above.
+# Please do not test authenticated flows against production — our admin
+# endpoints rate-limit + log per-IP; accidental DoS triggers paging.
+# Responsible-disclosure window: 30 days before public write-up.
+`, expires)
+}
+
 func (h *SEOHandler) OpenAPISpec(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/yaml")
 	w.Header().Set("Cache-Control", "public, max-age=86400")

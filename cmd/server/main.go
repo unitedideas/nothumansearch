@@ -150,6 +150,8 @@ func main() {
 	mux.HandleFunc("/.well-known/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/.well-known/ai-plugin.json", seoHandler.AIPluginManifest)
 	mux.HandleFunc("/.well-known/mcp.json", seoHandler.MCPManifest)
+	mux.HandleFunc("/.well-known/security.txt", seoHandler.SecurityTxt)
+	mux.HandleFunc("/security.txt", seoHandler.SecurityTxt)
 	mux.HandleFunc("/llms-full.txt", seoHandler.LLMsFullTxt)
 	mux.HandleFunc("/openapi.yaml", seoHandler.OpenAPISpec)
 	mux.HandleFunc("/sitemap.xml", seoHandler.Sitemap)
