@@ -268,6 +268,54 @@ func isBotUA(ua string) bool {
 	return false
 }
 
+// scannerPathPrefixes are URL prefixes that indicate a CMS/vuln scanner.
+// NHS is Go — no WordPress, no PHP, no .NET. Any request here is a bot.
+var scannerPathPrefixes = []string{
+	"/wp-admin", "/wp-login", "/wp-content", "/wp-includes", "/wp-json",
+	"/wordpress", "/xmlrpc.php", "/phpmyadmin", "/pma", "/myadmin",
+	"/admin.php", "/setup-config.php",
+	"/.env", "/.git", "/.DS_Store", "/.aws", "/.ssh",
+	"/old", "/old2", "/backup", "/backups", "/bak",
+	"/test", "/tests", "/staging", "/stage",
+	"/cms", "/blog/wp-admin", "/site/wp-admin",
+}
+
+// scannerPathSuffixes are file extensions that don't exist on NHS's Go stack.
+var scannerPathSuffixes = []string{
+	".php", ".php7", ".php5", ".phtml",
+	".asp", ".aspx", ".ashx", ".asmx",
+	".jsp", ".jspx", ".do", ".action",
+	".cgi", ".pl",
+}
+
+// scannerSubstrings catches nested probes like /blog/old/wp-admin/setup-config.php.
+var scannerSubstrings = []string{
+	"wp-admin", "wp-login", "wp-content", "wp-includes", "xmlrpc",
+	"phpmyadmin", "wlwmanifest", "/.env", "/.git/",
+	"setup-config", "admin-ajax",
+}
+
+// isScannerPath returns true if the request path looks like a CMS/vuln probe.
+func isScannerPath(p string) bool {
+	lp := strings.ToLower(p)
+	for _, pre := range scannerPathPrefixes {
+		if lp == pre || strings.HasPrefix(lp, pre+"/") || strings.HasPrefix(lp, pre+".") {
+			return true
+		}
+	}
+	for _, suf := range scannerPathSuffixes {
+		if strings.HasSuffix(lp, suf) {
+			return true
+		}
+	}
+	for _, sub := range scannerSubstrings {
+		if strings.Contains(lp, sub) {
+			return true
+		}
+	}
+	return false
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/static/") {
@@ -278,6 +326,33 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+
+		// Short-circuit scanner probes with 410 Gone. Log as is_bot=true so
+		// they never pollute the human-traffic report.
+		if isScannerPath(r.URL.Path) {
+			start := time.Now()
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+			w.WriteHeader(http.StatusGone)
+			w.Write([]byte("410 Gone — this path does not exist on nothumansearch.ai\n"))
+			dur := time.Since(start)
+			log.Printf("%s %s 410 (scanner) %s %s", r.Method, r.URL.Path, r.UserAgent(), dur.Round(time.Millisecond))
+			if database.DB != nil {
+				ip := r.RemoteAddr
+				if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+					ip = strings.TrimSpace(strings.Split(fwd, ",")[0])
+				}
+				ip = strings.Split(ip, ":")[0]
+				h := sha256.Sum256([]byte(ip))
+				ipHash := hex.EncodeToString(h[:16])
+				ua := r.UserAgent()
+				ref := r.Referer()
+				go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+					r.URL.Path, r.Method, http.StatusGone, ipHash, ua, ref, dur.Milliseconds(), true)
+			}
+			return
+		}
+
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
@@ -294,7 +369,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			ipHash := hex.EncodeToString(h[:16])
 			ua := r.UserAgent()
 			ref := r.Referer()
-			bot := isBotUA(ua)
+			bot := isBotUA(ua) || isScannerPath(r.URL.Path)
 			go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 				r.URL.Path, r.Method, sw.status, ipHash, ua, ref, dur.Milliseconds(), bot)
 		}
