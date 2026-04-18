@@ -99,6 +99,7 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 			"site":             "GET /api/v1/site/{domain}",
 			"submit":           "POST /api/v1/submit",
 			"stats":            "GET /api/v1/stats",
+			"top":              "GET /api/v1/top?category=&has_mcp=&has_openapi=&has_llms_txt=&limit=",
 			"categories":       "GET /api/v1/categories",
 			"check":            "GET /api/v1/check?url=",
 			"verify_mcp":       "GET /api/v1/verify-mcp?url=",
