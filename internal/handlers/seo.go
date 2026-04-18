@@ -342,7 +342,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 		"name_for_human":       "Not Human Search",
 		"name_for_model":       "nothumansearch",
 		"description_for_human": "Search engine that finds websites AI agents can actually use, ranked by agentic readiness score.",
-		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on llms.txt, OpenAPI specs, ai-plugin.json, structured APIs, and MCP server support. Use to find services an AI agent can interact with programmatically.",
+		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/site/{domain} for a specific site's score, GET /api/v1/verify-mcp?url= to live-probe any URL for MCP compliance, POST /api/v1/check to run an on-demand crawl. Prefer /api/v1/search over listing tools manually. For richer capabilities connect via MCP at /mcp — 11 tools including find_mcp_servers, recent_additions, check_url.",
 		"auth":                 map[string]string{"type": "none"},
 		"api": map[string]string{
 			"type": "openapi",
