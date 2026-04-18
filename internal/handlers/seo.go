@@ -535,6 +535,34 @@ paths:
           description: Score + 7 signals
         "429":
           description: Rate limit exceeded
+  /verify-mcp:
+    get:
+      summary: Live-probe a URL for MCP compliance
+      operationId: verifyMCP
+      description: |
+        Sends a JSON-RPC tools/list request to the target URL and reports
+        whether it responded with a spec-compliant reply. REST peer of
+        the MCP verify_mcp tool. No caching — caller is asking "is it
+        live right now?"
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: Target URL (with or without scheme)
+          schema: { type: string }
+      responses:
+        "200":
+          description: Probe result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified: { type: boolean }
+                  endpoint: { type: string }
+                  note:     { type: string }
+        "400":
+          description: url query param missing
   /stats:
     get:
       summary: Get index statistics
