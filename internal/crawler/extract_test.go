@@ -7,6 +7,67 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
+// TestGenerateTags covers the tag generator that feeds NHS's search
+// filters and /tag/{name} landing pages. Regression here mis-tags
+// sites, breaking filtered search + tag-based SEO discovery.
+func TestGenerateTags(t *testing.T) {
+	// Every "true" signal flag should add its corresponding tag.
+	site := &models.Site{
+		HasLLMsTxt:       true,
+		HasAIPlugin:      true,
+		HasOpenAPI:       true,
+		HasStructuredAPI: true,
+		HasMCPServer:     true,
+		HasRobotsAI:      true,
+	}
+	tags := generateTags(site)
+	set := map[string]bool{}
+	for _, tg := range tags {
+		set[tg] = true
+	}
+	for _, want := range []string{"llms-txt", "ai-plugin", "openapi", "api", "mcp", "ai-friendly"} {
+		if !set[want] {
+			t.Errorf("generateTags missing signal tag %q (got: %v)", want, tags)
+		}
+	}
+	// OpenAPI implies both "openapi" AND "api" tags
+	if set["openapi"] && !set["api"] {
+		t.Errorf("HasOpenAPI set but no 'api' tag produced")
+	}
+
+	// Description keyword matching (payment / database / auth / etc.)
+	paySite := &models.Site{
+		Description: "A payment processing API for online checkout flows with billing management.",
+	}
+	payTags := generateTags(paySite)
+	found := false
+	for _, tg := range payTags {
+		if tg == "payment" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("generateTags missing 'payment' tag for payment-description site (got: %v)", payTags)
+	}
+
+	// Keyword matching is case-insensitive (site.Description lower-cased first)
+	upperSite := &models.Site{
+		Description: "AUTHENTICATION via OAuth and SSO identity providers.",
+	}
+	upperTags := generateTags(upperSite)
+	foundAuth := false
+	for _, tg := range upperTags {
+		if tg == "authentication" {
+			foundAuth = true
+			break
+		}
+	}
+	if !foundAuth {
+		t.Errorf("generateTags missing 'authentication' for uppercase-keyword description")
+	}
+}
+
 // TestExtractTitle covers the HTML <title> extractor. Pure string op; a
 // regression here silently blanks site names across the index. Called
 // once per crawl per site.
