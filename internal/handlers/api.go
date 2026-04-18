@@ -101,6 +101,7 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 			"stats":            "GET /api/v1/stats",
 			"categories":       "GET /api/v1/categories",
 			"check":            "GET /api/v1/check?url=",
+			"verify_mcp":       "GET /api/v1/verify-mcp?url=",
 			"monitor_register": "POST /api/v1/monitor/register",
 		},
 		"auth":       "none",
@@ -268,6 +269,43 @@ func (h *APIHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		"total_sites":  totalSites,
 		"avg_score":    avgScore,
 		"top_category": topCategory,
+	})
+}
+
+// VerifyMCP is the REST wrapper around crawler.ProbeMCPJSONRPC — same
+// behavior as the MCP verify_mcp tool, reachable by agents that don't
+// speak MCP themselves.
+// GET /api/v1/verify-mcp?url=https://example.com/mcp
+func (h *APIHandler) VerifyMCP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		h.writeJSON(w, 405, map[string]string{"error": "GET only"})
+		return
+	}
+	raw := strings.TrimSpace(r.URL.Query().Get("url"))
+	if raw == "" {
+		h.writeJSON(w, 400, map[string]string{"error": "url query param required"})
+		return
+	}
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+
+	// Don't cache — the caller is asking "is it live RIGHT NOW".
+	w.Header().Set("Cache-Control", "no-store")
+
+	verified := crawler.ProbeMCPJSONRPC(raw)
+	note := "Endpoint responded with valid JSON-RPC 2.0 — server is live and MCP-compliant."
+	if !verified {
+		note = "Endpoint did not respond with valid JSON-RPC 2.0. Could be down, not an MCP server, or requires an initialize() handshake this probe does not send."
+	}
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	h.writeJSON(w, 200, map[string]interface{}{
+		"verified": verified,
+		"endpoint": raw,
+		"note":     note,
 	})
 }
 
