@@ -286,7 +286,11 @@ func (h *APIHandler) VerifyMCP(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 400, map[string]string{"error": "url query param required"})
 		return
 	}
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+	// Case-insensitive prefix check — without ToLower, an input like
+	// "HTTPS://example.com/mcp" would fail both HasPrefix checks and get
+	// re-prefixed to "https://HTTPS://example.com/mcp" (broken URL).
+	lower := strings.ToLower(raw)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		raw = "https://" + raw
 	}
 

@@ -103,7 +103,11 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 400, map[string]string{"error": "url required"})
 		return
 	}
-	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+	// Case-insensitive prefix check — without ToLower, an input like
+	// "HTTPS://stripe.com" would fail both HasPrefix checks and get
+	// re-prefixed to "https://HTTPS://stripe.com" (broken URL).
+	lowerURL := strings.ToLower(req.URL)
+	if !strings.HasPrefix(lowerURL, "http://") && !strings.HasPrefix(lowerURL, "https://") {
 		req.URL = "https://" + req.URL
 	}
 

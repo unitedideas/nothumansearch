@@ -431,7 +431,10 @@ func (h *MCPHandler) toolSubmitSite(w http.ResponseWriter, id json.RawMessage, a
 		return
 	}
 	// Normalize — accept domains without scheme, reject obvious garbage.
-	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+	// Case-insensitive check: without ToLower, "HTTPS://x.com" would be
+	// re-prefixed to "https://HTTPS://x.com".
+	lower := strings.ToLower(rawURL)
+	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		rawURL = "https://" + rawURL
 	}
 
@@ -558,12 +561,16 @@ func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessag
 		h.writeToolError(w, id, "domain required")
 		return
 	}
-	// Normalize: strip scheme and trailing slashes if agent passed a URL.
+	// Normalize: lowercase FIRST so scheme/www prefixes strip regardless
+	// of casing, then strip. The previous order (TrimPrefix then ToLower)
+	// let an uppercase-scheme input like "HTTPS://Stripe.COM" bypass the
+	// prefix strip — ToLower'd to "https://stripe.com" but GetSiteByDomain
+	// expects bare "stripe.com" and silently returned not-found.
+	domain = strings.ToLower(domain)
 	domain = strings.TrimPrefix(domain, "https://")
 	domain = strings.TrimPrefix(domain, "http://")
 	domain = strings.TrimPrefix(domain, "www.")
 	domain = strings.TrimSuffix(domain, "/")
-	domain = strings.ToLower(domain)
 
 	site, err := models.GetSiteByDomain(h.DB, domain)
 	if err != nil {
@@ -636,7 +643,9 @@ func (h *MCPHandler) toolCheckURL(w http.ResponseWriter, id json.RawMessage, arg
 		h.writeToolError(w, id, "url is required")
 		return
 	}
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+	// Case-insensitive scheme check (see companion fix in api.go + check.go)
+	lowerRaw := strings.ToLower(raw)
+	if !strings.HasPrefix(lowerRaw, "http://") && !strings.HasPrefix(lowerRaw, "https://") {
 		raw = "https://" + raw
 	}
 
@@ -724,7 +733,9 @@ func (h *MCPHandler) toolVerifyMCP(w http.ResponseWriter, id json.RawMessage, ar
 		h.writeToolError(w, id, "url is required")
 		return
 	}
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+	// Case-insensitive scheme check (see companion fix in api.go + check.go)
+	lowerRaw := strings.ToLower(raw)
+	if !strings.HasPrefix(lowerRaw, "http://") && !strings.HasPrefix(lowerRaw, "https://") {
 		raw = "https://" + raw
 	}
 	verified := crawler.ProbeMCPJSONRPC(raw)
