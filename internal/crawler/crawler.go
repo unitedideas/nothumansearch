@@ -567,7 +567,11 @@ func extractTitle(html string) string {
 		if end == -1 {
 			return ""
 		}
-		start = start + end
+		// Advance past the ">" of the opening <title ...> tag. Previously
+		// this was `start + end` which points AT the ">", causing extracted
+		// titles like "<title dir='ltr'>Foo</title>" to start with ">Foo"
+		// instead of "Foo". Caught by TestExtractTitle.
+		start = start + end + 1
 	} else {
 		start += 7
 	}
