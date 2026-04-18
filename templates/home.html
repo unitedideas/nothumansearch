@@ -244,8 +244,9 @@
         {{end}}
 
         <div style="max-width:640px;margin:-16px auto 32px;padding:12px 16px;background:linear-gradient(135deg, rgba(217,119,87,0.10) 0%, rgba(217,119,87,0.02) 100%);border:1px solid rgba(217,119,87,0.35);border-radius:6px;text-align:center;">
-            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Wire NHS into Claude Code</div>
-            <code style="display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);word-break:break-all;">claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp</code>
+            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Wire NHS into your agent — one line</div>
+            <code style="display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);word-break:break-all;">curl -fsSL https://nothumansearch.ai/install | sh</code>
+            <div style="color:var(--text-muted);font-size:10px;margin-top:6px;">Runs <code style="color:var(--text-muted);background:transparent;">claude mcp add</code> if Claude Code is installed. Prints Cursor/Cline/Continue snippets otherwise.</div>
         </div>
 
         {{if not .Heading}}
