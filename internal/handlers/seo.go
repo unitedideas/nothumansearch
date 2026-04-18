@@ -188,6 +188,11 @@ Report: %s/report
 - Full Index: %s/llms-full.txt
 - OpenAPI: %s/openapi.yaml
 - Plugin: %s/.well-known/ai-plugin.json
+
+## Developer Resources
+- Verify any MCP server in 3 curls: https://gist.github.com/unitedideas/ce709323717b95eb56f7be7392a0a557
+- NHS Score Check GitHub Action (fail CI on score drop): https://github.com/unitedideas/nhs-score-check-action
+- Q2 2026 MCP Ecosystem Health data + methodology: https://8bitconcepts.com/research/q2-2026-mcp-ecosystem-health.html
 `, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
