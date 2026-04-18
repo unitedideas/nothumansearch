@@ -1,6 +1,7 @@
 # Not Human Search
 
 [![NHS Agentic Readiness](https://nothumansearch.ai/badge/nothumansearch.ai.svg)](https://nothumansearch.ai/site/nothumansearch.ai)
+[![SafeSkill 91/100](https://img.shields.io/badge/SafeSkill-91%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/unitedideas-nothumansearch)
 
 **Search engine for AI agents.** Indexes sites ranked by *agentic readiness* — llms.txt, OpenAPI, ai-plugin, MCP servers, and structured APIs.
 
