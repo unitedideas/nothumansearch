@@ -118,7 +118,7 @@ Not Human Search is itself an MCP server. Wire it into your agent once and get l
 
 Endpoint: %s/mcp
 Transport: streamable-http
-Tools (8): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp
+Tools (10): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions
 
 Claude Code setup:
   claude mcp add --transport http nothumansearch %s/mcp
@@ -305,6 +305,26 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"description": "Subscribe an email to get alerted when the indicated domain's agentic readiness score drops.",
 				"endpoint":    h.BaseURL + "/api/v1/monitor/register",
 				"method":      "POST",
+			},
+			{
+				"name":        "verify_mcp",
+				"description": "Live JSON-RPC probe of any URL to confirm it's a spec-compliant MCP server. Returns {verified, endpoint, note}.",
+			},
+			{
+				"name":        "list_categories",
+				"description": "List every index category with site counts and average agentic scores. Use before searching to discover where density lives.",
+			},
+			{
+				"name":        "get_top_sites",
+				"description": "Highest-scored agent-ready sites overall or in a specific category.",
+			},
+			{
+				"name":        "find_mcp_servers",
+				"description": "Convenience wrapper over search — returns only sites that expose an MCP server, ranked by agentic score. Pairs with verify_mcp for probe-before-use.",
+			},
+			{
+				"name":        "recent_additions",
+				"description": "Agent-first sites added to the index within the last N days (default 7, max 90). For tracking ecosystem momentum and weekly digests.",
 			},
 		},
 	})
