@@ -94,7 +94,17 @@ Allow: /
 
 Sitemap: %s/sitemap.xml
 # RSS feed: %s/feed.xml (new agent-ready additions)
-`, h.BaseURL, h.BaseURL)
+
+# AI agent discovery
+# llms.txt: %s/llms.txt
+# llms-full.txt: %s/llms-full.txt
+# OpenAPI spec: %s/openapi.yaml
+# AI plugin manifest: %s/.well-known/ai-plugin.json
+# MCP manifest: %s/.well-known/mcp.json
+# MCP endpoint (streamable-http JSON-RPC): %s/mcp
+# Registry auth proof: %s/.well-known/mcp-registry-auth
+# Security contact: %s/.well-known/security.txt
+`, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
