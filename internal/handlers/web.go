@@ -216,6 +216,7 @@ func (h *WebHandler) MCPServersPage(w http.ResponseWriter, r *http.Request) {
 		Desc:       "Complete directory of MCP servers ranked by agentic readiness. Find Model Context Protocol endpoints for every AI agent use case — search, data, automation, commerce, and more.",
 		Heading:    "MCP Server Directory",
 		Subheading: "Every Model Context Protocol server in our index, ranked by agentic readiness score.",
+		OGImage:    "og-mcp-servers.png",
 		Params:     models.SearchParams{HasMCP: true, Limit: 30},
 	})
 }
@@ -229,6 +230,7 @@ func (h *WebHandler) AIToolsPage(w http.ResponseWriter, r *http.Request) {
 		Desc:       "Curated directory of AI tools that expose llms.txt, OpenAPI, or MCP endpoints — ranked by how well they serve AI agents. The agent-native alternative to generic AI tool lists.",
 		Heading:    "AI Tools Directory",
 		Subheading: "Every AI tool in our index, ranked by agentic readiness. These are the tools AI agents can actually use programmatically.",
+		OGImage:    "og-ai-tools.png",
 		Params:     models.SearchParams{Category: "ai-tools", Limit: 30},
 	})
 }
@@ -270,6 +272,7 @@ func (h *WebHandler) TopPage(w http.ResponseWriter, r *http.Request) {
 		Desc:       "The 100 highest-scoring agent-ready sites on the internet. Ranked by llms.txt, OpenAPI, ai-plugin, MCP, and other signals AI agents use at runtime.",
 		Heading:    "Top 100 Agent-Ready Sites",
 		Subheading: "The sites AI agents can actually use. Ranked by agentic readiness — publish llms.txt, OpenAPI, ai-plugin, MCP, or a structured API to appear here.",
+		OGImage:    "og-top.png",
 		Params:     models.SearchParams{Limit: 100},
 	})
 }
@@ -296,6 +299,7 @@ func (h *WebHandler) DeveloperPage(w http.ResponseWriter, r *http.Request) {
 		Desc:       "Every developer API in our index that AI agents can discover and call — ranked by agentic readiness. Find APIs with OpenAPI specs, llms.txt, ai-plugin.json, or MCP endpoints.",
 		Heading:    "Developer API Directory",
 		Subheading: "Every developer API in our index, ranked by agentic readiness. All entries expose at least one programmatic signal agents can discover at build time.",
+		OGImage:    "og-developer-apis.png",
 		Params:     models.SearchParams{Category: "developer", Limit: 30},
 	})
 }
@@ -390,6 +394,7 @@ type categoryLanding struct {
 	Desc       string
 	Heading    string
 	Subheading string
+	OGImage    string // filename under /static/img/, no leading slash. Empty = og-default.png.
 	Params     models.SearchParams
 }
 
@@ -409,6 +414,11 @@ func (h *WebHandler) renderCategoryLanding(w http.ResponseWriter, r *http.Reques
 
 	totalSites, avgScore, _ := models.GetStats(h.DB)
 
+	ogImage := c.OGImage
+	if ogImage == "" {
+		ogImage = "og-default.png"
+	}
+
 	data := map[string]interface{}{
 		"Mode":       c.Mode,
 		"PageTitle":  c.Title,
@@ -423,6 +433,7 @@ func (h *WebHandler) renderCategoryLanding(w http.ResponseWriter, r *http.Reques
 		"AvgScore":   avgScore,
 		"Canonical":  "https://nothumansearch.ai" + c.Path,
 		"BasePath":   c.Path,
+		"OGImage":    ogImage,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
