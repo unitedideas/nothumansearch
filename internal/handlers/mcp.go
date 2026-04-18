@@ -157,6 +157,18 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 						"type":        "boolean",
 						"description": "Only return sites with a documented structured API",
 					},
+					"has_mcp": map[string]any{
+						"type":        "boolean",
+						"description": "Only return sites that expose an MCP server",
+					},
+					"has_openapi": map[string]any{
+						"type":        "boolean",
+						"description": "Only return sites with a published OpenAPI / Swagger spec",
+					},
+					"has_llms_txt": map[string]any{
+						"type":        "boolean",
+						"description": "Only return sites that publish an llms.txt file (LLM-first site summary)",
+					},
 					"limit": map[string]any{
 						"type":        "integer",
 						"description": "Max results (default 10, max 20)",
@@ -262,6 +274,30 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 				},
 			},
 		},
+		{
+			"name":        "find_mcp_servers",
+			"title":       "Find MCP Servers",
+			"description": "List sites in the index that expose a live MCP server, ranked by agentic readiness. Use this when your agent needs to discover callable MCP endpoints for a domain ('payments', 'jobs', 'search') or overall. Pairs naturally with verify_mcp for a probe-before-use workflow.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"query": map[string]any{
+						"type":        "string",
+						"description": "Optional keyword to narrow results (e.g. 'payments', 'jobs', 'weather')",
+					},
+					"category": map[string]any{
+						"type":        "string",
+						"description": "Filter by category (e.g. 'developer', 'finance', 'ai-tools'). Omit for all categories.",
+					},
+					"limit": map[string]any{
+						"type":        "integer",
+						"description": "Max results (default 10, max 20)",
+						"minimum":     1,
+						"maximum":     20,
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -292,6 +328,8 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 		h.toolListCategories(w, req.ID)
 	case "get_top_sites":
 		h.toolGetTopSites(w, req.ID, params.Arguments)
+	case "find_mcp_servers":
+		h.toolFindMCPServers(w, req.ID, params.Arguments)
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
@@ -405,12 +443,15 @@ func (h *MCPHandler) toolSubmitSite(w http.ResponseWriter, id json.RawMessage, a
 
 func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
 	p := models.SearchParams{
-		Query:    asString(args["query"]),
-		Category: asString(args["category"]),
-		MinScore: asInt(args["min_score"]),
-		HasAPI:   asBool(args["has_api"]),
-		Limit:    asInt(args["limit"]),
-		Page:     1,
+		Query:      asString(args["query"]),
+		Category:   asString(args["category"]),
+		MinScore:   asInt(args["min_score"]),
+		HasAPI:     asBool(args["has_api"]),
+		HasMCP:     asBool(args["has_mcp"]),
+		HasOpenAPI: asBool(args["has_openapi"]),
+		HasLLMsTxt: asBool(args["has_llms_txt"]),
+		Limit:      asInt(args["limit"]),
+		Page:       1,
 	}
 	if p.Limit <= 0 || p.Limit > 20 {
 		p.Limit = 10
@@ -640,6 +681,53 @@ func (h *MCPHandler) toolGetTopSites(w http.ResponseWriter, id json.RawMessage, 
 		"structuredContent": map[string]any{
 			"category": category,
 			"results":  sites,
+		},
+	})
+}
+
+// toolFindMCPServers is a convenience wrapper over SearchSites that pins
+// HasMCP=true. Agents looking specifically for MCP endpoints don't have
+// to know the has_mcp filter exists on search_agents — they can discover
+// this tool by name. Pairs with verify_mcp for probe-before-use flows.
+func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	p := models.SearchParams{
+		Query:    asString(args["query"]),
+		Category: asString(args["category"]),
+		HasMCP:   true,
+		Limit:    asInt(args["limit"]),
+		Page:     1,
+	}
+	if p.Limit <= 0 || p.Limit > 20 {
+		p.Limit = 10
+	}
+
+	sites, total, err := models.SearchSites(h.DB, p)
+	if err != nil {
+		h.writeToolError(w, id, "query failed: "+err.Error())
+		return
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Found %d MCP-exposing sites (showing %d).\n\n", total, len(sites))
+	for i, s := range sites {
+		name := s.Name
+		if name == "" {
+			name = s.Domain
+		}
+		fmt.Fprintf(&b, "%d. %s [%d/100] — %s (%s)\n", i+1, name, s.AgenticScore, s.Domain, s.Category)
+		if s.Description != "" {
+			fmt.Fprintf(&b, "   %s\n", s.Description)
+		}
+		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n\n", s.URL, h.BaseURL, s.Domain)
+	}
+
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": b.String()},
+		},
+		"structuredContent": map[string]any{
+			"total":   total,
+			"results": sites,
 		},
 	})
 }
