@@ -113,6 +113,12 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	// programmatically interact with. llms.txt alone is passive content (markdown index)
 	// and does not qualify. Must match AgentFirstFilter const below.
 	conditions = append(conditions, "(has_structured_api = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)")
+	// Exclude spam (foreign-language gambling / SEO-farm class, see crawler.isSpam).
+	// Callers who want audit access can pass p.Category = "spam" explicitly — the
+	// category filter below will override by adding its own = condition.
+	if p.Category == "" {
+		conditions = append(conditions, "category <> 'spam'")
+	}
 
 	useFTS := false
 	var tsQueryArg int

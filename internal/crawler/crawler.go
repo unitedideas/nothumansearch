@@ -330,8 +330,15 @@ func CrawlSite(siteURL string) (*models.Site, error) {
 	// Calculate score
 	site.AgenticScore = models.CalculateScore(site)
 
-	// Auto-categorize
+	// Auto-categorize (also flags spam class — foreign-language gambling
+	// SEO-farms, see isSpam).
 	site.Category = categorize(site)
+	if site.Category == "spam" {
+		// Spam sites lose all score so they never appear above legitimate
+		// low-score entries. They're still stored so we can reason about
+		// them (e.g., via /api/v1/search?category=spam for audits).
+		site.AgenticScore = 0
+	}
 
 	// Generate tags for search discoverability
 	site.Tags = generateTags(site)
@@ -629,7 +636,43 @@ func extractMetaDescription(html string) string {
 	return desc
 }
 
+// isSpam flags SEO-farm / gambling sites that exploit agentic-signal presence
+// to rank in search. Targets the class that keeps slipping through: foreign-
+// language gambling promotion (Indonesian `kemenangan`, Thai `แทงบอล`, English
+// MEGA*/WIN* brand stuffing). High-precision — false positives cost us real
+// sites. If you see a legit site flagged, narrow the rule.
+func isSpam(site *models.Site) bool {
+	blob := strings.ToLower(site.Name + " " + site.Description)
+	// Indonesian gambling SEO-farm stock phrases. Four hits separately would be
+	// coincidence; pairs of these in one blob are effectively deterministic.
+	idMarkers := []string{"kemenangan", "taruhan", "judi", "bandar", "situs slot", "agen slot", "togel"}
+	idHits := 0
+	for _, m := range idMarkers {
+		if strings.Contains(blob, m) {
+			idHits++
+		}
+	}
+	if idHits >= 2 {
+		return true
+	}
+	// Thai gambling.
+	if strings.Contains(blob, "แทงบอล") || strings.Contains(blob, "บาคาร่า") {
+		return true
+	}
+	// English SEO-farm brand-stuffing — MEGA/WIN/SLOT/GACOR with digits in the
+	// name. Rare in legit products.
+	for _, kw := range []string{"megawin", "slot gacor", "slot88", "togelpedia"} {
+		if strings.Contains(blob, kw) {
+			return true
+		}
+	}
+	return false
+}
+
 func categorize(site *models.Site) string {
+	if isSpam(site) {
+		return "spam"
+	}
 	d := strings.ToLower(site.Domain)
 	desc := strings.ToLower(site.Description)
 	name := strings.ToLower(site.Name)
