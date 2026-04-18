@@ -95,7 +95,7 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 		"ai_plugin_manifest":  "https://nothumansearch.ai/.well-known/ai-plugin.json",
 		"mcp_endpoint":        "https://nothumansearch.ai/mcp",
 		"endpoints": map[string]string{
-			"search":           "GET /api/v1/search?q=&category=&min_score=&page=",
+			"search":           "GET /api/v1/search?q=&category=&tag=&min_score=&has_api=&has_mcp=&has_openapi=&has_llms_txt=&page=",
 			"site":             "GET /api/v1/site/{domain}",
 			"submit":           "POST /api/v1/submit",
 			"stats":            "GET /api/v1/stats",
