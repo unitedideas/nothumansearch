@@ -263,7 +263,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		{
 			"name":        "list_categories",
 			"title":       "List Index Categories",
-			"description": "List all categories in the Not Human Search index with site counts and average agentic scores. Use this to understand what kinds of agent-ready services exist before searching — e.g. discover that 'developer' has 400+ sites while 'health' has 50.",
+			"description": "List all categories in the Not Human Search index with site counts and average agentic scores. Use this to understand what kinds of agent-ready services exist before searching — counts are live, so the distribution shifts as the index grows.",
 			"inputSchema": map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
