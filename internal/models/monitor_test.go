@@ -59,6 +59,44 @@ func TestValidateEmail(t *testing.T) {
 	}
 }
 
+// TestNewToken locks in the monitor-token contract:
+//   - 48 hex chars (24 bytes = 192 bits of entropy)
+//   - Only lowercase hex characters
+//   - No collisions across many calls (crypto/rand)
+//
+// A regression that shortens the random part weakens unsubscribe-link
+// security (tokens are the ONLY auth for unsubscribe endpoints per
+// SECURITY.md — no login flow).
+func TestNewToken(t *testing.T) {
+	tok, err := newToken()
+	if err != nil {
+		t.Fatalf("newToken returned error: %v", err)
+	}
+	if len(tok) != 48 {
+		t.Errorf("newToken len = %d, want 48 (24 bytes hex-encoded)", len(tok))
+	}
+	// Must be pure hex (lowercase).
+	for _, c := range tok {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("newToken contains non-hex char %q in %q", c, tok)
+			break
+		}
+	}
+
+	// 100 calls, zero collisions. 24 bytes → collision probability effectively 0.
+	seen := map[string]bool{}
+	for i := 0; i < 100; i++ {
+		tok, err := newToken()
+		if err != nil {
+			t.Fatalf("newToken iter %d: %v", i, err)
+		}
+		if seen[tok] {
+			t.Errorf("newToken collision at iter %d: %q", i, tok)
+		}
+		seen[tok] = true
+	}
+}
+
 // TestIs172Private_Boundaries covers the 172.16.0.0/12 range. This range is
 // the nastiest private-IP boundary to get right — not a simple prefix match —
 // and SSRF blocking depends on it. Included ranges: 172.16 through 172.31.
