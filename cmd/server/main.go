@@ -248,6 +248,7 @@ func main() {
 	mux.HandleFunc("/api/v1/sites/", apiHandler.GetSite)
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
+	mux.HandleFunc("/api/v1/top", apiHandler.Top)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
 	mux.HandleFunc("/api/v1/verify-mcp", apiHandler.VerifyMCP)
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)

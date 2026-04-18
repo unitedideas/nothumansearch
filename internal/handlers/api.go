@@ -272,6 +272,54 @@ func (h *APIHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Top returns the highest-scored sites in the index, sorted by agentic_score
+// DESC. Filterable by category and signal (has_mcp, has_llms_txt, etc).
+// Public, free, cached 5 min — designed as a stable JSON other sites can
+// mirror/embed. GET /api/v1/top?category=&has_mcp=&limit=
+func (h *APIHandler) Top(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		h.writeJSON(w, 405, map[string]string{"error": "GET only"})
+		return
+	}
+	q := r.URL.Query()
+	limit := 50
+	if l := q.Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	sites, total, err := models.SearchSites(h.DB, models.SearchParams{
+		Category:   q.Get("category"),
+		Tag:        q.Get("tag"),
+		HasAPI:     q.Get("has_api") == "true",
+		HasMCP:     q.Get("has_mcp") == "true",
+		HasOpenAPI: q.Get("has_openapi") == "true",
+		HasLLMsTxt: q.Get("has_llms_txt") == "true",
+		Limit:      limit,
+		Page:       1,
+	})
+	if err != nil {
+		h.writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	if sites == nil {
+		sites = []models.Site{}
+	}
+
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	h.writeJSON(w, 200, map[string]interface{}{
+		"results":      sites,
+		"total":        total,
+		"limit":        limit,
+		"source":       "https://nothumansearch.ai",
+		"description":  "Highest-scored agent-ready sites, sorted by agentic readiness. Free, public, no auth.",
+	})
+}
+
 // VerifyMCP is the REST wrapper around crawler.ProbeMCPJSONRPC — same
 // behavior as the MCP verify_mcp tool, reachable by agents that don't
 // speak MCP themselves.
