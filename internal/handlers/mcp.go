@@ -196,7 +196,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		{
 			"name":        "get_stats",
 			"title":       "Get Index Stats",
-			"description": "Get current statistics for the Not Human Search index: total sites, average agentic score, top category.",
+			"description": "Current Not Human Search index stats: total sites, average agentic score, top category, sites added in the last 7 days, count of sites exposing an MCP server, and count scoring a perfect 100/100.",
 			"inputSchema": map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -584,15 +584,25 @@ func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessag
 
 func (h *MCPHandler) toolGetStats(w http.ResponseWriter, id json.RawMessage) {
 	total, avg, top := models.GetStats(h.DB)
-	text := fmt.Sprintf("Not Human Search index: %d agent-ready sites, average agentic score %d/100, top category %q.", total, avg, top)
+
+	// Cheap signal breakouts — three single COUNTs on indexed columns.
+	var addedThisWeek, mcpSites, perfectScore int
+	_ = h.DB.QueryRow(`SELECT count(*) FROM sites WHERE ` + models.AgentFirstFilter + ` AND created_at >= NOW() - INTERVAL '7 days'`).Scan(&addedThisWeek)
+	_ = h.DB.QueryRow(`SELECT count(*) FROM sites WHERE ` + models.AgentFirstFilter + ` AND has_mcp_server = true`).Scan(&mcpSites)
+	_ = h.DB.QueryRow(`SELECT count(*) FROM sites WHERE ` + models.AgentFirstFilter + ` AND agentic_score >= 100`).Scan(&perfectScore)
+
+	text := fmt.Sprintf("Not Human Search index: %d agent-ready sites, average agentic score %d/100, top category %q. %d sites added this week. %d expose an MCP server. %d scored 100/100.", total, avg, top, addedThisWeek, mcpSites, perfectScore)
 	h.writeResult(w, id, map[string]any{
 		"content": []map[string]any{
 			{"type": "text", "text": text},
 		},
 		"structuredContent": map[string]any{
-			"total_sites":  total,
-			"avg_score":    avg,
-			"top_category": top,
+			"total_sites":      total,
+			"avg_score":        avg,
+			"top_category":     top,
+			"added_this_week":  addedThisWeek,
+			"mcp_sites":        mcpSites,
+			"perfect_score":    perfectScore,
 		},
 	})
 }
