@@ -147,25 +147,43 @@ body{background:#0d0d0e;color:#e8e8e9;font-family:'Inter',system-ui,sans-serif;l
 .code{font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:96px;font-weight:700;color:#d97757;line-height:1;margin-bottom:16px;letter-spacing:-0.04em}
 h1{font-size:28px;color:#fff;margin-bottom:14px}
 p{color:#c5c5c9;margin-bottom:28px}
-.links{display:grid;grid-template-columns:1fr;gap:12px;text-align:left}
-.links a{display:block;padding:16px 20px;background:#111214;border:1px solid rgba(255,255,255,0.07);border-radius:8px;color:#e8e8e9;text-decoration:none}
+form.search{display:flex;gap:8px;margin-bottom:32px}
+form.search input{flex:1;padding:14px 18px;background:#111214;border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#e8e8e9;font-size:16px;font-family:inherit;outline:none}
+form.search input:focus{border-color:#d97757}
+form.search button{padding:14px 22px;background:#d97757;color:#fff;border:none;border-radius:8px;font-weight:600;font-size:15px;cursor:pointer;font-family:inherit}
+form.search button:hover{background:#c76645}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:36px;justify-content:center}
+.pills a{padding:6px 12px;background:rgba(217,119,87,0.08);border:1px solid rgba(217,119,87,0.25);border-radius:999px;color:#d97757;text-decoration:none;font-size:13px}
+.pills a:hover{background:rgba(217,119,87,0.18)}
+.links{display:grid;grid-template-columns:1fr;gap:10px;text-align:left}
+.links a{display:block;padding:14px 18px;background:#111214;border:1px solid rgba(255,255,255,0.07);border-radius:8px;color:#e8e8e9;text-decoration:none;font-size:14px}
 .links a:hover{border-color:#d97757}
-.links a strong{color:#fff;display:block;margin-bottom:4px}
-.links a span{color:#8b8d91;font-size:14px}
-.home{display:inline-block;margin-top:32px;padding:10px 22px;background:#d97757;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px}
+.links a strong{color:#fff;display:block;margin-bottom:2px;font-size:15px}
+.links a span{color:#8b8d91}
+.home{display:inline-block;margin-top:28px;padding:10px 22px;background:transparent;color:#d97757;border:1px solid rgba(217,119,87,0.3);border-radius:6px;text-decoration:none;font-weight:500;font-size:14px}
 </style>
 </head><body><div class="wrap">
 <div class="code">404</div>
 <h1>That page doesn't exist</h1>
-<p>Try searching the agentic web or browse the directories:</p>
-<div class="links">
-  <a href="/"><strong>Search 980+ agent-ready sites →</strong><span>Find any API, tool, or service ranked by agentic readiness.</span></a>
-  <a href="/mcp-servers"><strong>MCP Server Directory →</strong><span>Every Model Context Protocol server in the index.</span></a>
-  <a href="/ai-tools"><strong>AI Tools Directory →</strong><span>Agent-ready AI tools scored on 7 signals.</span></a>
-  <a href="/developer-apis"><strong>Developer API Directory →</strong><span>APIs AI agents can discover at build time.</span></a>
-  <a href="/score"><strong>Score any URL →</strong><span>Run the 7-signal check live against any site.</span></a>
+<p>Search the agentic web instead:</p>
+<form class="search" action="/" method="get" role="search">
+  <input type="search" name="q" placeholder="e.g. payment API, weather data, code review MCP" aria-label="Search agent-ready sites" autofocus>
+  <button type="submit">Search</button>
+</form>
+<div class="pills">
+  <a href="/?q=payment+API">payment API</a>
+  <a href="/?q=weather">weather</a>
+  <a href="/?q=AI+jobs">AI jobs</a>
+  <a href="/?q=authentication">auth</a>
+  <a href="/?q=code+hosting">code hosting</a>
+  <a href="/mcp-servers">MCP servers</a>
 </div>
-<a class="home" href="/">← Not Human Search</a>
+<div class="links">
+  <a href="/score"><strong>Score any URL →</strong><span>Run the 7-signal agentic-readiness check live.</span></a>
+  <a href="/mcp-servers"><strong>MCP Server Directory →</strong><span>Every Model Context Protocol server, verified.</span></a>
+  <a href="/mcp"><strong>Wire NHS into your agent →</strong><span><code>claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp</code></span></a>
+</div>
+<a class="home" href="/">← Not Human Search home</a>
 </div></body></html>`
 
 // and the canonical link target for badge + outreach CTAs.
