@@ -488,7 +488,9 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var toolBreakdown []map[string]any
+	// Initialize as empty slice (not nil) so JSON encodes [] instead of null
+	// when there are no rows. Consumers iterate without nil-check.
+	toolBreakdown := []map[string]any{}
 	for rows.Next() {
 		var name string
 		var count int
@@ -506,7 +508,7 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 		return nil, err
 	}
 	defer rows2.Close()
-	var methodBreakdown []map[string]any
+	methodBreakdown := []map[string]any{}
 	for rows2.Next() {
 		var m string
 		var c int
@@ -524,7 +526,7 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 		return nil, err
 	}
 	defer rows3.Close()
-	var agentBreakdown []map[string]any
+	agentBreakdown := []map[string]any{}
 	for rows3.Next() {
 		var ua sql.NullString
 		var c int
@@ -533,18 +535,19 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	}
 	result["agents"] = agentBreakdown
 
-	// Top search queries via MCP (search_agents tool)
+	// Top search queries via MCP — include both the canonical tool name AND
+	// its aliases (see MCP tools/call switch in handlers/mcp.go).
 	rows4, err := db.Query(`
 		SELECT arguments->>'query' as q, COUNT(*) as cnt
 		FROM mcp_requests
-		WHERE tool_name = 'search_agents' AND arguments->>'query' IS NOT NULL AND arguments->>'query' != ''
+		WHERE tool_name IN ('search_agents', 'search') AND arguments->>'query' IS NOT NULL AND arguments->>'query' != ''
 			AND created_at > NOW() - make_interval(days => $1)
 		GROUP BY q ORDER BY cnt DESC LIMIT 30`, days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows4.Close()
-	var topQueries []map[string]any
+	topQueries := []map[string]any{}
 	for rows4.Next() {
 		var q string
 		var c int
