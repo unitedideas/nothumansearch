@@ -10,7 +10,13 @@ import (
 	"github.com/lib/pq"
 )
 
+// sanitizeUTF8 strips two Postgres-unfriendly bytes:
+//   - Invalid UTF-8 sequences (pq rejects with "invalid byte sequence for encoding UTF8")
+//   - NUL bytes (0x00) — valid UTF-8 but Postgres text fields reject them with the same error
 func sanitizeUTF8(s string) string {
+	if strings.ContainsRune(s, 0) {
+		s = strings.ReplaceAll(s, "\x00", "")
+	}
 	if utf8.ValidString(s) {
 		return s
 	}
@@ -18,11 +24,20 @@ func sanitizeUTF8(s string) string {
 }
 
 func UpsertSite(db *sql.DB, s *Site) error {
+	// Sanitize every text field that could contain bad bytes from the crawled
+	// page. Previously only the 5 content fields were sanitized; URL/Domain/
+	// favicon URLs occasionally carry NUL bytes from malformed HTML meta tags
+	// and trigger "SAVE FAIL: invalid byte sequence 0x00" (seen in recrawl log).
+	s.Domain = sanitizeUTF8(s.Domain)
+	s.URL = sanitizeUTF8(s.URL)
 	s.Name = sanitizeUTF8(s.Name)
 	s.Description = sanitizeUTF8(s.Description)
 	s.LLMsTxtContent = sanitizeUTF8(s.LLMsTxtContent)
 	s.OpenAPISummary = sanitizeUTF8(s.OpenAPISummary)
+	s.MCPEndpoint = sanitizeUTF8(s.MCPEndpoint)
+	s.Category = sanitizeUTF8(s.Category)
 	s.CrawlError = sanitizeUTF8(s.CrawlError)
+	s.FaviconURL = sanitizeUTF8(s.FaviconURL)
 	if s.Tags == nil {
 		s.Tags = pq.StringArray{}
 	}
