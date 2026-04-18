@@ -118,7 +118,7 @@ Not Human Search is itself an MCP server. Wire it into your agent once and get l
 
 Endpoint: %s/mcp
 Transport: streamable-http
-Tools (10): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions
+Tools (11): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions, check_url
 
 Claude Code setup:
   claude mcp add --transport http nothumansearch %s/mcp
@@ -309,6 +309,10 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 			{
 				"name":        "verify_mcp",
 				"description": "Live JSON-RPC probe of any URL to confirm it's a spec-compliant MCP server. Returns {verified, endpoint, note}.",
+			},
+			{
+				"name":        "check_url",
+				"description": "On-demand agentic-readiness score for any URL. Runs the 7-signal crawler live and returns score + per-signal breakdown. Like submit_site but without the submissions-table side-effect — for verify-before-use workflows.",
 			},
 			{
 				"name":        "list_categories",

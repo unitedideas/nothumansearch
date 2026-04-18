@@ -40,6 +40,7 @@ fixes that so every future version bump is a commit.
 See `registry.modelcontextprotocol.io/v0/servers?search=nothumansearch`
 for the authoritative timeline. Recent bumps:
 
+- `v1.7.0` — check_url tool (11 total).
 - `v1.6.0` — find_mcp_servers + recent_additions tools (10 total).
 - `v1.5.0` — list_categories + get_top_sites.
 - `v1.4.0` — verify_mcp.

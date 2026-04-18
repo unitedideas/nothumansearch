@@ -218,6 +218,21 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			},
 		},
 		{
+			"name":        "check_url",
+			"title":       "Check Any URL's Agentic Readiness",
+			"description": "On-demand agentic-readiness check for any URL. Runs the NHS 7-signal crawler live (llms.txt, ai-plugin.json, OpenAPI, structured API, MCP server, robots.txt AI rules, Schema.org) and returns a score 0-100 with per-signal breakdown. Use before calling an unfamiliar API to confirm it's agent-usable. Re-runnable without the submissions-table side-effect of submit_site — ideal for verify-before-use workflows.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"url": map[string]any{
+						"type":        "string",
+						"description": "Full URL or bare domain (e.g. 'stripe.com' or 'https://stripe.com'). Homepage works best — NHS probes the /.well-known/ paths, /robots.txt, /llms.txt relative to the site root.",
+					},
+				},
+				"required": []string{"url"},
+			},
+		},
+		{
 			"name":        "verify_mcp",
 			"title":       "Verify MCP Endpoint",
 			"description": "Actively probe any URL to check if it is a live, spec-compliant MCP server. Sends a JSON-RPC tools/list request and verifies a valid response. Use this before depending on a third-party MCP endpoint — manifests and documentation can claim MCP support without actually serving it. Returns {verified: true/false, endpoint, note}.",
@@ -344,6 +359,8 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 		h.toolSubmitSite(w, req.ID, params.Arguments)
 	case "register_monitor":
 		h.toolRegisterMonitor(w, req.ID, params.Arguments)
+	case "check_url":
+		h.toolCheckURL(w, req.ID, params.Arguments)
 	case "verify_mcp":
 		h.toolVerifyMCP(w, req.ID, params.Arguments)
 	case "list_categories":
@@ -603,6 +620,99 @@ func (h *MCPHandler) toolGetStats(w http.ResponseWriter, id json.RawMessage) {
 			"added_this_week":  addedThisWeek,
 			"mcp_sites":        mcpSites,
 			"perfect_score":    perfectScore,
+		},
+	})
+}
+
+// toolCheckURL runs a live 7-signal crawl on the provided URL and returns
+// the agentic-readiness score + per-signal breakdown. Unlike submit_site,
+// no record is written to the submissions table — this is for
+// verify-before-use flows where the agent just wants the score.
+// The crawl is capped at 25s so a slow target can't pin the request.
+func (h *MCPHandler) toolCheckURL(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	raw, _ := args["url"].(string)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		h.writeToolError(w, id, "url is required")
+		return
+	}
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+
+	done := make(chan struct{})
+	var site *models.Site
+	var crawlErr error
+	go func() {
+		site, crawlErr = crawler.CrawlSite(raw)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(25 * time.Second):
+		h.writeToolError(w, id, "target site took too long to respond (25s timeout)")
+		return
+	}
+	if crawlErr != nil {
+		h.writeToolError(w, id, "crawl failed: "+crawlErr.Error())
+		return
+	}
+
+	// Upsert as a fire-and-forget side-effect so repeat checks improve the index
+	// over time. Failure here doesn't affect the caller's response — same
+	// pattern as /api/v1/check.
+	go func(s *models.Site) {
+		_ = models.UpsertSite(h.DB, s)
+	}(site)
+
+	var signals []string
+	if site.HasLLMsTxt {
+		signals = append(signals, "llms.txt")
+	}
+	if site.HasAIPlugin {
+		signals = append(signals, "ai-plugin")
+	}
+	if site.HasOpenAPI {
+		signals = append(signals, "openapi")
+	}
+	if site.HasStructuredAPI {
+		signals = append(signals, "api")
+	}
+	if site.HasMCPServer {
+		signals = append(signals, "mcp")
+	}
+	if site.HasRobotsAI {
+		signals = append(signals, "robots-ai")
+	}
+	if site.HasSchemaOrg {
+		signals = append(signals, "schema.org")
+	}
+	sigList := "none detected"
+	if len(signals) > 0 {
+		sigList = strings.Join(signals, ", ")
+	}
+	text := fmt.Sprintf("check_url %s\n  score: %d/100\n  category: %s\n  signals: %s\n  report: %s/site/%s",
+		site.Domain, site.AgenticScore, site.Category, sigList, h.BaseURL, site.Domain)
+
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": text},
+		},
+		"structuredContent": map[string]any{
+			"domain":        site.Domain,
+			"url":           site.URL,
+			"agentic_score": site.AgenticScore,
+			"category":      site.Category,
+			"signals": map[string]bool{
+				"llms_txt":       site.HasLLMsTxt,
+				"ai_plugin":      site.HasAIPlugin,
+				"openapi":        site.HasOpenAPI,
+				"structured_api": site.HasStructuredAPI,
+				"mcp_server":     site.HasMCPServer,
+				"robots_ai":      site.HasRobotsAI,
+				"schema_org":     site.HasSchemaOrg,
+			},
+			"report_url": h.BaseURL + "/site/" + site.Domain,
 		},
 	})
 }
