@@ -181,6 +181,20 @@ func main() {
 	})
 	mux.HandleFunc("/site/", webHandler.SitePage)
 	mux.HandleFunc("/tag/", webHandler.TagPage)
+	mux.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
+		// Curl-pipe-bash friendly installer. Serves a shell script that wires
+		// NHS MCP into the user's Claude Code install; also handles Cursor,
+		// Cline, and Continue by printing the right snippet for each.
+		// Usage: curl -fsSL https://nothumansearch.ai/install | bash
+		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Write([]byte(installScript))
+	})
+	mux.HandleFunc("/install.sh", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Write([]byte(installScript))
+	})
 	mux.HandleFunc("/mcp-servers", webHandler.MCPServersPage)
 	mux.HandleFunc("/ai-tools", webHandler.AIToolsPage)
 	mux.HandleFunc("/developer-apis", webHandler.DeveloperPage)
@@ -611,3 +625,57 @@ func corsMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+const installScript = `#!/bin/sh
+# Not Human Search — one-line MCP installer
+# Usage:  curl -fsSL https://nothumansearch.ai/install | sh
+#
+# Wires the NHS MCP server into Claude Code if installed. Prints
+# copy-paste snippets for Cursor, Cline, and Continue.
+#
+# NHS endpoint: https://nothumansearch.ai/mcp (streamable-http, no auth)
+# 8 tools: search_agents, get_site_details, get_stats, list_categories,
+# get_top_sites, submit_site, register_monitor, verify_mcp
+
+set -eu
+ENDPOINT="https://nothumansearch.ai/mcp"
+NAME="nothumansearch"
+
+banner() {
+  printf '\n\033[1;38;5;173mNot Human Search — MCP installer\033[0m\n'
+  printf 'Endpoint: %s\n\n' "$ENDPOINT"
+}
+
+banner
+
+if command -v claude >/dev/null 2>&1; then
+  printf 'Claude Code detected. Installing MCP server...\n'
+  if claude mcp add --transport http "$NAME" "$ENDPOINT" 2>&1; then
+    printf '\n\033[1;32mInstalled.\033[0m Restart Claude Code, then try:\n'
+    printf '  "Find MCP servers that search Jira"\n'
+    printf '  "Search the agentic web for payment APIs"\n\n'
+  else
+    printf '\n\033[1;33mInstall failed.\033[0m Run manually:\n'
+    printf '  claude mcp add --transport http %s %s\n\n' "$NAME" "$ENDPOINT"
+  fi
+else
+  printf '\033[1;33mClaude Code not found on PATH.\033[0m\n'
+  printf 'Install it from https://claude.com/claude-code, then rerun this script.\n\n'
+fi
+
+cat <<SNIPPETS
+For other MCP clients:
+
+Cursor:     Add to ~/.cursor/mcp.json or project .cursor/mcp.json
+            { "mcpServers": { "$NAME": { "url": "$ENDPOINT" } } }
+
+Cline:      Settings -> MCP Servers -> Add:
+            Name: $NAME   Transport: HTTP   URL: $ENDPOINT
+
+Continue:   Add to ~/.continue/config.json
+            "mcpServers": [ { "name": "$NAME", "url": "$ENDPOINT" } ]
+
+Docs:       https://nothumansearch.ai/mcp-servers
+SNIPPETS
+`
+
