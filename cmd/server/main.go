@@ -638,8 +638,9 @@ const installScript = `#!/bin/sh
 # copy-paste snippets for Cursor, Cline, and Continue.
 #
 # NHS endpoint: https://nothumansearch.ai/mcp (streamable-http, no auth)
-# 8 tools: search_agents, get_site_details, get_stats, list_categories,
-# get_top_sites, submit_site, register_monitor, verify_mcp
+# 11 tools: search_agents, get_site_details, get_stats, list_categories,
+# get_top_sites, submit_site, register_monitor, verify_mcp,
+# check_url, find_mcp_servers, recent_additions
 
 set -eu
 ENDPOINT="https://nothumansearch.ai/mcp"
