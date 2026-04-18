@@ -44,6 +44,38 @@ func main() {
 	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations")); err != nil {
 		log.Printf("WARNING: migration: %v", err)
 	}
+
+	// Retention prune for page_views + mcp_requests. Runs hourly, deletes rows
+	// older than 30 days. Prevents unbounded growth on 256MB Postgres (page_views
+	// audit on 2026-04-17 showed 77k rows in 2 days — ~1M/month if unchecked).
+	go func() {
+		prune := func() {
+			if database.DB == nil {
+				return
+			}
+			if res, err := database.DB.Exec(`DELETE FROM page_views WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("page_views prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("page_views prune: deleted %d rows", n)
+			}
+			if res, err := database.DB.Exec(`DELETE FROM mcp_requests WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("mcp_requests prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("mcp_requests prune: deleted %d rows", n)
+			}
+			if res, err := database.DB.Exec(`DELETE FROM submissions WHERE status IN ('failed','rejected','duplicate') AND created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("submissions prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("submissions prune: deleted %d rows", n)
+			}
+		}
+		// Run once on boot after a short delay, then hourly
+		time.Sleep(2 * time.Minute)
+		prune()
+		for range time.Tick(1 * time.Hour) {
+			prune()
+		}
+	}()
 	// Belt-and-braces: ensure favicon columns exist (was added in 006 migration).
 	if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_favicon BOOLEAN DEFAULT FALSE`); err != nil {
 		log.Printf("ensure has_favicon: %v", err)
@@ -253,6 +285,30 @@ var botPatterns = []string{
 	"ccbot", "firecrawl", "chiark", "agentdiscoveryindex", "montexi",
 	"dataforseo", "wp-admin/setup-config", "wlwmanifest",
 	"java/", "libwww", "lwp-trivial", "nutch", "httpie",
+	// MCP clients + internal infra (added 2026-04-17 after audit showed
+	// claude-code/* hammering /mcp with 20k+ is_bot=false rows bloating page_views)
+	"claude-code/", "claude-desktop", "cursor-mcp", "mcp-client",
+	"nhs-discovery", "consul health check", "fly-check", "fly-proxy",
+	"kube-probe", "google-cloud-checks",
+}
+
+// noLogPathPrefixes are request paths we skip from page_views entirely.
+// /mcp gets its own table (mcp_requests). /health is internal infra noise.
+// These exclusions keep page_views focused on human/organic traffic.
+var noLogPathPrefixes = []string{
+	"/mcp",      // JSON-RPC endpoint — logged to mcp_requests table
+	"/health",   // internal Consul/Fly health checks
+	"/metrics",  // Prometheus scrapers
+}
+
+// shouldLogPageView returns false for paths we explicitly exclude.
+func shouldLogPageView(p string) bool {
+	for _, pre := range noLogPathPrefixes {
+		if p == pre || strings.HasPrefix(p, pre+"/") {
+			return false
+		}
+	}
+	return true
 }
 
 func isBotUA(ua string) bool {
@@ -359,7 +415,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		dur := time.Since(start)
 		log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.status, r.UserAgent(), dur.Round(time.Millisecond))
 
-		if database.DB != nil {
+		if database.DB != nil && shouldLogPageView(r.URL.Path) {
 			ip := r.RemoteAddr
 			if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 				ip = strings.TrimSpace(strings.Split(fwd, ",")[0])
