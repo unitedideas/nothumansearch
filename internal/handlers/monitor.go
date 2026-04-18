@@ -202,6 +202,15 @@ a{color:#d97757}</style></head>
 <div id="msg"></div>
 <p style="margin-top:2rem"><a href="/">&larr; Back to Not Human Search</a></p>
 
+<div style="margin-top:2.5rem;padding-top:1rem;border-top:1px solid #333;font-size:13px;color:#aaa">
+  <strong style="color:#d97757">AI engineering research</strong> (live data, refreshed weekly):
+  <a href="https://8bitconcepts.com/research/q2-2026-ai-hiring-snapshot.html?utm_source=nothumansearch&amp;utm_medium=footer" target="_blank" rel="noopener">Hiring snapshot</a> &middot;
+  <a href="https://8bitconcepts.com/research/q2-2026-ai-compensation-by-skill.html?utm_source=nothumansearch&amp;utm_medium=footer" target="_blank" rel="noopener">Compensation by skill</a> &middot;
+  <a href="https://8bitconcepts.com/research/q2-2026-mcp-ecosystem-health.html?utm_source=nothumansearch&amp;utm_medium=footer" target="_blank" rel="noopener">MCP ecosystem</a> &middot;
+  <a href="https://8bitconcepts.com/research/q2-2026-remote-vs-onsite-ai-hiring.html?utm_source=nothumansearch&amp;utm_medium=footer" target="_blank" rel="noopener">Remote vs onsite</a> &middot;
+  <a href="https://8bitconcepts.com/research/q2-2026-entry-level-ai-gap.html?utm_source=nothumansearch&amp;utm_medium=footer" target="_blank" rel="noopener">Entry-level gap</a>
+</div>
+
 <script>
 document.getElementById('f').addEventListener('submit', async (e) => {
   e.preventDefault();
