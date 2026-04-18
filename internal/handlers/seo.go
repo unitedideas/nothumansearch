@@ -164,6 +164,11 @@ when a site's agent signals regress.
 ### Stats
 GET /stats
 
+### Top Sites
+GET /top?has_mcp=true&category=ai-tools&limit=25
+Returns the highest-scored sites in the index, sorted by agentic_score DESC.
+Designed for embedding / mirroring: stable URL, cached 5min, no auth. Max 100 results.
+
 ### Categories
 GET /categories
 Returns: {categories: [{name, count}]} — all 12 buckets with live counts.
@@ -311,6 +316,19 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"method":      "GET",
 			},
 			{
+				"name":        "top_sites_rest",
+				"description": "REST version of get_top_sites — returns top-scored sites as JSON, filterable by category or signal (has_mcp, has_llms_txt). Cached 5min. For agents that don't speak MCP.",
+				"endpoint":    h.BaseURL + "/api/v1/top",
+				"method":      "GET",
+				"parameters": map[string]interface{}{
+					"category":     map[string]string{"type": "string", "description": "Filter by category"},
+					"has_mcp":      map[string]string{"type": "boolean", "description": "Return only sites with a verified MCP server"},
+					"has_openapi":  map[string]string{"type": "boolean"},
+					"has_llms_txt": map[string]string{"type": "boolean"},
+					"limit":        map[string]string{"type": "integer", "description": "Default 50, max 100"},
+				},
+			},
+			{
 				"name":        "register_monitor",
 				"description": "Subscribe an email to get alerted when the indicated domain's agentic readiness score drops.",
 				"endpoint":    h.BaseURL + "/api/v1/monitor/register",
@@ -352,7 +370,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 		"name_for_human":       "Not Human Search",
 		"name_for_model":       "nothumansearch",
 		"description_for_human": "Search engine that finds websites AI agents can actually use, ranked by agentic readiness score.",
-		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/site/{domain} for a specific site's score, GET /api/v1/verify-mcp?url= to live-probe any URL for MCP compliance, POST /api/v1/check to run an on-demand crawl. Prefer /api/v1/search over listing tools manually. For richer capabilities connect via MCP at /mcp — 11 tools including find_mcp_servers, recent_additions, check_url.",
+		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/top (top-scored sites, filterable by signal — great for embedding a ranked list), GET /api/v1/site/{domain} for a specific site's score, GET /api/v1/verify-mcp?url= to live-probe any URL for MCP compliance, POST /api/v1/check to run an on-demand crawl. Prefer /api/v1/search over listing tools manually. For richer capabilities connect via MCP at /mcp — 11 tools including find_mcp_servers, recent_additions, check_url.",
 		"auth":                 map[string]string{"type": "none"},
 		"api": map[string]string{
 			"type": "openapi",
@@ -604,6 +622,45 @@ paths:
       responses:
         "200":
           description: Index stats
+  /top:
+    get:
+      summary: Top-scored agent-ready sites
+      description: >
+        Returns the highest-scored sites in the index (sorted by agentic_score DESC).
+        Designed as a stable JSON other sites can mirror / embed. Cached 5 min.
+      operationId: getTop
+      parameters:
+        - in: query
+          name: category
+          schema: { type: string }
+          description: Filter by category (e.g. ai-tools, developer, commerce)
+        - in: query
+          name: has_mcp
+          schema: { type: boolean }
+          description: Return only sites with a verified MCP server
+        - in: query
+          name: has_openapi
+          schema: { type: boolean }
+        - in: query
+          name: has_llms_txt
+          schema: { type: boolean }
+        - in: query
+          name: has_api
+          schema: { type: boolean }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50, maximum: 100 }
+      responses:
+        "200":
+          description: Top sites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results: { type: array, items: { $ref: "#/components/schemas/Site" } }
+                  total:   { type: integer }
+                  limit:   { type: integer }
 components:
   schemas:
     Site:
