@@ -105,6 +105,12 @@
         <p>The web was designed for humans pointing browsers at HTML. AI agents &mdash; coding copilots, research assistants, autonomous shoppers &mdash; need a different surface: machine-readable manifests, typed API contracts, and live tool endpoints they can call without a DOM.</p>
         <p>An agent-ready site shows up when an agent searches for its category. A site without these signals is invisible to the fastest-growing slice of inbound traffic on the web. The 7 signals below are what NHS scores against, and they map 1:1 to what every major agent runtime (Claude, ChatGPT, Cursor, etc.) actually looks for.</p>
 
+        <div class="callout" style="border-left:3px solid #d97757;padding:12px 16px;background:rgba(217,119,87,0.06);margin:20px 0;">
+            <strong>Try NHS from your agent before reading on:</strong>
+            <code style="display:block;margin-top:8px;font-family:'IBM Plex Mono',monospace;color:#d97757;">curl -fsSL https://nothumansearch.ai/install | sh</code>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">Wires NHS MCP into Claude Code. Prints Cursor/Cline/Continue snippets otherwise. Then ask: "find MCP servers that search Jira" or "what agent-ready APIs exist for payments?"</div>
+        </div>
+
         <h2 id="llms-txt">1. llms.txt <span class="pts">25 pts</span></h2>
         <div class="signal-meta">/llms.txt &nbsp;or&nbsp; /.well-known/llms.txt</div>
         <p>The single highest-value signal. <code>llms.txt</code> is a markdown file at the root of your site that tells AI agents what your service does, where the docs are, and which URLs matter most. Think of it as <code>robots.txt</code>, but written for understanding instead of crawling permission.</p>
