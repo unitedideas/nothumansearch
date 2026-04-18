@@ -275,6 +275,28 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			},
 		},
 		{
+			"name":        "recent_additions",
+			"title":       "Recently Indexed Agent-First Sites",
+			"description": "List agent-ready sites newly added to the Not Human Search index, sorted newest first. Use this to discover what's just landed on the agentic web — new MCP servers, fresh llms.txt adopters, new OpenAPI publishers. Good for weekly agent digests or tracking ecosystem momentum.",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"days": map[string]any{
+						"type":        "integer",
+						"description": "Look back window in days (default 7, max 90)",
+						"minimum":     1,
+						"maximum":     90,
+					},
+					"limit": map[string]any{
+						"type":        "integer",
+						"description": "Max results (default 10, max 50)",
+						"minimum":     1,
+						"maximum":     50,
+					},
+				},
+			},
+		},
+		{
 			"name":        "find_mcp_servers",
 			"title":       "Find MCP Servers",
 			"description": "List sites in the index that expose a live MCP server, ranked by agentic readiness. Use this when your agent needs to discover callable MCP endpoints for a domain ('payments', 'jobs', 'search') or overall. Pairs naturally with verify_mcp for a probe-before-use workflow.",
@@ -330,6 +352,8 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 		h.toolGetTopSites(w, req.ID, params.Arguments)
 	case "find_mcp_servers":
 		h.toolFindMCPServers(w, req.ID, params.Arguments)
+	case "recent_additions":
+		h.toolRecentAdditions(w, req.ID, params.Arguments)
 	default:
 		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
 	}
@@ -681,6 +705,69 @@ func (h *MCPHandler) toolGetTopSites(w http.ResponseWriter, id json.RawMessage, 
 		"structuredContent": map[string]any{
 			"category": category,
 			"results":  sites,
+		},
+	})
+}
+
+// toolRecentAdditions surfaces newly-indexed agent-first sites. Pairs
+// with get_stats — agents checking "what's new" can sample fresh sites
+// without a full crawl of the index.
+func (h *MCPHandler) toolRecentAdditions(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+	days := asInt(args["days"])
+	if days <= 0 {
+		days = 7
+	}
+	limit := asInt(args["limit"])
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+
+	sites, err := models.GetRecentSites(h.DB, days, limit)
+	if err != nil {
+		h.writeToolError(w, id, "query failed: "+err.Error())
+		return
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Found %d sites added in the last %d days:\n\n", len(sites), days)
+	for i, s := range sites {
+		name := s.Name
+		if name == "" {
+			name = s.Domain
+		}
+		fmt.Fprintf(&b, "%d. %s [%d/100] — %s (%s)\n", i+1, name, s.AgenticScore, s.Domain, s.Category)
+		if s.Description != "" {
+			fmt.Fprintf(&b, "   %s\n", s.Description)
+		}
+		var signals []string
+		if s.HasLLMsTxt {
+			signals = append(signals, "llms.txt")
+		}
+		if s.HasAIPlugin {
+			signals = append(signals, "ai-plugin")
+		}
+		if s.HasOpenAPI {
+			signals = append(signals, "openapi")
+		}
+		if s.HasStructuredAPI {
+			signals = append(signals, "api")
+		}
+		if s.HasMCPServer {
+			signals = append(signals, "mcp")
+		}
+		if len(signals) > 0 {
+			fmt.Fprintf(&b, "   Signals: %s\n", strings.Join(signals, ", "))
+		}
+		fmt.Fprintf(&b, "   Added: %s   URL: %s\n\n", s.CreatedAt.Format("2006-01-02"), s.URL)
+	}
+
+	h.writeResult(w, id, map[string]any{
+		"content": []map[string]any{
+			{"type": "text", "text": b.String()},
+		},
+		"structuredContent": map[string]any{
+			"days":    days,
+			"results": sites,
 		},
 	})
 }

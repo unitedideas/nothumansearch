@@ -365,6 +365,48 @@ func GetTopSites(db *sql.DB, category string, limit int) ([]Site, error) {
 	return sites, rows.Err()
 }
 
+// GetRecentSites returns the most recently added agent-first sites,
+// newest first by created_at. days is how far back to look (1..90, clamped).
+// limit is how many to return (1..50, clamped). Useful for agents asking
+// "what new agent-ready services have been indexed lately?"
+func GetRecentSites(db *sql.DB, days, limit int) ([]Site, error) {
+	if days <= 0 {
+		days = 7
+	}
+	if days > 90 {
+		days = 90
+	}
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	q := `SELECT id, domain, url, name, description,
+	             has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai,
+	             has_structured_api, has_mcp_server, has_schema_org,
+	             agentic_score, category, tags, created_at
+	      FROM sites WHERE ` + AgentFirstFilter + `
+	        AND created_at >= NOW() - make_interval(days => $1)
+	      ORDER BY created_at DESC, agentic_score DESC
+	      LIMIT ` + fmt.Sprintf("%d", limit)
+	rows, err := db.Query(q, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sites []Site
+	for rows.Next() {
+		var s Site
+		if err := rows.Scan(&s.ID, &s.Domain, &s.URL, &s.Name, &s.Description,
+			&s.HasLLMsTxt, &s.HasAIPlugin, &s.HasOpenAPI, &s.HasRobotsAI,
+			&s.HasStructuredAPI, &s.HasMCPServer, &s.HasSchemaOrg,
+			&s.AgenticScore, &s.Category, &s.Tags, &s.CreatedAt); err != nil {
+			continue
+		}
+		sites = append(sites, s)
+	}
+	return sites, rows.Err()
+}
+
 // TagCount is a single tag and the number of agent-first sites carrying it.
 type TagCount struct {
 	Name  string `json:"name"`
