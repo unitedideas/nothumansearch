@@ -349,7 +349,9 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 	}
 
 	switch params.Name {
-	case "search_agents":
+	case "search_agents", "search":
+		// "search" is an alias; some agents guess this simpler name when
+		// surveying the tool list. Route both to the same handler.
 		h.toolSearchAgents(w, req.ID, params.Arguments)
 	case "get_site_details":
 		h.toolGetSiteDetails(w, req.ID, params.Arguments)
