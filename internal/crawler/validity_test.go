@@ -2,6 +2,61 @@ package crawler
 
 import "testing"
 
+// TestIsAPIResponse covers the heuristic that decides whether an HTTP
+// response body looks like an API (JSON or JSON-ish error) vs HTML page.
+// Used during /docs and /developer path probing — false positives count
+// non-API sites as agent-ready (inflates NHS score); false negatives miss
+// real APIs (deflates).
+func TestIsAPIResponse(t *testing.T) {
+	apiLike := []string{
+		// Valid JSON objects and arrays
+		`{"jobs": []}`,
+		`[]`,
+		`[{"id": 1}]`,
+		`{"error": "unauthorized"}`,
+		// JSON with leading/trailing whitespace
+		"  \n  {\"data\": [1,2,3]}  \n  ",
+		// Short plain-text error mentioning auth/API
+		"Unauthorized",
+		"API key required",
+		"Invalid token",
+		"Bearer token expected",
+		// Valid nested JSON
+		`{"data": {"users": [{"id": 1}]}}`,
+	}
+	for _, body := range apiLike {
+		if !isAPIResponse(body) {
+			t.Errorf("isAPIResponse(%q) = false, want true (looks like API)", body)
+		}
+	}
+
+	htmlLike := []string{
+		// Clear HTML markers
+		"<!doctype html><html>",
+		"<!DOCTYPE HTML><html>",
+		"<html><head></head></html>",
+		"<head><title>Home</title></head>",
+		// Malformed JSON (doesn't parse)
+		`{"broken": [`,
+		`{unquoted: "values"}`,
+		// Empty
+		"",
+		"   \n\t  ",
+		// Plain text without API hints
+		"Hello, world!",
+		"This is a landing page for our product.",
+		// Long text (>200 chars) with api-hint substrings won't match
+		// (the hint matcher is short-body-only to avoid false positives
+		// on pages that just MENTION API in prose).
+		"This is a long descriptive page about our REST API that explains authentication and token-based access for users who want to integrate with our platform in a variety of programming languages and frameworks for production use with comprehensive documentation covering every endpoint.",
+	}
+	for _, body := range htmlLike {
+		if isAPIResponse(body) {
+			t.Errorf("isAPIResponse(%q) = true, want false (not API-like)", body)
+		}
+	}
+}
+
 // TestIsValidOpenAPI covers the operational bar stated in the repo CLAUDE.md:
 // "OpenAPI requires real parseable 3.x/Swagger 2.x spec with non-empty paths,
 // not HTML containing the word 'openapi'." Regressing this to a naive
