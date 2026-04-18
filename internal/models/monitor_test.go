@@ -140,3 +140,45 @@ func TestIs172Private_Boundaries(t *testing.T) {
 		}
 	}
 }
+
+// TestSanitizeUTF8 locks in the NUL-byte + invalid-UTF-8 stripping contract.
+// Prevents regression of the SAVE FAIL bug fixed in commit a3fd496 where
+// favicon URLs containing 0x00 would reach Postgres and trigger:
+//   pq: invalid byte sequence for encoding "UTF8": 0x00 (22021)
+// 0x00 is valid UTF-8 (passes utf8.ValidString) but Postgres rejects it in
+// text columns — so sanitizeUTF8 must strip it unconditionally.
+func TestSanitizeUTF8_NulByte(t *testing.T) {
+	if got := sanitizeUTF8("zero\x00byte"); got != "zerobyte" {
+		t.Errorf("sanitizeUTF8(NUL) = %q, want %q", got, "zerobyte")
+	}
+	// Multiple NULs + mixed with other content.
+	if got := sanitizeUTF8("\x00leading"); got != "leading" {
+		t.Errorf("sanitizeUTF8(leading NUL) = %q", got)
+	}
+	if got := sanitizeUTF8("trailing\x00"); got != "trailing" {
+		t.Errorf("sanitizeUTF8(trailing NUL) = %q", got)
+	}
+	if got := sanitizeUTF8("a\x00b\x00c"); got != "abc" {
+		t.Errorf("sanitizeUTF8(interspersed NUL) = %q", got)
+	}
+	// Valid UTF-8 with no NUL passes through unchanged.
+	in := "https://avatars.githubusercontent.com/u/12345"
+	if got := sanitizeUTF8(in); got != in {
+		t.Errorf("sanitizeUTF8 mutated valid input: %q → %q", in, got)
+	}
+	// Invalid UTF-8 still gets cleaned (0xFF is never a legal start byte).
+	bad := "ok" + string([]byte{0xFF}) + "fine"
+	got := sanitizeUTF8(bad)
+	if !isValidASCIIish(got) {
+		t.Errorf("sanitizeUTF8 left invalid byte: %q", got)
+	}
+}
+
+func isValidASCIIish(s string) bool {
+	for _, b := range []byte(s) {
+		if b == 0xFF {
+			return false
+		}
+	}
+	return true
+}
