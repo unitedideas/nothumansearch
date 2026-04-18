@@ -15,10 +15,10 @@ LLM agents and autonomous systems can't "browse the web" efficiently the way hum
 
 ## What's indexed
 
-- **8,000+ sites crawled** and scored across 7 agentic signals
-- **500+ MCP-verified servers** with live JSON-RPC probe
-- **Agent-first filter** — every indexed site has at least one strong agent signal
-- Continuously refreshed via daily recrawl + weekly auto-discovery
+- **1,900+ agent-first sites** scored across 7 agentic signals (see `/api/v1/stats` for current live count)
+- **500+ MCP servers** with live JSON-RPC probe verification
+- **Agent-first filter** — every indexed site has at least one strong agent signal (llms.txt, ai-plugin, OpenAPI, structured API, MCP server)
+- Continuously refreshed via daily recrawl + weekly auto-discovery pipeline
 
 ## Scoring (max 100)
 
@@ -38,7 +38,7 @@ LLM agents and autonomous systems can't "browse the web" efficiently the way hum
 ```
 claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
 ```
-8 tools: `search_agents`, `get_site_details`, `get_stats`, `list_categories`, `get_top_sites`, `verify_mcp`, and more.
+Tools include `search_agents`, `find_mcp_servers`, `verify_mcp`, `check_url`, `recent_additions`, `list_categories`, `get_top_sites`, `get_site_details`, `get_stats`, `submit_site`, `register_monitor`. Current full list: `curl https://nothumansearch.ai/mcp -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`.
 
 **As a developer (HTTP API):**
 ```bash
