@@ -571,6 +571,12 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	return result, nil
 }
 
+// foundryPeerReferer matches Referer header values pointing at any sibling
+// Foundry property. Excluded from dashboard numbers so cross-Foundry clicks
+// (e.g. ADB → NHS) don't inflate "humans" on this site. Self-referrals
+// (nothumansearch.ai → nothumansearch.ai) are NOT matched — legit navigation.
+const foundryPeerReferer = `aidevboard\.com|8bitconcepts\.com|bringyour\.ai|poddrop\.(xyz|com)|foundry-dashboard\.fly\.dev`
+
 func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
 	if days <= 0 {
 		days = 14
@@ -593,7 +599,8 @@ func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
 			count(DISTINCT ip_hash) AS unique_ips
 		FROM page_views
 		WHERE created_at >= NOW() - $1::int * INTERVAL '1 day'
-		GROUP BY 1 ORDER BY 1`, days)
+		  AND (referer = '' OR referer !~* $2)
+		GROUP BY 1 ORDER BY 1`, days, foundryPeerReferer)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -612,7 +619,8 @@ func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
 	rows2, err := db.Query(`
 		SELECT path, count(*) AS cnt FROM page_views
 		WHERE NOT is_bot AND created_at >= NOW() - $1::int * INTERVAL '1 day'
-		GROUP BY path ORDER BY cnt DESC LIMIT 25`, days)
+		  AND (referer = '' OR referer !~* $2)
+		GROUP BY path ORDER BY cnt DESC LIMIT 25`, days, foundryPeerReferer)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -631,7 +639,8 @@ func GetTrafficAnalytics(db *sql.DB, days int) (map[string]interface{}, error) {
 	rows3, err := db.Query(`
 		SELECT referer, count(*) AS cnt FROM page_views
 		WHERE NOT is_bot AND referer != '' AND created_at >= NOW() - $1::int * INTERVAL '1 day'
-		GROUP BY referer ORDER BY cnt DESC LIMIT 25`, days)
+		  AND referer !~* $2
+		GROUP BY referer ORDER BY cnt DESC LIMIT 25`, days, foundryPeerReferer)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {

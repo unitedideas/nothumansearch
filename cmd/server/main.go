@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -119,6 +120,18 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("bb1637af360f471ab2a1555d45d683ea"))
 	})
+
+	// Google Site Verification (HTML file method for Search Console)
+	// Filename from env: GOOGLE_SITE_VERIFICATION (e.g., "google1234abc")
+	// File served at: /google1234abc.html
+	if gsvKey := os.Getenv("GOOGLE_SITE_VERIFICATION"); gsvKey != "" {
+		filePath := "/" + gsvKey + ".html"
+		mux.HandleFunc(filePath, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=604800")
+			fmt.Fprintf(w, "google-site-verification: %s\n", gsvKey)
+		})
+	}
 
 	// Official MCP registry HTTP-based domain authentication. This public-key
 	// proof lets `mcp-publisher login http --domain nothumansearch.ai` sign
