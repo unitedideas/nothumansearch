@@ -105,6 +105,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("digest template: %v", err)
 	}
+	fixHandler := handlers.NewFixHandler(database.DB, baseURL)
 
 	mux := http.NewServeMux()
 
@@ -266,6 +267,13 @@ func main() {
 	mux.HandleFunc("/api/v1/verify-mcp", apiHandler.VerifyMCP)
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
+	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
+
+	// Paid fix-my-score intake + Stripe. /fix/success is registered before the
+	// catch-all /fix/ so it wins the match.
+	mux.HandleFunc("/fix/success", fixHandler.SuccessPage)
+	mux.HandleFunc("/fix/", fixHandler.ServeHTTP)
+	mux.HandleFunc("/webhook/stripe", fixHandler.HandleWebhook)
 	mux.Handle("/api/v1/check", checkHandler)
 
 	// Embeddable score badges: /badge/{domain}.svg
