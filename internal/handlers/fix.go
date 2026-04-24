@@ -43,12 +43,16 @@ type FixHandler struct {
 func NewFixHandler(db *sql.DB, baseURL string) *FixHandler {
 	gostripe.Key = os.Getenv("STRIPE_SECRET_KEY")
 	if gostripe.Key == "" {
-		log.Println("fix: STRIPE_SECRET_KEY not set, /fix/* runs in test mode")
+		log.Println("fix: STRIPE_SECRET_KEY not set, /fix/* runs in test mode (lead-capture only)")
+	}
+	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	if webhookSecret == "" && gostripe.Key != "" {
+		log.Println("WARNING: fix: STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is missing. Webhook signature verification will fail.")
 	}
 	return &FixHandler{
 		DB:            db,
 		BaseURL:       baseURL,
-		WebhookSecret: os.Getenv("STRIPE_WEBHOOK_SECRET"),
+		WebhookSecret: webhookSecret,
 	}
 }
 
@@ -267,25 +271,23 @@ a { color:#d97757; text-decoration:none; }
 
 // POST /webhook/stripe — Stripe events. Handles checkout.session.completed and
 // nothing else for now (NHS has exactly one paid product).
+// Requires STRIPE_WEBHOOK_SECRET to be set for signature verification.
 func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
+	if h.WebhookSecret == "" {
+		log.Printf("fix webhook: webhook secret not configured (STRIPE_WEBHOOK_SECRET missing)")
+		http.Error(w, "webhook not configured", http.StatusInternalServerError)
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 65536))
 	if err != nil {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
 	}
-	var event gostripe.Event
-	if h.WebhookSecret != "" {
-		event, err = webhook.ConstructEvent(body, r.Header.Get("Stripe-Signature"), h.WebhookSecret)
-		if err != nil {
-			log.Printf("fix webhook: signature: %v", err)
-			http.Error(w, "invalid signature", http.StatusBadRequest)
-			return
-		}
-	} else {
-		if err := json.Unmarshal(body, &event); err != nil {
-			http.Error(w, "invalid json", http.StatusBadRequest)
-			return
-		}
+	event, err := webhook.ConstructEvent(body, r.Header.Get("Stripe-Signature"), h.WebhookSecret)
+	if err != nil {
+		log.Printf("fix webhook: signature verification failed: %v", err)
+		http.Error(w, "invalid signature", http.StatusBadRequest)
+		return
 	}
 
 	if event.Type == "checkout.session.completed" {
