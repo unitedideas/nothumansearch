@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 96" role="img" aria-label="Not Human Search">
+  <rect x="8" y="16" width="64" height="64" rx="14" fill="#0d0d0e" stroke="#d97757" stroke-width="3"/>
+  <path d="M22 29h31v10H22zM22 42h31v10H22zM22 55h24v10H22z" fill="none" stroke="#d97757" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M29 34h10M29 47h16M29 60h8" stroke="#d97757" stroke-width="3" stroke-linecap="round"/>
+  <path d="M50 54a8 8 0 1 1 11 11 8 8 0 0 1-11-11Z" fill="none" stroke="#d97757" stroke-width="4"/>
+  <path d="M60 64l7 7" stroke="#d97757" stroke-width="4" stroke-linecap="round"/>
+  <path d="M56 34h5M56 47h5" stroke="#f4efe7" stroke-width="3" stroke-linecap="round"/>
+  <text x="96" y="44" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#0d0d0e">Not Human Search</text>
+  <text x="98" y="66" font-family="IBM Plex Mono, ui-monospace, monospace" font-size="12" font-weight="500" fill="#d97757" letter-spacing="1.8">NOTHUMANSEARCH.AI</text>
+</svg>
