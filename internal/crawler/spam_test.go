@@ -55,8 +55,8 @@ func TestIsSpam(t *testing.T) {
 		{
 			name: "legit Foundry property",
 			site: models.Site{
-				Name:        "BringYour — harness migration for AI agents",
-				Description: "Move your AI agent between 13 tools with one command.",
+				Name:        "Bring Your AI — harness migration for AI agents",
+				Description: "Move Claude Code to Codex locally without sending harness data to a server.",
 			},
 			want: false,
 		},
