@@ -1,11 +1,12 @@
 // Fix-my-score paid intake + Stripe checkout.
 //
 // Flow:
-//   GET  /fix/{host}            intake form
-//   POST /fix/{host}            validate + create geo_fix_jobs row + Stripe session, redirect
-//   GET  /fix/success           thank-you page
-//   POST /webhook/stripe        flip status=paid + Discord ping
-//   GET  /api/v1/admin/geo-jobs (Bearer auth) list paid + pending orders
+//
+//	GET  /fix/{host}            intake form
+//	POST /fix/{host}            validate + create geo_fix_jobs row + Stripe session, redirect
+//	GET  /fix/success           thank-you page
+//	POST /webhook/stripe        flip status=paid + Discord ping
+//	GET  /api/v1/admin/geo-jobs (Bearer auth) list paid + pending orders
 //
 // Pricing: $199 one-time, 72hr turnaround (manual fulfillment for now).
 // Lead-mode fallback — if STRIPE_SECRET_KEY is unset, intake is recorded
@@ -283,7 +284,9 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read error", http.StatusBadRequest)
 		return
 	}
-	event, err := webhook.ConstructEvent(body, r.Header.Get("Stripe-Signature"), h.WebhookSecret)
+	event, err := webhook.ConstructEventWithOptions(body, r.Header.Get("Stripe-Signature"), h.WebhookSecret, webhook.ConstructEventOptions{
+		IgnoreAPIVersionMismatch: true,
+	})
 	if err != nil {
 		log.Printf("fix webhook: signature verification failed: %v", err)
 		http.Error(w, "invalid signature", http.StatusBadRequest)
