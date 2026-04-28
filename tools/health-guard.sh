@@ -7,6 +7,7 @@
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+FLY_BIN="/opt/homebrew/bin/fly"
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_FILE="${APP_DIR}/tools/health-guard.log"
@@ -59,6 +60,11 @@ mark_restarted() {
     date +%s > "$STATE_FILE"
 }
 
+fly_cmd() {
+    env FLY_ACCESS_TOKEN="$(/usr/bin/security find-generic-password -a foundry -s fly-api-token -w)" \
+        "$FLY_BIN" "$@"
+}
+
 # --- Check 1: public API responds with valid JSON ---
 api_status=$(curl -s --max-time 20 -o /tmp/nhs-health.json -w "%{http_code}" "https://nothumansearch.ai/api/v1/stats" || echo "000")
 api_ok=0
@@ -71,7 +77,7 @@ fi
 # --- Check 2: Fly DB role ---
 # `fly status` for the DB app returns ROLE=primary|standby when healthy,
 # ROLE=error when the cluster is stuck (e.g. post-OOM recovery loop).
-db_role=$(fly status -a nothumansearch-db 2>/dev/null | awk '/started/ && /sjc/ {print $3}' | head -1)
+db_role=$(fly_cmd status -a nothumansearch-db 2>/dev/null | awk '/started/ && /sjc/ {print $3}' | head -1)
 
 log "api_status=$api_status api_ok=$api_ok db_role=$db_role"
 
@@ -85,9 +91,9 @@ if [[ "$db_role" == "error" ]]; then
     if can_restart; then
         notify "⚠️  NHS Postgres in ERROR state — restarting DB machine (api_status=$api_status)"
         log "restarting DB..."
-        machine_id=$(fly status -a nothumansearch-db 2>/dev/null | awk '/started/ && /sjc/ {print $1}' | head -1)
+        machine_id=$(fly_cmd status -a nothumansearch-db 2>/dev/null | awk '/started/ && /sjc/ {print $1}' | head -1)
         if [[ -n "$machine_id" ]]; then
-            if fly machine restart "$machine_id" -a nothumansearch-db >> "$LOG_FILE" 2>&1; then
+            if fly_cmd machine restart "$machine_id" -a nothumansearch-db >> "$LOG_FILE" 2>&1; then
                 mark_restarted
                 sleep 20
                 # Re-check
