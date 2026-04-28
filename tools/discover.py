@@ -11,16 +11,41 @@ Runs weekly via launchd. Compounds the index size over time without
 requiring manual seed-list updates.
 """
 import json
+import os
 import re
+import shlex
 import subprocess
 import sys
 import time
 import urllib.parse
 import urllib.request
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.error import HTTPError, URLError
 
 NHS_BASE = "https://nothumansearch.ai"
 UA = "NHS-Discovery/1.0 (+https://nothumansearch.ai)"
+BATCH_SIZE = 25
+SSH_TIMEOUT_SECONDS = 900
+SOURCE_WORKERS = 8
+INDEX_CHECK_WORKERS = 32
+_GH_TOKEN = None
+
+
+def github_token():
+    global _GH_TOKEN
+    if _GH_TOKEN is not None:
+        return _GH_TOKEN
+    try:
+        _GH_TOKEN = subprocess.check_output(
+            ["gh", "auth", "token"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+        ).strip()
+    except Exception:
+        _GH_TOKEN = ""
+    return _GH_TOKEN
 
 # Root domains we never want to submit — noise, platform infra, social, etc.
 # Matched against registrable domain (last 2 labels), so subdomains are caught too.
@@ -63,7 +88,12 @@ def http_get(url, timeout=20, retries=2):
     last = None
     for attempt in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+            headers = {"User-Agent": UA, "Accept": "*/*"}
+            if url.startswith("https://api.github.com/"):
+                token = github_token()
+                if token:
+                    headers["Authorization"] = f"Bearer {token}"
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read().decode("utf-8", errors="replace")
         except (HTTPError, URLError) as e:
@@ -301,7 +331,7 @@ def from_github_mcp_topic(max_pages=33):
                 d = extract_domain(hp)
                 if d:
                     domains.add(d)
-            time.sleep(6.5)  # stay under 10 rpm unauth limit
+            time.sleep(0.2 if github_token() else 6.5)  # stay under 10 rpm when unauthenticated
     print(f"[github] {len(domains)} candidate domains")
     return domains
 
@@ -343,53 +373,101 @@ def crawl_via_ssh(domains):
     """Pipe domains to the crawler on Fly via SSH, bypassing HTTP rate limits."""
     if not domains:
         return 0, 0
-    payload = "\n".join(domains) + "\n"
-    print(f"Piping {len(domains)} domains to crawler via fly ssh...")
+    print(f"Piping {len(domains)} domains to crawler via fly ssh in batches of {BATCH_SIZE}...")
+    submitted = 0
+    errors = 0
     try:
         fly_bin = "/opt/homebrew/bin/fly"
-        result = subprocess.run(
-            [fly_bin, "ssh", "console", "-a", "nothumansearch", "-C",
-             "/app/crawler -file /dev/stdin -workers 5"],
-            input=payload.encode(),
-            capture_output=True,
-            timeout=3600,
-        )
-        stdout = result.stdout.decode("utf-8", errors="replace")
-        stderr = result.stderr.decode("utf-8", errors="replace")
-        for line in stdout.splitlines():
-            print(f"  [crawler] {line}")
-        if stderr.strip():
-            for line in stderr.splitlines()[-5:]:
-                print(f"  [crawler:err] {line}")
-        return len(domains), 0 if result.returncode == 0 else len(domains)
-    except subprocess.TimeoutExpired:
-        print("  [crawler] SSH timeout after 1h")
-        return 0, len(domains)
+        token = subprocess.check_output(
+            ["/usr/bin/security", "find-generic-password", "-a", "foundry", "-s", "fly-api-token", "-w"],
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8").strip()
+        env = dict(os.environ)
+        env["FLY_ACCESS_TOKEN"] = token
+        env.setdefault("HOME", "/Users/owlassist")
+
+        for idx in range(0, len(domains), BATCH_SIZE):
+            batch = domains[idx : idx + BATCH_SIZE]
+            remote_file = f"/tmp/nhs-discover-{uuid.uuid4().hex}.txt"
+            payload = "\n".join(f"https://{domain}" for domain in batch) + "\n"
+            remote_script = (
+                f"cat > {remote_file} <<'EOF'\n"
+                f"{payload}"
+                "EOF\n"
+                f"/usr/bin/timeout {SSH_TIMEOUT_SECONDS - 30} /app/crawler -file {remote_file} -workers 5\n"
+                f"rc=$?\n"
+                f"rm -f {remote_file}\n"
+                f"exit $rc"
+            )
+            remote_cmd = f"/bin/sh -lc {shlex.quote(remote_script)}"
+            print(f"  [batch {idx // BATCH_SIZE + 1}] {len(batch)} domains")
+            try:
+                result = subprocess.run(
+                    [fly_bin, "ssh", "console", "-a", "nothumansearch", "-C",
+                     remote_cmd],
+                    timeout=SSH_TIMEOUT_SECONDS,
+                    env=env,
+                )
+            except subprocess.TimeoutExpired:
+                print(f"  [crawler] batch timeout after {SSH_TIMEOUT_SECONDS}s")
+                errors += len(batch)
+                continue
+            if result.returncode == 0:
+                submitted += len(batch)
+            else:
+                errors += len(batch)
+        return submitted, errors
     except FileNotFoundError:
         print("  [crawler] fly CLI not found, falling back to HTTP submit")
         return -1, 0
+    except subprocess.CalledProcessError:
+        print("  [crawler] fly token missing from Keychain", file=sys.stderr)
+        return 0, len(domains)
 
 
 def main():
     print(f"=== NHS discovery run @ {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
     candidates = set()
-    candidates |= from_mcp_registry()
-    candidates |= from_awesome_mcp()
-    candidates |= from_pulsemcp()
-    candidates |= from_mcpso()
-    candidates |= from_llmstxt_site()
-    candidates |= from_apis_guru()
-    candidates |= from_smithery()
-    candidates |= from_github_mcp_topic()
+    sources = [
+        (from_mcp_registry, 100),
+        (from_pulsemcp, 95),
+        (from_mcpso, 90),
+        (from_smithery, 85),
+        (from_github_mcp_topic, 80),
+        (from_awesome_mcp, 75),
+        (from_apis_guru, 35),
+        (from_llmstxt_site, 10),
+    ]
+    weights = {}
+    with ThreadPoolExecutor(max_workers=SOURCE_WORKERS) as pool:
+        futures = {pool.submit(source): (source.__name__, weight) for source, weight in sources}
+        for future in as_completed(futures):
+            name, weight = futures[future]
+            try:
+                domains = future.result()
+            except Exception as e:
+                print(f"[{name}] failed: {e}", file=sys.stderr)
+                continue
+            candidates |= domains
+            for domain in domains:
+                weights[domain] = max(weights.get(domain, 0), weight)
     print(f"Total unique candidates: {len(candidates)}")
 
-    new_domains = []
+    new_domains = set()
     skipped = 0
-    for domain in sorted(candidates):
-        if already_indexed(domain):
-            skipped += 1
-            continue
-        new_domains.append(domain)
+    with ThreadPoolExecutor(max_workers=INDEX_CHECK_WORKERS) as pool:
+        futures = {pool.submit(already_indexed, domain): domain for domain in candidates}
+        for future in as_completed(futures):
+            domain = futures[future]
+            try:
+                indexed = future.result()
+            except Exception:
+                indexed = True
+            if indexed:
+                skipped += 1
+            else:
+                new_domains.add(domain)
+    new_domains = sorted(new_domains, key=lambda d: (-weights.get(d, 0), d))
 
     print(f"New domains to crawl: {len(new_domains)} (already indexed: {skipped})")
 

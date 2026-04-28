@@ -16,6 +16,27 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
+const crawlJobTimeout = 90 * time.Second
+
+type crawlResult struct {
+	site *models.Site
+	err  error
+}
+
+func crawlSiteWithTimeout(rawURL string) (*models.Site, error) {
+	resultCh := make(chan crawlResult, 1)
+	go func() {
+		site, err := crawler.CrawlSite(rawURL)
+		resultCh <- crawlResult{site: site, err: err}
+	}()
+	select {
+	case result := <-resultCh:
+		return result.site, result.err
+	case <-time.After(crawlJobTimeout):
+		return nil, fmt.Errorf("crawl timeout after %s", crawlJobTimeout)
+	}
+}
+
 func main() {
 	seed := flag.Bool("seed", false, "Crawl seed sites")
 	recrawl := flag.Bool("recrawl", false, "Re-crawl all sites in the database")
@@ -100,9 +121,9 @@ func recategorizeAll() {
 	defer rows.Close()
 
 	type row struct {
-		id       string
-		oldCat   string
-		site     models.Site
+		id     string
+		oldCat string
+		site   models.Site
 	}
 	var all []row
 	for rows.Next() {
@@ -156,9 +177,13 @@ func crawlOne(rawURL string, dryRun bool) {
 	}
 
 	log.Printf("Crawling %s...", rawURL)
-	site, err := crawler.CrawlSite(rawURL)
+	site, err := crawlSiteWithTimeout(rawURL)
 	if err != nil {
-		log.Fatalf("crawl error: %v", err)
+		log.Printf("crawl error: %v", err)
+		if dryRun {
+			return
+		}
+		os.Exit(1)
 	}
 
 	printSite(site)
@@ -206,7 +231,7 @@ func crawlFile(path string, numWorkers int, dryRun bool) {
 		go func() {
 			defer wg.Done()
 			for u := range jobs {
-				site, err := crawler.CrawlSite(u)
+				site, err := crawlSiteWithTimeout(u)
 				if err != nil {
 					mu.Lock()
 					failed++
@@ -260,7 +285,7 @@ func crawlSeeds(numWorkers int, dryRun bool) {
 		go func() {
 			defer wg.Done()
 			for j := range jobs {
-				site, err := crawler.CrawlSite(j.url)
+				site, err := crawlSiteWithTimeout(j.url)
 				if err != nil {
 					mu.Lock()
 					failed++
@@ -320,7 +345,7 @@ func recrawlAll(numWorkers int) {
 				go func() {
 					defer subWG.Done()
 					for u := range submitCh {
-						site, err := crawler.CrawlSite(u)
+						site, err := crawlSiteWithTimeout(u)
 						if err != nil {
 							log.Printf("FAIL submission %s: %v", u, err)
 							database.DB.Exec("UPDATE submissions SET status='failed' WHERE url=$1", u)
@@ -374,7 +399,7 @@ func recrawlAll(numWorkers int) {
 		go func() {
 			defer wg.Done()
 			for j := range jobs {
-				site, err := crawler.CrawlSite(j.url)
+				site, err := crawlSiteWithTimeout(j.url)
 				if err != nil {
 					mu.Lock()
 					failed++

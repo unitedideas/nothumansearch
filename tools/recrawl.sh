@@ -5,19 +5,26 @@ set -euo pipefail
 # Processes pending submissions, then re-crawls all indexed sites
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+export HOME="/Users/owlassist"
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_FILE="${APP_DIR}/tools/recrawl.log"
+FLY_BIN="/opt/homebrew/bin/fly"
+
+fly_ssh() {
+  env FLY_ACCESS_TOKEN="$(/usr/bin/security find-generic-password -a foundry -s fly-api-token -w)" \
+    "$FLY_BIN" ssh console -a nothumansearch -C "$1"
+}
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') NHS recrawl starting" >> "$LOG_FILE"
 
 cd "$APP_DIR"
 
 # Seed new sites first (idempotent — existing sites just get upserted)
-fly ssh console -a nothumansearch -C "/app/crawler -seed -workers 10" >> "$LOG_FILE" 2>&1
+fly_ssh "/app/crawler -seed -workers 10" >> "$LOG_FILE" 2>&1
 
 # Then recrawl all (updates scores, categories, tags for existing sites)
-fly ssh console -a nothumansearch -C "/app/crawler -recrawl -workers 10" >> "$LOG_FILE" 2>&1
+fly_ssh "/app/crawler -recrawl -workers 10" >> "$LOG_FILE" 2>&1
 
 # Submit key pages to IndexNow for Bing/Yandex
 curl -s -X POST "https://api.indexnow.org/indexnow" \
