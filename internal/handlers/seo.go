@@ -362,23 +362,34 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *SEOHandler) GlamaManifest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"$schema": "https://glama.ai/mcp/schemas/connector.json",
+		"maintainers": []map[string]string{
+			{"email": "hello@8bitconcepts.com"},
+		},
+	})
+}
+
 func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"schema_version":       "v1",
-		"name_for_human":       "Not Human Search",
-		"name_for_model":       "nothumansearch",
+		"schema_version":        "v1",
+		"name_for_human":        "Not Human Search",
+		"name_for_model":        "nothumansearch",
 		"description_for_human": "Search engine that finds websites AI agents can actually use, ranked by agentic readiness score.",
 		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/top (top-scored sites, filterable by signal — great for embedding a ranked list), GET /api/v1/site/{domain} for a specific site's score, GET /api/v1/verify-mcp?url= to live-probe any URL for MCP compliance, POST /api/v1/check to run an on-demand crawl. Prefer /api/v1/search over listing tools manually. For richer capabilities connect via MCP at /mcp — 11 tools including find_mcp_servers, recent_additions, check_url.",
-		"auth":                 map[string]string{"type": "none"},
+		"auth":                  map[string]string{"type": "none"},
 		"api": map[string]string{
 			"type": "openapi",
 			"url":  h.BaseURL + "/openapi.yaml",
 		},
-		"logo_url":        h.BaseURL + "/static/img/logo.svg",
-		"contact_email":   "hello@nothumansearch.ai",
-		"legal_info_url":  h.BaseURL + "/about",
+		"logo_url":       h.BaseURL + "/static/img/logo.svg",
+		"contact_email":  "hello@nothumansearch.ai",
+		"legal_info_url": h.BaseURL + "/about",
 	})
 }
 
@@ -804,13 +815,13 @@ type rssFeed struct {
 }
 
 type rssChannel struct {
-	Title         string     `xml:"title"`
-	Link          string     `xml:"link"`
-	AtomLink      atomLink   `xml:"atom:link"`
-	Description   string     `xml:"description"`
-	Language      string     `xml:"language"`
-	LastBuildDate string     `xml:"lastBuildDate"`
-	Items         []rssItem  `xml:"item"`
+	Title         string    `xml:"title"`
+	Link          string    `xml:"link"`
+	AtomLink      atomLink  `xml:"atom:link"`
+	Description   string    `xml:"description"`
+	Language      string    `xml:"language"`
+	LastBuildDate string    `xml:"lastBuildDate"`
+	Items         []rssItem `xml:"item"`
 }
 
 type atomLink struct {

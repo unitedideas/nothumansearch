@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "ai.nothumansearch/search",
   "title": "Not Human Search",
-  "description": "Search the agentic web. 1,900+ sites, 11 tools incl. check_url + verify_mcp for probe-before-use.",
-  "version": "1.7.0",
+  "description": "Search the agentic web. 4,100+ sites, 11 tools incl. check_url + verify_mcp for probe-before-use.",
+  "version": "1.7.1",
   "websiteUrl": "https://nothumansearch.ai",
   "remotes": [
     {

@@ -164,6 +164,7 @@ func main() {
 	mux.HandleFunc("/.well-known/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/.well-known/ai-plugin.json", seoHandler.AIPluginManifest)
 	mux.HandleFunc("/.well-known/mcp.json", seoHandler.MCPManifest)
+	mux.HandleFunc("/.well-known/glama.json", seoHandler.GlamaManifest)
 	mux.HandleFunc("/.well-known/security.txt", seoHandler.SecurityTxt)
 	mux.HandleFunc("/security.txt", seoHandler.SecurityTxt)
 	mux.HandleFunc("/llms-full.txt", seoHandler.LLMsFullTxt)
@@ -335,9 +336,9 @@ var botPatterns = []string{
 // /mcp gets its own table (mcp_requests). /health is internal infra noise.
 // These exclusions keep page_views focused on human/organic traffic.
 var noLogPathPrefixes = []string{
-	"/mcp",      // JSON-RPC endpoint — logged to mcp_requests table
-	"/health",   // internal Consul/Fly health checks
-	"/metrics",  // Prometheus scrapers
+	"/mcp",     // JSON-RPC endpoint — logged to mcp_requests table
+	"/health",  // internal Consul/Fly health checks
+	"/metrics", // Prometheus scrapers
 }
 
 // shouldLogPageView returns false for paths we explicitly exclude.
@@ -704,4 +705,3 @@ Continue:   Add to ~/.continue/config.json
 Docs:       https://nothumansearch.ai/mcp-servers
 SNIPPETS
 `
-
