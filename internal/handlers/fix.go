@@ -64,6 +64,19 @@ func writeFixJSON(w http.ResponseWriter, status int, data interface{}) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
+func normalizeFixPaymentMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "", "stripe", "stripe_checkout", "stripe_link", "link":
+		return "stripe_checkout"
+	case "spt", "stripe_spt", "shared_payment_token", "stripe_acp", "acp", "agentic_checkout", "agentic_commerce":
+		return "stripe_acp_spt"
+	case "mpp", "x402", "mpp_x402", "machine_payments", "machine_payments_x402", "stripe_machine_payments":
+		return "machine_payments_x402"
+	default:
+		return "unsupported"
+	}
+}
+
 func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 	writeFixJSON(w, http.StatusOK, map[string]interface{}{
 		"seller": map[string]interface{}{
@@ -76,12 +89,15 @@ func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 		"currency": "USD",
 		"agentic_payments": map[string]interface{}{
 			"ready":           true,
-			"supported_modes": []string{"stripe_checkout"},
+			"supported_modes": []string{"stripe_checkout", "stripe_link", "link"},
 			"unsupported_modes": map[string]string{
-				"stripe_spt": "Stripe SPT payments are not generally available for this seller surface yet.",
-				"x402":       "No x402 endpoint is deployed for Not Human Search.",
-				"mpp":        "No Machine Payment Protocol endpoint is deployed for Not Human Search.",
+				"stripe_acp": "Stripe Agentic Commerce Protocol is private-preview gated for this seller surface.",
+				"stripe_spt": "Stripe Shared Payment Tokens are private-preview gated for this seller surface.",
+				"x402":       "No Stripe machine payments / x402 endpoint is deployed for Not Human Search.",
+				"mpp":        "No machine-payment endpoint is deployed for Not Human Search.",
 			},
+			"link":                     "Available inside Stripe Checkout when enabled on the Stripe account.",
+			"private_preview_required": []string{"stripe_acp", "stripe_spt", "x402"},
 			"endpoints": map[string]string{
 				"catalog":  h.BaseURL + "/api/v1/catalog",
 				"quote":    h.BaseURL + "/api/v1/quote",
@@ -115,9 +131,10 @@ func (h *FixHandler) AgentJSON(w http.ResponseWriter, r *http.Request) {
 			"catalog":                   h.BaseURL + "/api/v1/catalog",
 			"quote":                     h.BaseURL + "/api/v1/quote",
 			"checkout":                  h.BaseURL + "/api/v1/checkout",
-			"payment_modes":             []string{"stripe_checkout"},
+			"payment_modes":             []string{"stripe_checkout", "stripe_link", "link"},
 			"agentic_payments_ready":    true,
-			"unsupported_payment_modes": []string{"stripe_spt", "x402", "mpp"},
+			"unsupported_payment_modes": []string{"stripe_acp", "stripe_spt", "x402", "mpp"},
+			"private_preview_required":  []string{"stripe_acp", "stripe_spt", "x402"},
 		},
 		"contact": "hello@nothumansearch.ai",
 	})
@@ -316,7 +333,6 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 	}
 
 	params := &gostripe.CheckoutSessionParams{
-		PaymentMethodTypes: gostripe.StringSlice([]string{"card"}),
 		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: gostripe.String("usd"),
@@ -380,14 +396,31 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown product_id"})
 		return
 	}
-	mode := strings.TrimSpace(req.PaymentMode)
-	if mode == "" {
-		mode = "stripe_checkout"
+	mode := normalizeFixPaymentMode(req.PaymentMode)
+	if mode == "stripe_acp_spt" {
+		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
+			"error":         "spt_not_enabled",
+			"payment_mode":  req.PaymentMode,
+			"fallback_mode": "stripe_checkout",
+			"fallback_url":  h.BaseURL + "/fix/" + strings.TrimSpace(req.Host),
+			"note":          "Stripe ACP/SPT support is private-preview gated; use Checkout/Link fallback.",
+		})
+		return
 	}
-	if mode != "stripe_checkout" && mode != "stripe" {
+	if mode == "machine_payments_x402" {
+		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
+			"error":         "machine_payments_not_enabled",
+			"payment_mode":  req.PaymentMode,
+			"fallback_mode": "stripe_checkout",
+			"fallback_url":  h.BaseURL + "/fix/" + strings.TrimSpace(req.Host),
+			"note":          "No Stripe machine payments / x402 endpoint is deployed for Not Human Search.",
+		})
+		return
+	}
+	if mode != "stripe_checkout" {
 		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
 			"error":           "unsupported_payment_mode",
-			"supported_modes": []string{"stripe_checkout"},
+			"supported_modes": []string{"stripe_checkout", "stripe_link", "link"},
 			"fallback_url":    h.BaseURL + "/fix/" + strings.TrimSpace(req.Host),
 		})
 		return
@@ -459,7 +492,6 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := &gostripe.CheckoutSessionParams{
-		PaymentMethodTypes: gostripe.StringSlice([]string{"card"}),
 		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: gostripe.String("usd"),
