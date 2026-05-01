@@ -365,7 +365,7 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		Notes       string                 `json:"notes"`
 		Metadata    map[string]interface{} `json:"metadata"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&req); err != nil {
 		writeFixJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return
 	}
