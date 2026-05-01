@@ -57,6 +57,116 @@ func NewFixHandler(db *sql.DB, baseURL string) *FixHandler {
 	}
 }
 
+func writeFixJSON(w http.ResponseWriter, status int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
+	writeFixJSON(w, http.StatusOK, map[string]interface{}{
+		"seller": map[string]interface{}{
+			"id":            "nothumansearch",
+			"name":          "Not Human Search",
+			"url":           h.BaseURL,
+			"contact_email": "hello@nothumansearch.ai",
+		},
+		"version":  "2026-05-01",
+		"currency": "USD",
+		"agentic_payments": map[string]interface{}{
+			"ready":           true,
+			"supported_modes": []string{"stripe_checkout"},
+			"unsupported_modes": map[string]string{
+				"stripe_spt": "Stripe SPT payments are not generally available for this seller surface yet.",
+				"x402":       "No x402 endpoint is deployed for Not Human Search.",
+				"mpp":        "No Machine Payment Protocol endpoint is deployed for Not Human Search.",
+			},
+			"endpoints": map[string]string{
+				"catalog":  h.BaseURL + "/api/v1/catalog",
+				"quote":    h.BaseURL + "/api/v1/quote",
+				"checkout": h.BaseURL + "/api/v1/checkout",
+			},
+		},
+		"products": []map[string]interface{}{h.fixProduct()},
+	})
+}
+
+func (h *FixHandler) AgentJSON(w http.ResponseWriter, r *http.Request) {
+	writeFixJSON(w, http.StatusOK, map[string]interface{}{
+		"name":        "Not Human Search",
+		"description": "Search engine for agent-ready sites ranked by agentic readiness.",
+		"url":         h.BaseURL,
+		"capabilities": []string{
+			"agentic-readiness-search",
+			"mcp-server-discovery",
+			"geo-uplift-service",
+		},
+		"api": map[string]string{
+			"base_url": h.BaseURL + "/api/v1",
+			"openapi":  h.BaseURL + "/openapi.yaml",
+		},
+		"mcp": map[string]string{
+			"endpoint": h.BaseURL + "/mcp",
+			"manifest": h.BaseURL + "/.well-known/mcp.json",
+		},
+		"commerce": map[string]interface{}{
+			"manifest":                  h.BaseURL + "/.well-known/commerce.json",
+			"catalog":                   h.BaseURL + "/api/v1/catalog",
+			"quote":                     h.BaseURL + "/api/v1/quote",
+			"checkout":                  h.BaseURL + "/api/v1/checkout",
+			"payment_modes":             []string{"stripe_checkout"},
+			"agentic_payments_ready":    true,
+			"unsupported_payment_modes": []string{"stripe_spt", "x402", "mpp"},
+		},
+		"contact": "hello@nothumansearch.ai",
+	})
+}
+
+func (h *FixHandler) fixProduct() map[string]interface{} {
+	return map[string]interface{}{
+		"id":          "nhs_geo_fix_my_score",
+		"name":        "Fix my agent-readiness score",
+		"description": "Done-for-you GEO uplift pull request for one website.",
+		"type":        "one_time_service",
+		"price": map[string]interface{}{
+			"amount":   fixPriceCents,
+			"currency": "USD",
+			"display":  "$199 one-time",
+		},
+		"fulfillment": map[string]interface{}{
+			"turnaround_hours": 72,
+			"target_score":     "90+ after merge or refund",
+		},
+		"required_metadata": []string{"host", "email"},
+		"checkout": map[string]interface{}{
+			"mode":     "stripe_checkout",
+			"endpoint": h.BaseURL + "/api/v1/checkout",
+		},
+	}
+}
+
+func (h *FixHandler) CommerceCatalog(w http.ResponseWriter, r *http.Request) {
+	writeFixJSON(w, http.StatusOK, map[string]interface{}{
+		"seller":   "nothumansearch",
+		"currency": "USD",
+		"products": []map[string]interface{}{h.fixProduct()},
+	})
+}
+
+func (h *FixHandler) CommerceQuote(w http.ResponseWriter, r *http.Request) {
+	writeFixJSON(w, http.StatusOK, map[string]interface{}{
+		"seller":            "nothumansearch",
+		"product_id":        "nhs_geo_fix_my_score",
+		"currency":          "USD",
+		"amount":            fixPriceCents,
+		"total":             fixPriceCents,
+		"payment_mode":      "stripe_checkout",
+		"required_metadata": []string{"host", "email"},
+		"checkout_endpoint": h.BaseURL + "/api/v1/checkout",
+	})
+}
+
 // ServeHTTP routes /fix/{host} for GET (form) and POST (checkout).
 // /fix/success is handled by the separate handler below.
 func (h *FixHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -240,6 +350,157 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 		log.Printf("fix: SetGeoFixJobSession: %v", err)
 	}
 	http.Redirect(w, r, s.URL, http.StatusSeeOther)
+}
+
+// POST /api/v1/checkout — agent-readable Stripe Checkout creation for the
+// same fix-my-score product exposed at /fix/{host}.
+func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProductID   string                 `json:"product_id"`
+		ProductId   string                 `json:"productId"`
+		PaymentMode string                 `json:"payment_mode"`
+		Host        string                 `json:"host"`
+		Email       string                 `json:"email"`
+		RepoURL     string                 `json:"repo_url"`
+		Notes       string                 `json:"notes"`
+		Metadata    map[string]interface{} `json:"metadata"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeFixJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return
+	}
+	productID := strings.TrimSpace(req.ProductID)
+	if productID == "" {
+		productID = strings.TrimSpace(req.ProductId)
+	}
+	if productID == "" {
+		productID = "nhs_geo_fix_my_score"
+	}
+	if productID != "nhs_geo_fix_my_score" {
+		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown product_id"})
+		return
+	}
+	mode := strings.TrimSpace(req.PaymentMode)
+	if mode == "" {
+		mode = "stripe_checkout"
+	}
+	if mode != "stripe_checkout" && mode != "stripe" {
+		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
+			"error":           "unsupported_payment_mode",
+			"supported_modes": []string{"stripe_checkout"},
+			"fallback_url":    h.BaseURL + "/fix/" + strings.TrimSpace(req.Host),
+		})
+		return
+	}
+	if req.Host == "" && req.Metadata != nil {
+		if value, ok := req.Metadata["host"].(string); ok {
+			req.Host = value
+		}
+	}
+	if req.Email == "" && req.Metadata != nil {
+		if value, ok := req.Metadata["email"].(string); ok {
+			req.Email = value
+		}
+	}
+	host := strings.ToLower(strings.TrimSpace(req.Host))
+	host = strings.TrimPrefix(host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.Trim(host, "/")
+	email := strings.TrimSpace(req.Email)
+	repoURL := strings.TrimSpace(req.RepoURL)
+	notes := strings.TrimSpace(req.Notes)
+	if host == "" {
+		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing host", "required_metadata": []string{"host", "email"}})
+		return
+	}
+	if email == "" || !strings.Contains(email, "@") {
+		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "valid email required", "required_metadata": []string{"host", "email"}})
+		return
+	}
+	if _, err := models.GetSiteByDomain(h.DB, host); err != nil {
+		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown host"})
+		return
+	}
+
+	j := &models.GeoFixJob{
+		Host:       host,
+		Email:      email,
+		PriceCents: fixPriceCents,
+		Currency:   "usd",
+		Status:     "pending",
+	}
+	if repoURL != "" {
+		j.RepoURL = &repoURL
+	}
+	if notes != "" {
+		j.Notes = &notes
+	}
+	if err := models.CreateGeoFixJob(h.DB, j); err != nil {
+		log.Printf("fix: agentic CreateGeoFixJob: %v", err)
+		writeFixJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not record intake"})
+		return
+	}
+
+	if gostripe.Key == "" {
+		if _, err := h.DB.Exec(`UPDATE geo_fix_jobs SET status='lead', updated_at=NOW() WHERE id=$1`, j.ID); err != nil {
+			log.Printf("fix: mark agentic lead: %v", err)
+		}
+		notify.DiscordAsync(fmt.Sprintf("📥 **NHS fix-my-score lead** — %s · %s · $%d (Stripe not configured — follow up manually)",
+			host, email, fixPriceCents/100))
+		writeFixJSON(w, http.StatusAccepted, map[string]interface{}{
+			"seller":       "nothumansearch",
+			"product_id":   "nhs_geo_fix_my_score",
+			"status":       "lead_recorded",
+			"payment_mode": "stripe_checkout",
+			"job_id":       j.ID,
+			"message":      "Stripe is not configured; intake was recorded for manual invoice follow-up.",
+		})
+		return
+	}
+
+	params := &gostripe.CheckoutSessionParams{
+		PaymentMethodTypes: gostripe.StringSlice([]string{"card"}),
+		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
+			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
+				Currency: gostripe.String("usd"),
+				ProductData: &gostripe.CheckoutSessionLineItemPriceDataProductDataParams{
+					Name:        gostripe.String("NHS Agent-Readiness Uplift"),
+					Description: gostripe.String(fmt.Sprintf("Done-for-you GEO uplift PR for %s — target score 95+", host)),
+				},
+				UnitAmount: gostripe.Int64(int64(fixPriceCents)),
+			},
+			Quantity: gostripe.Int64(1),
+		}},
+		Mode:          gostripe.String(string(gostripe.CheckoutSessionModePayment)),
+		SuccessURL:    gostripe.String(h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:     gostripe.String(h.BaseURL + "/fix/" + host),
+		CustomerEmail: gostripe.String(email),
+		Metadata: map[string]string{
+			"product":  "nhs_fix_my_score",
+			"host":     host,
+			"email":    email,
+			"job_id":   strconv.FormatInt(j.ID, 10),
+			"repo_url": repoURL,
+		},
+	}
+	s, err := session.New(params)
+	if err != nil {
+		log.Printf("fix: agentic session.New: %v", err)
+		writeFixJSON(w, http.StatusBadGateway, map[string]string{"error": "checkout unavailable"})
+		return
+	}
+	if err := models.SetGeoFixJobSession(h.DB, j.ID, s.ID); err != nil {
+		log.Printf("fix: agentic SetGeoFixJobSession: %v", err)
+	}
+	writeFixJSON(w, http.StatusCreated, map[string]interface{}{
+		"seller":            "nothumansearch",
+		"product_id":        "nhs_geo_fix_my_score",
+		"status":            "requires_customer_action",
+		"payment_mode":      "stripe_checkout",
+		"checkout_url":      s.URL,
+		"stripe_session_id": s.ID,
+		"job_id":            j.ID,
+	})
 }
 
 // GET /fix/success — friendly thank-you page. If ?lead=1 we haven't charged

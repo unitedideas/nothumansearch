@@ -86,24 +86,27 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.writeJSON(w, 200, map[string]any{
-		"$schema":             "https://schema.org/WebAPI",
-		"name":                "Not Human Search API v1",
-		"description":         "Search engine for agent-ready sites ranked by agentic readiness score (0-100).",
-		"version":             "1.0.0",
-		"base_url":            "https://nothumansearch.ai/api/v1",
-		"openapi_spec":        "https://nothumansearch.ai/openapi.yaml",
-		"ai_plugin_manifest":  "https://nothumansearch.ai/.well-known/ai-plugin.json",
-		"mcp_endpoint":        "https://nothumansearch.ai/mcp",
+		"$schema":            "https://schema.org/WebAPI",
+		"name":               "Not Human Search API v1",
+		"description":        "Search engine for agent-ready sites ranked by agentic readiness score (0-100).",
+		"version":            "1.0.0",
+		"base_url":           "https://nothumansearch.ai/api/v1",
+		"openapi_spec":       "https://nothumansearch.ai/openapi.yaml",
+		"ai_plugin_manifest": "https://nothumansearch.ai/.well-known/ai-plugin.json",
+		"mcp_endpoint":       "https://nothumansearch.ai/mcp",
 		"endpoints": map[string]string{
-			"search":           "GET /api/v1/search?q=&category=&tag=&min_score=&has_api=&has_mcp=&has_openapi=&has_llms_txt=&page=",
-			"site":             "GET /api/v1/site/{domain}",
-			"submit":           "POST /api/v1/submit",
-			"stats":            "GET /api/v1/stats",
-			"top":              "GET /api/v1/top?category=&has_mcp=&has_openapi=&has_llms_txt=&limit=",
-			"categories":       "GET /api/v1/categories",
-			"check":            "GET /api/v1/check?url=",
-			"verify_mcp":       "GET /api/v1/verify-mcp?url=",
-			"monitor_register": "POST /api/v1/monitor/register",
+			"search":            "GET /api/v1/search?q=&category=&tag=&min_score=&has_api=&has_mcp=&has_openapi=&has_llms_txt=&page=",
+			"site":              "GET /api/v1/site/{domain}",
+			"submit":            "POST /api/v1/submit",
+			"stats":             "GET /api/v1/stats",
+			"top":               "GET /api/v1/top?category=&has_mcp=&has_openapi=&has_llms_txt=&limit=",
+			"categories":        "GET /api/v1/categories",
+			"check":             "GET /api/v1/check?url=",
+			"verify_mcp":        "GET /api/v1/verify-mcp?url=",
+			"commerce_catalog":  "GET /api/v1/catalog",
+			"commerce_quote":    "POST /api/v1/quote",
+			"commerce_checkout": "POST /api/v1/checkout",
+			"monitor_register":  "POST /api/v1/monitor/register",
 		},
 		"auth":       "none",
 		"rate_limit": "60 req/min per IP",
@@ -313,11 +316,11 @@ func (h *APIHandler) Top(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	h.writeJSON(w, 200, map[string]interface{}{
-		"results":      sites,
-		"total":        total,
-		"limit":        limit,
-		"source":       "https://nothumansearch.ai",
-		"description":  "Highest-scored agent-ready sites, sorted by agentic readiness. Free, public, no auth.",
+		"results":     sites,
+		"total":       total,
+		"limit":       limit,
+		"source":      "https://nothumansearch.ai",
+		"description": "Highest-scored agent-ready sites, sorted by agentic readiness. Free, public, no auth.",
 	})
 }
 

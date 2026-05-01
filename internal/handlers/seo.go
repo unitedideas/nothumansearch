@@ -447,6 +447,43 @@ paths:
                   ai_plugin_manifest: { type: string }
                   mcp_endpoint:       { type: string }
                   endpoints:          { type: object, additionalProperties: { type: string } }
+  /catalog:
+    get:
+      summary: Agent-readable commerce catalog
+      operationId: getCommerceCatalog
+      responses:
+        "200":
+          description: Catalog for the fix-my-score service
+  /quote:
+    post:
+      summary: Create a deterministic quote
+      operationId: createCommerceQuote
+      responses:
+        "200":
+          description: Quote with amount, total, currency, and required checkout metadata
+  /checkout:
+    post:
+      summary: Create a Stripe Checkout URL for a GEO uplift order
+      operationId: createCommerceCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [host, email]
+              properties:
+                product_id:   { type: string, default: nhs_geo_fix_my_score }
+                payment_mode: { type: string, enum: [stripe_checkout, stripe] }
+                host:         { type: string }
+                email:        { type: string, format: email }
+                repo_url:     { type: string }
+                notes:        { type: string }
+      responses:
+        "201":
+          description: Stripe Checkout URL
+        "501":
+          description: Requested payment mode is not supported
   /categories:
     get:
       summary: Get all category buckets and their counts

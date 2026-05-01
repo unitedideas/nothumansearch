@@ -164,6 +164,8 @@ func main() {
 	mux.HandleFunc("/.well-known/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/.well-known/ai-plugin.json", seoHandler.AIPluginManifest)
 	mux.HandleFunc("/.well-known/mcp.json", seoHandler.MCPManifest)
+	mux.HandleFunc("/.well-known/agent.json", fixHandler.AgentJSON)
+	mux.HandleFunc("/.well-known/commerce.json", fixHandler.CommerceManifest)
 	mux.HandleFunc("/.well-known/glama.json", seoHandler.GlamaManifest)
 	mux.HandleFunc("/.well-known/security.txt", seoHandler.SecurityTxt)
 	mux.HandleFunc("/security.txt", seoHandler.SecurityTxt)
@@ -258,6 +260,10 @@ func main() {
 
 	// API
 	mux.HandleFunc("/api/v1", apiHandler.Index)
+	mux.HandleFunc("/api/v1/catalog", fixHandler.CommerceCatalog)
+	mux.HandleFunc("/api/v1/products", fixHandler.CommerceCatalog)
+	mux.HandleFunc("/api/v1/quote", fixHandler.CommerceQuote)
+	mux.HandleFunc("/api/v1/checkout", fixHandler.AgenticCheckout)
 	mux.HandleFunc("/api/v1/search", apiHandler.Search)
 	mux.HandleFunc("/api/v1/site/", apiHandler.GetSite)
 	mux.HandleFunc("/api/v1/sites/", apiHandler.GetSite)
