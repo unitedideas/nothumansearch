@@ -15,15 +15,18 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
 	"github.com/unitedideas/nothumansearch/internal/notify"
@@ -68,8 +71,10 @@ func normalizeFixPaymentMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case "", "stripe", "stripe_checkout", "stripe_link", "link":
 		return "stripe_checkout"
-	case "spt", "stripe_spt", "shared_payment_token", "stripe_acp", "acp", "agentic_checkout", "agentic_commerce":
+	case "spt", "stripe_spt", "shared_payment_token", "agentic_checkout", "agentic_commerce":
 		return "stripe_acp_spt"
+	case "stripe_acp", "acp":
+		return "unsupported"
 	case "mpp", "x402", "mpp_x402", "machine_payments", "machine_payments_x402", "stripe_machine_payments":
 		return "machine_payments_x402"
 	default:
@@ -89,15 +94,15 @@ func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 		"currency": "USD",
 		"agentic_payments": map[string]interface{}{
 			"ready":           true,
-			"supported_modes": []string{"stripe_checkout", "stripe_link", "link"},
+			"supported_modes": []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
 			"unsupported_modes": map[string]string{
 				"stripe_acp": "Stripe Agentic Commerce Protocol is private-preview gated for this seller surface.",
-				"stripe_spt": "Stripe Shared Payment Tokens are private-preview gated for this seller surface.",
 				"x402":       "No Stripe machine payments / x402 endpoint is deployed for Not Human Search.",
 				"mpp":        "No machine-payment endpoint is deployed for Not Human Search.",
 			},
+			"stripe_spt":               "Supported for the one-time GEO uplift product. Submit a Link-issued shared_payment_granted_token to /api/v1/checkout.",
 			"link":                     "Available inside Stripe Checkout when enabled on the Stripe account.",
-			"private_preview_required": []string{"stripe_acp", "stripe_spt", "x402"},
+			"private_preview_required": []string{"stripe_acp", "x402"},
 			"endpoints": map[string]string{
 				"catalog":  h.BaseURL + "/api/v1/catalog",
 				"quote":    h.BaseURL + "/api/v1/quote",
@@ -131,10 +136,10 @@ func (h *FixHandler) AgentJSON(w http.ResponseWriter, r *http.Request) {
 			"catalog":                   h.BaseURL + "/api/v1/catalog",
 			"quote":                     h.BaseURL + "/api/v1/quote",
 			"checkout":                  h.BaseURL + "/api/v1/checkout",
-			"payment_modes":             []string{"stripe_checkout", "stripe_link", "link"},
+			"payment_modes":             []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
 			"agentic_payments_ready":    true,
-			"unsupported_payment_modes": []string{"stripe_acp", "stripe_spt", "x402", "mpp"},
-			"private_preview_required":  []string{"stripe_acp", "stripe_spt", "x402"},
+			"unsupported_payment_modes": []string{"stripe_acp", "x402", "mpp"},
+			"private_preview_required":  []string{"stripe_acp", "x402"},
 		},
 		"contact": "hello@nothumansearch.ai",
 	})
@@ -157,8 +162,9 @@ func (h *FixHandler) fixProduct() map[string]interface{} {
 		},
 		"required_metadata": []string{"host", "email"},
 		"checkout": map[string]interface{}{
-			"mode":     "stripe_checkout",
-			"endpoint": h.BaseURL + "/api/v1/checkout",
+			"mode":            "stripe_checkout",
+			"endpoint":        h.BaseURL + "/api/v1/checkout",
+			"supported_modes": []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
 		},
 	}
 }
@@ -375,6 +381,8 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		ProductID   string                 `json:"product_id"`
 		ProductId   string                 `json:"productId"`
 		PaymentMode string                 `json:"payment_mode"`
+		SPT         string                 `json:"shared_payment_granted_token"`
+		BuyerEmail  string                 `json:"buyer_email"`
 		Host        string                 `json:"host"`
 		Email       string                 `json:"email"`
 		RepoURL     string                 `json:"repo_url"`
@@ -397,16 +405,6 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	mode := normalizeFixPaymentMode(req.PaymentMode)
-	if mode == "stripe_acp_spt" {
-		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
-			"error":         "spt_not_enabled",
-			"payment_mode":  req.PaymentMode,
-			"fallback_mode": "stripe_checkout",
-			"fallback_url":  h.BaseURL + "/fix/" + strings.TrimSpace(req.Host),
-			"note":          "Stripe ACP/SPT support is private-preview gated; use Checkout/Link fallback.",
-		})
-		return
-	}
 	if mode == "machine_payments_x402" {
 		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
 			"error":         "machine_payments_not_enabled",
@@ -417,10 +415,10 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	if mode != "stripe_checkout" {
+	if mode != "stripe_checkout" && mode != "stripe_acp_spt" {
 		writeFixJSON(w, http.StatusNotImplemented, map[string]interface{}{
 			"error":           "unsupported_payment_mode",
-			"supported_modes": []string{"stripe_checkout", "stripe_link", "link"},
+			"supported_modes": []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
 			"fallback_url":    h.BaseURL + "/fix/" + strings.TrimSpace(req.Host),
 		})
 		return
@@ -433,6 +431,19 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 	if req.Email == "" && req.Metadata != nil {
 		if value, ok := req.Metadata["email"].(string); ok {
 			req.Email = value
+		}
+	}
+	if req.SPT == "" && req.Metadata != nil {
+		if value, ok := req.Metadata["shared_payment_granted_token"].(string); ok {
+			req.SPT = value
+		}
+	}
+	if req.BuyerEmail == "" {
+		req.BuyerEmail = req.Email
+	}
+	if req.BuyerEmail == "" && req.Metadata != nil {
+		if value, ok := req.Metadata["buyer_email"].(string); ok {
+			req.BuyerEmail = value
 		}
 	}
 	host := strings.ToLower(strings.TrimSpace(req.Host))
@@ -471,6 +482,12 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 	if err := models.CreateGeoFixJob(h.DB, j); err != nil {
 		log.Printf("fix: agentic CreateGeoFixJob: %v", err)
 		writeFixJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not record intake"})
+		return
+	}
+	if mode == "stripe_acp_spt" {
+		if err := h.settleFixWithSPT(w, j, strings.TrimSpace(req.SPT), strings.TrimSpace(req.BuyerEmail)); err != nil {
+			log.Printf("fix: spt settlement: %v", err)
+		}
 		return
 	}
 
@@ -533,6 +550,116 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		"stripe_session_id": s.ID,
 		"job_id":            j.ID,
 	})
+}
+
+func (h *FixHandler) settleFixWithSPT(w http.ResponseWriter, j *models.GeoFixJob, spt, buyerEmail string) error {
+	if spt == "" || !strings.HasPrefix(spt, "spt_") {
+		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing shared_payment_granted_token", "payment_mode": "stripe_spt"})
+		return nil
+	}
+	if buyerEmail == "" || !strings.Contains(buyerEmail, "@") {
+		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "valid buyer_email required", "payment_mode": "stripe_spt"})
+		return nil
+	}
+	pi, err := confirmSharedPaymentToken(fixPriceCents, "usd", spt, "NHS Agent-Readiness Uplift", map[string]string{
+		"seller":      "nothumansearch",
+		"product":     "nhs_fix_my_score",
+		"host":        j.Host,
+		"job_id":      strconv.FormatInt(j.ID, 10),
+		"buyer_email": buyerEmail,
+	})
+	if err != nil {
+		writeFixJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+			"error":         "spt_settlement_failed",
+			"payment_mode":  "stripe_spt",
+			"message":       err.Error(),
+			"fallback_mode": "stripe_checkout",
+			"fallback_url":  h.BaseURL + "/fix/" + url.PathEscape(j.Host),
+			"job_id":        j.ID,
+		})
+		return err
+	}
+	if err := models.SetGeoFixJobSession(h.DB, j.ID, pi.ID); err != nil {
+		writeFixJSON(w, http.StatusInternalServerError, map[string]string{"error": "payment recorded at Stripe but local session update failed"})
+		return err
+	}
+	paid, err := models.MarkGeoFixJobPaid(h.DB, pi.ID)
+	if err != nil {
+		writeFixJSON(w, http.StatusInternalServerError, map[string]string{"error": "payment recorded at Stripe but local paid update failed"})
+		return err
+	}
+	notify.DiscordAsync(fmt.Sprintf("💳 **NHS fix-my-score SPT paid** — %s · %s · $%d · PI %s", paid.Host, paid.Email, fixPriceCents/100, pi.ID))
+	writeFixJSON(w, http.StatusCreated, map[string]interface{}{
+		"seller":                   "nothumansearch",
+		"product_id":               "nhs_geo_fix_my_score",
+		"status":                   "paid",
+		"payment_mode":             "stripe_spt",
+		"stripe_payment_intent_id": pi.ID,
+		"job_id":                   paid.ID,
+		"message":                  "GEO uplift order paid and recorded",
+	})
+	return nil
+}
+
+type sptPaymentIntent struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+func confirmSharedPaymentToken(amount int, currency, spt, description string, metadata map[string]string) (*sptPaymentIntent, error) {
+	key := os.Getenv("STRIPE_SPT_SECRET_KEY")
+	if key == "" {
+		key = os.Getenv("STRIPE_SECRET_KEY")
+	}
+	if key == "" {
+		return nil, fmt.Errorf("STRIPE_SPT_SECRET_KEY is not configured")
+	}
+	values := url.Values{}
+	values.Set("amount", fmt.Sprintf("%d", amount))
+	values.Set("currency", strings.ToLower(currency))
+	values.Set("confirm", "true")
+	values.Set("payment_method_data[shared_payment_granted_token]", spt)
+	if description != "" {
+		values.Set("description", description)
+	}
+	for k, v := range metadata {
+		if strings.TrimSpace(v) != "" {
+			values.Set("metadata["+k+"]", v)
+		}
+	}
+	req, err := http.NewRequest(http.MethodPost, "https://api.stripe.com/v1/payment_intents", bytes.NewBufferString(values.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(key, "")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Stripe-Version", "2026-02-25.clover")
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		var payload struct {
+			Error struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(body, &payload) == nil && payload.Error.Message != "" {
+			return nil, fmt.Errorf("stripe error: %s", payload.Error.Message)
+		}
+		return nil, fmt.Errorf("stripe error: status %d", resp.StatusCode)
+	}
+	var pi sptPaymentIntent
+	if err := json.Unmarshal(body, &pi); err != nil {
+		return nil, err
+	}
+	if pi.Status != "succeeded" {
+		return nil, fmt.Errorf("payment_intent status %s", pi.Status)
+	}
+	return &pi, nil
 }
 
 // GET /fix/success — friendly thank-you page. If ?lead=1 we haven't charged
