@@ -98,6 +98,14 @@
 
         /* Search */
         .search-box { position:relative; max-width:640px; margin:0 auto 40px; }
+        .field-label {
+            display:block; color:var(--text); font-size:13px; font-weight:600;
+            margin-bottom:8px; text-align:left;
+        }
+        .field-help {
+            color:var(--text-muted); font-size:12px; line-height:1.5; margin-top:7px;
+            text-align:left;
+        }
         .search-box input {
             width:100%; padding:16px 20px; padding-right:120px;
             background:var(--surface); border:1px solid var(--border);
@@ -118,7 +126,8 @@
         /* Example queries */
         .example-queries {
             text-align:center; margin:-24px auto 32px; font-size:13px; color:var(--text-muted);
-            max-width:900px; white-space:nowrap; overflow-x:auto;
+            max-width:900px; display:flex; gap:6px; align-items:center; justify-content:center;
+            flex-wrap:wrap;
         }
         .example-queries a {
             color:var(--accent); text-decoration:none; padding:3px 10px;
@@ -184,6 +193,18 @@
         .score-badge.high { background:#1a2e1a; color:var(--green); }
         .score-badge.medium { background:#2e2a1a; color:var(--yellow); }
         .score-badge.low { background:#2e1a1a; color:var(--red); }
+        .score-stack {
+            flex-shrink:0; width:132px; display:flex; flex-direction:column;
+            align-items:flex-end; gap:8px;
+        }
+        .score-reasons {
+            color:var(--text-muted); font-size:11px; line-height:1.35; text-align:right;
+        }
+        .score-reasons span {
+            display:block; font-family:'IBM Plex Mono',monospace;
+        }
+        .score-reasons .found { color:var(--green); }
+        .score-reasons .missing { color:var(--text-muted); }
 
         /* Pagination */
         .pagination { text-align:center; margin:32px 0; }
@@ -210,6 +231,36 @@
             display:inline-block; background:var(--bg); padding:8px 16px;
             border-radius:4px; font-family:'IBM Plex Mono',monospace;
             font-size:13px; color:var(--green); margin-top:12px;
+        }
+        .primary-actions {
+            max-width:640px; margin:-22px auto 32px; display:flex; justify-content:center;
+            gap:10px; flex-wrap:wrap;
+        }
+        .primary-actions a {
+            display:inline-flex; align-items:center; justify-content:center;
+            min-height:42px; padding:10px 16px; border-radius:6px;
+            font-weight:600; font-size:14px; text-decoration:none;
+        }
+        .primary-actions .primary-link { background:var(--accent); color:var(--bg); }
+        .primary-actions .secondary-link {
+            background:var(--surface); color:var(--accent); border:1px solid rgba(217,119,87,0.35);
+        }
+        .submit-fields { display:flex; gap:8px; max-width:520px; margin:16px auto 0; align-items:flex-start; }
+        .submit-fields .submit-input-wrap { flex:1; min-width:0; }
+        @media (max-width: 640px) {
+            header { padding-top:32px; }
+            .stats { gap:20px; flex-wrap:wrap; }
+            .search-box { margin-bottom:36px; }
+            .search-box input { padding-right:20px; }
+            .search-box button { position:static; width:100%; min-height:44px; margin-top:8px; }
+            .site-card { display:grid; grid-template-columns:32px 1fr; gap:12px; }
+            .score-stack {
+                grid-column:2; width:100%; align-items:flex-start; flex-direction:row;
+                justify-content:space-between; gap:12px;
+            }
+            .score-reasons { text-align:left; flex:1; }
+            .submit-fields { flex-direction:column; }
+            .submit-fields .submit-input-wrap, .submit-fields button { width:100%; }
         }
     </style>
 </head>
@@ -239,17 +290,16 @@
 
         {{if not .Heading}}
         <form class="search-box" method="GET" action="/">
-            <input type="text" name="q" value="{{.Query}}" placeholder="What does your agent need? e.g. payment API, AI jobs, weather data..." autofocus>
+            <label class="field-label" for="site-search">Search agent-ready services</label>
+            <input id="site-search" type="text" name="q" value="{{.Query}}" placeholder="payment API, AI jobs, weather data" aria-describedby="site-search-help" autofocus>
             <button type="submit">Search</button>
+            <div class="field-help" id="site-search-help">Search by category, protocol, or job your agent needs to complete.</div>
         </form>
-        {{end}}
-
-        <div style="max-width:640px;margin:-16px auto 32px;padding:12px 16px;background:linear-gradient(135deg, rgba(217,119,87,0.10) 0%, rgba(217,119,87,0.02) 100%);border:1px solid rgba(217,119,87,0.35);border-radius:6px;text-align:center;">
-            <div style="color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;">Wire into your agent — one line</div>
-            <code style="display:block;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);word-break:break-all;">curl -fsSL https://nothumansearch.ai/install | sh</code>
-            <code style="display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-muted);word-break:break-all;margin-top:4px;">curl -fsSL https://aidevboard.com/install | sh   <span style="color:var(--text-muted);font-family:inherit;">(companion: 8,400+ AI/ML jobs)</span></code>
-            <div style="color:var(--text-muted);font-size:10px;margin-top:6px;">Runs <code style="color:var(--text-muted);background:transparent;">claude mcp add</code> if Claude Code is installed. Prints Cursor/Cline/Continue snippets otherwise.</div>
+        <div class="primary-actions" aria-label="Primary actions">
+            <a class="primary-link" href="/score">Score Your Site</a>
+            <a class="secondary-link" href="/guide">Improve a score</a>
         </div>
+        {{end}}
 
         {{if not .Heading}}
         <div class="example-queries">
@@ -284,10 +334,10 @@
             <div class="site-favicon-fallback">{{initial .Domain}}</div>
             {{end}}
             <div class="site-info">
-                <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{.Name}}{{else}}{{.Domain}}{{end}}</a>
+                <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
                 {{if .IsFeatured}} <span style="color:var(--accent);font-size:11px;font-weight:600;">FEATURED</span>{{end}}
                 <div class="site-domain">{{.Domain}}</div>
-                {{if .Description}}<div class="site-desc">{{.Description}}</div>{{end}}
+                {{if .Description}}<div class="site-desc">{{displayText .Description}}</div>{{end}}
                 <div class="site-badges">
                     {{if .HasLLMsTxt}}<span class="badge badge-signal">llms.txt</span>{{end}}
                     {{if .HasAIPlugin}}<span class="badge badge-signal">ai-plugin</span>{{end}}
@@ -299,7 +349,16 @@
                     <span class="badge badge-category">{{.Category}}</span>
                 </div>
             </div>
-            <div class="score-badge {{scoreClass .AgenticScore}}">{{.AgenticScore}}</div>
+            <div class="score-stack" aria-label="Score explanation">
+                <div class="score-badge {{scoreClass .AgenticScore}}">{{.AgenticScore}}</div>
+                <div class="score-reasons">
+                    {{range scoreReasons .}}
+                    <span class="{{if .Found}}found{{else}}missing{{end}}">{{if .Found}}+{{else}}missing +{{end}}{{.Points}} {{.Label}}</span>
+                    {{else}}
+                    <span class="missing">Score source unavailable</span>
+                    {{end}}
+                </div>
+            </div>
         </div>
         {{end}}
 
@@ -323,7 +382,7 @@
         </div>
         {{end}}
 
-        <div class="cta-box" style="text-align:left;background:linear-gradient(135deg, rgba(217,119,87,0.10) 0%, rgba(217,119,87,0.02) 100%);border-color:rgba(217,119,87,0.35);">
+        <div class="cta-box" style="text-align:left;">
             <h3>Wire NHS into your agent &mdash; MCP server</h3>
             <p>Add Not Human Search as an MCP tool. Your agent can call <code style="color:var(--accent);font-family:'IBM Plex Mono',monospace;">search_agents</code>, <code style="color:var(--accent);font-family:'IBM Plex Mono',monospace;">get_site_details</code>, <code style="color:var(--accent);font-family:'IBM Plex Mono',monospace;">get_stats</code>, and <code style="color:var(--accent);font-family:'IBM Plex Mono',monospace;">submit_site</code> at runtime.</p>
             <div style="margin-top:14px;">
@@ -359,19 +418,23 @@
             <script src="https://aidevboard.com/static/widget.js" async></script>
         </div>
 
-        <div class="cta-box" style="background:linear-gradient(135deg, rgba(217,119,87,0.08) 0%, rgba(217,119,87,0.02) 100%);border-color:rgba(217,119,87,0.3);">
+        <div class="cta-box">
             <h3>Free: Monitor Your Agentic Readiness</h3>
             <p>We'll email you when your site's agent signals regress &mdash; so you catch it before your AI traffic drops. One email per week, only on real regressions.</p>
-            <a href="/monitor" style="display:inline-block;margin-top:14px;padding:10px 24px;background:var(--accent);color:var(--bg);border-radius:6px;font-weight:600;font-size:14px;text-decoration:none;">Set up free monitoring &rarr;</a>
+            <a href="/monitor" style="display:inline-block;margin-top:14px;padding:10px 18px;background:var(--surface);color:var(--accent);border:1px solid rgba(217,119,87,0.35);border-radius:6px;font-weight:600;font-size:14px;text-decoration:none;">Set up free monitoring &rarr;</a>
         </div>
 
         <div class="cta-box" id="submit">
             <h3>Submit Your Site</h3>
             <p>Get crawled and scored on agentic readiness. Appear in agent search results.</p>
-            <form id="submit-form" style="display:flex;gap:8px;max-width:480px;margin:16px auto 0;align-items:center;">
-                <input id="submit-url" type="url" placeholder="https://example.com" required
+            <form id="submit-form" class="submit-fields">
+                <div class="submit-input-wrap">
+                    <label class="field-label" for="submit-url">Site URL</label>
+                    <input id="submit-url" type="url" placeholder="https://example.com" aria-describedby="submit-url-help" required
                     style="flex:1;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:'IBM Plex Mono',monospace;outline:none;">
-                <button type="submit" style="padding:10px 20px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:600;font-size:14px;cursor:pointer;">Submit</button>
+                    <div class="field-help" id="submit-url-help">Use the public homepage. NHS checks standard paths like <code>/llms.txt</code>, OpenAPI, MCP, robots, and schema.</div>
+                </div>
+                <button type="submit" style="padding:10px 20px;margin-top:25px;background:var(--accent);color:var(--bg);border:none;border-radius:6px;font-weight:600;font-size:14px;cursor:pointer;">Submit</button>
             </form>
             <div id="submit-msg" style="margin-top:10px;font-size:13px;"></div>
         </div>

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"html/template"
 	"log"
 	"net/http"
@@ -34,6 +35,16 @@ func NewDigestHandler(db *sql.DB, baseURL, templatesDir string) (*DigestHandler,
 			return fmt.Sprintf("%.1f", float64(part)*100.0/float64(total))
 		},
 		"add": func(a, b int) int { return a + b },
+		"displayText": func(s string) string {
+			for i := 0; i < 3; i++ {
+				next := html.UnescapeString(s)
+				if next == s {
+					return next
+				}
+				s = next
+			}
+			return s
+		},
 		"scoreClass": func(score int) string {
 			if score >= 70 {
 				return "high"
@@ -236,28 +247,28 @@ func (h *DigestHandler) JSONHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"generated_at":      d.GeneratedAt.Format(time.RFC3339),
-		"week_start":        d.WeekStart.Format(time.RFC3339),
-		"new_mcp_servers":   d.NewMCP,
-		"top_mcp_servers":   d.TopMCP,
-		"categories":        d.Categories,
-		"submissions_week":  d.SubmissionsWeek,
-		"total_sites":       d.TotalSites,
-		"mcp_verified":      d.MCPVerified,
-		"llms_txt_count":    d.LlmsTxtCount,
-		"openapi_count":     d.OpenAPICount,
-		"pct_mcp":           d.PctMCP,
-		"pct_llms_txt":      d.PctLlmsTxt,
-		"pct_openapi":       d.PctOpenAPI,
-		"canonical_url":     d.Canonical,
+		"generated_at":     d.GeneratedAt.Format(time.RFC3339),
+		"week_start":       d.WeekStart.Format(time.RFC3339),
+		"new_mcp_servers":  d.NewMCP,
+		"top_mcp_servers":  d.TopMCP,
+		"categories":       d.Categories,
+		"submissions_week": d.SubmissionsWeek,
+		"total_sites":      d.TotalSites,
+		"mcp_verified":     d.MCPVerified,
+		"llms_txt_count":   d.LlmsTxtCount,
+		"openapi_count":    d.OpenAPICount,
+		"pct_mcp":          d.PctMCP,
+		"pct_llms_txt":     d.PctLlmsTxt,
+		"pct_openapi":      d.PctOpenAPI,
+		"canonical_url":    d.Canonical,
 	})
 }
 
 // RSS types for the digest feed. One <item> per "new MCP server of the week".
 type digestRSS struct {
-	XMLName xml.Name        `xml:"rss"`
-	Version string          `xml:"version,attr"`
-	Atom    string          `xml:"xmlns:atom,attr"`
+	XMLName xml.Name         `xml:"rss"`
+	Version string           `xml:"version,attr"`
+	Atom    string           `xml:"xmlns:atom,attr"`
 	Channel digestRSSChannel `xml:"channel"`
 }
 

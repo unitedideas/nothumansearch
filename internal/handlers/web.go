@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"html"
 	"html/template"
 	"log"
 	"net/http"
@@ -16,6 +17,12 @@ import (
 type WebHandler struct {
 	DB   *sql.DB
 	tmpl *template.Template
+}
+
+type scoreReason struct {
+	Label  string
+	Points int
+	Found  bool
 }
 
 func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
@@ -38,9 +45,58 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 			}
 			return "Basic"
 		},
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
-		"tof": func(a int) float64 { return float64(a) },
+		"displayText": func(s string) string {
+			for i := 0; i < 3; i++ {
+				next := html.UnescapeString(s)
+				if next == s {
+					return next
+				}
+				s = next
+			}
+			return s
+		},
+		"scoreReasons": func(v any) []scoreReason {
+			var s models.Site
+			switch site := v.(type) {
+			case models.Site:
+				s = site
+			case *models.Site:
+				if site == nil {
+					return nil
+				}
+				s = *site
+			default:
+				return nil
+			}
+			reasons := []scoreReason{
+				{Label: "llms.txt", Points: models.ScoreLLMsTxt, Found: s.HasLLMsTxt},
+				{Label: "ai-plugin", Points: models.ScoreAIPlugin, Found: s.HasAIPlugin},
+				{Label: "OpenAPI", Points: models.ScoreOpenAPI, Found: s.HasOpenAPI},
+				{Label: "structured API", Points: models.ScoreStructuredAPI, Found: s.HasStructuredAPI},
+				{Label: "MCP", Points: models.ScoreMCPServer, Found: s.HasMCPServer},
+				{Label: "AI robots", Points: models.ScoreRobotsAI, Found: s.HasRobotsAI},
+				{Label: "Schema.org", Points: models.ScoreSchemaOrg, Found: s.HasSchemaOrg},
+			}
+			out := make([]scoreReason, 0, 3)
+			for _, r := range reasons {
+				if r.Found {
+					out = append(out, r)
+					if len(out) == 2 {
+						break
+					}
+				}
+			}
+			for _, r := range reasons {
+				if !r.Found {
+					out = append(out, r)
+					break
+				}
+			}
+			return out
+		},
+		"add":  func(a, b int) int { return a + b },
+		"sub":  func(a, b int) int { return a - b },
+		"tof":  func(a int) float64 { return float64(a) },
 		"mulf": func(a, b float64) float64 { return a * b },
 		"divf": func(a, b float64) float64 {
 			if b == 0 {
@@ -517,7 +573,7 @@ type ReportData struct {
 	HighScore   int
 	MediumScore int
 	AvgScore    float64
-	LlmsTxt    int
+	LlmsTxt     int
 	OpenAPI     int
 	AIPlugin    int
 	API         int
@@ -536,8 +592,8 @@ type CategoryStat struct {
 }
 
 type TopSite struct {
-	Domain string
-	Score  int
+	Domain   string
+	Score    int
 	Category string
 }
 

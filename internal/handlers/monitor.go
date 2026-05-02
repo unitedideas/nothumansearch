@@ -83,8 +83,8 @@ func (h *MonitorHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if !allowed {
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(time.Unix(resetUnix, 0)).Seconds())+1))
 		writeJSON(w, 429, map[string]any{
-			"error":      "rate limit exceeded: 5 monitor registrations per hour per IP",
-			"retry_sec":  int(time.Until(time.Unix(resetUnix, 0)).Seconds()) + 1,
+			"error":     "rate limit exceeded: 5 monitor registrations per hour per IP",
+			"retry_sec": int(time.Until(time.Unix(resetUnix, 0)).Seconds()) + 1,
 		})
 		return
 	}
@@ -174,9 +174,11 @@ var landingTmpl = template.Must(template.New("landing").Parse(`<!doctype html>
 <style>body{font-family:ui-sans-serif,system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem;background:#0d0d0e;color:#e8e6e3}
 h1{font-size:2rem;margin-bottom:.25rem}
 .sub{color:#999;margin-bottom:2rem}
-input,button{font:inherit;padding:.6rem .8rem;border-radius:6px;border:1px solid #333;background:#151518;color:inherit;width:100%;box-sizing:border-box;margin-bottom:.5rem}
+label{display:block;font-weight:600;margin:1rem 0 .35rem}
+input,button{font:inherit;padding:.6rem .8rem;border-radius:6px;border:1px solid #333;background:#151518;color:inherit;width:100%;box-sizing:border-box;margin-bottom:.35rem}
 button{background:#d97757;border-color:#d97757;color:#0d0d0e;font-weight:600;cursor:pointer}
 button:hover{background:#e0845f}
+.help{display:block;color:#999;font-size:.85rem;line-height:1.45;margin:0 0 .25rem}
 .ok{color:#7fd97f;margin-top:1rem}
 .err{color:#ff7777;margin-top:1rem}
 ul{color:#aaa;line-height:1.7}
@@ -195,8 +197,12 @@ a{color:#d97757}</style></head>
 </ul>
 
 <form id="f">
-  <label>Your email<br><input type="email" name="email" required placeholder="you@example.com"></label>
-  <label>Site to watch<br><input type="text" name="domain" required placeholder="example.com"></label>
+  <label for="monitor-email">Email for alerts</label>
+  <input id="monitor-email" type="email" name="email" required placeholder="you@example.com" aria-describedby="monitor-email-help">
+  <span class="help" id="monitor-email-help">Used only for readiness-regression alerts and unsubscribe links.</span>
+  <label for="monitor-domain">Domain to watch</label>
+  <input id="monitor-domain" type="text" name="domain" required placeholder="example.com" aria-describedby="monitor-domain-help">
+  <span class="help" id="monitor-domain-help">Enter the root domain without a path. NHS checks the standard agent-readiness files weekly.</span>
   <button type="submit">Start monitoring</button>
 </form>
 <div id="msg"></div>

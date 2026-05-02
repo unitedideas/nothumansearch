@@ -36,10 +36,13 @@
         .logo span { color:var(--accent); }
         h1 { font-size:32px; font-weight:700; margin:32px 0 8px; text-align:center; letter-spacing:-1px; }
         .tagline { color:var(--text-muted); font-size:15px; text-align:center; margin-bottom:32px; }
-        .score-form { display:flex; gap:8px; margin:0 auto 12px; max-width:560px; }
+        .field-label { display:block; color:var(--text); font-size:13px; font-weight:600; margin:0 auto 8px; max-width:560px; }
+        .field-help { color:var(--text-muted); font-size:12px; line-height:1.5; margin:7px auto 0; max-width:560px; }
+        .score-form { display:flex; gap:8px; margin:0 auto 12px; max-width:560px; align-items:flex-start; }
+        .score-input-wrap { flex:1; min-width:0; }
         .score-form input { flex:1; background:var(--surface); border:1px solid var(--border); color:var(--text); padding:14px 16px; font-size:15px; border-radius:6px; font-family:inherit; }
         .score-form input:focus { outline:none; border-color:var(--accent); }
-        .score-form button { background:var(--accent); color:#fff; border:none; padding:0 24px; font-weight:600; font-size:15px; border-radius:6px; cursor:pointer; font-family:inherit; }
+        .score-form button { background:var(--accent); color:#fff; border:none; padding:14px 24px; margin-top:25px; font-weight:600; font-size:15px; border-radius:6px; cursor:pointer; font-family:inherit; }
         .score-form button:hover { background:#b8613e; }
         .score-form button:disabled { opacity:0.6; cursor:wait; }
         .hint { text-align:center; color:var(--text-muted); font-size:13px; margin-bottom:32px; }
@@ -58,6 +61,11 @@
         .signal.on .mark { color:var(--green); }
         .signal.off .mark { color:var(--red); }
         .signal.off { color:var(--text-muted); }
+        .score-reasons { margin:18px 0 4px; padding:12px 14px; background:#0a0a0b; border:1px solid var(--border); border-radius:6px; }
+        .score-reasons h3 { font-size:13px; margin-bottom:8px; color:var(--text); }
+        .score-reasons ul { list-style:none; display:grid; gap:5px; }
+        .score-reasons li { color:var(--text-muted); font-size:12px; font-family:'IBM Plex Mono',monospace; }
+        .score-reasons .found { color:var(--green); }
         .cta { display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
         .cta a { color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; }
         .cta a:hover { background:var(--accent); color:#fff; }
@@ -84,6 +92,15 @@
         .methodology .pts { color:var(--green); font-family:'IBM Plex Mono',monospace; text-align:right; }
         footer { padding:32px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; color:var(--text-muted); font-size:13px; }
         footer a { color:var(--accent); text-decoration:none; }
+        @media (max-width: 640px) {
+            h1 { font-size:28px; }
+            .score-form { flex-direction:column; }
+            .score-input-wrap, .score-form button { width:100%; }
+            .score-form button { margin-top:0; min-height:46px; }
+            .signals { grid-template-columns:1fr; }
+            .result { padding:22px 18px; }
+            .methodology { overflow-x:auto; }
+        }
     </style>
     <script type="application/ld+json">
     {
@@ -107,7 +124,11 @@
         <p class="tagline">7 signals. 1 score. Free, no sign-up.</p>
 
         <form class="score-form" id="scoreForm" onsubmit="return runCheck(event)">
-            <input type="text" id="urlInput" placeholder="stripe.com" autocomplete="off" required>
+            <div class="score-input-wrap">
+                <label class="field-label" for="urlInput">Website URL or domain</label>
+                <input type="text" id="urlInput" placeholder="stripe.com" autocomplete="off" aria-describedby="urlInputHelp" required>
+                <div class="field-help" id="urlInputHelp">Use a public homepage. NHS checks the same seven signals used by the directory crawler.</div>
+            </div>
             <button type="submit" id="submitBtn">Score</button>
         </form>
         <div class="hint">Rate-limited to 10 checks/hour per IP. No key needed. &middot; <a href="/guide" style="color:var(--accent);">How to improve your score &rarr;</a></div>
@@ -166,6 +187,15 @@
             robots_ai: 'robots.txt AI',
             schema_org: 'Schema.org'
         };
+        const signalPoints = {
+            llms_txt: 25,
+            ai_plugin: 20,
+            openapi: 20,
+            structured_api: 15,
+            mcp_server: 10,
+            robots_ai: 5,
+            schema_org: 5
+        };
 
         function scoreClass(n) {
             if (n >= 70) return 'high';
@@ -208,6 +238,14 @@
                     const on = sig[k];
                     return '<div class="signal ' + (on ? 'on' : 'off') + '"><span class="mark">' + (on ? '✓' : '×') + '</span>' + signalLabels[k] + '</div>';
                 }).join('');
+                const keys = Object.keys(signalLabels);
+                const found = keys.filter(k => sig[k]).slice(0, 3);
+                const missing = keys.filter(k => !sig[k]).slice(0, 2);
+                const reasonRows = found.map(k => '<li class="found">+' + signalPoints[k] + ' ' + signalLabels[k] + '</li>')
+                    .concat(missing.map(k => '<li>missing +' + signalPoints[k] + ' ' + signalLabels[k] + '</li>'));
+                const reasonHTML = reasonRows.length
+                    ? '<div class="score-reasons"><h3>Why this score</h3><ul>' + reasonRows.join('') + '</ul></div>'
+                    : '<div class="score-reasons"><h3>Why this score</h3><ul><li>Signal details were not returned by the checker.</li></ul></div>';
                 out.className = 'result show';
                 const cls = scoreClass(data.agentic_score);
                 const dom = data.domain || url;
@@ -221,6 +259,7 @@
                     '<div class="score-label">' + scoreWord(data.agentic_score) + ' &middot; ' + (data.category || 'uncategorized') + '</div>' +
                     '<div class="result-domain">' + dom + '</div>' +
                     '<div class="signals">' + sigHTML + '</div>' +
+                    reasonHTML +
                     '<div class="cta">' +
                         '<a href="' + (data.report_url || ('/site/' + dom)) + '">Full report</a>' +
                         '<a href="/#submit">Submit to directory</a>' +

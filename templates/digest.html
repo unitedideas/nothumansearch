@@ -180,9 +180,9 @@
         <div class="site-row">
             <div class="rank">#{{add $i 1}}</div>
             <div class="row-main">
-                <div class="row-name"><a href="/site/{{$s.Domain}}">{{$s.Name}}</a></div>
+                <div class="row-name"><a href="/site/{{$s.Domain}}">{{displayText $s.Name}}</a></div>
                 <div class="row-domain">{{$s.Domain}}</div>
-                {{if $s.Description}}<div class="row-desc">{{$s.Description}}</div>{{end}}
+                {{if $s.Description}}<div class="row-desc">{{displayText $s.Description}}</div>{{end}}
                 <div class="row-badges">
                     <span class="badge badge-category">{{$s.Category}}</span>
                     {{if $s.HasMCP}}<span class="badge badge-signal">MCP</span>{{end}}
@@ -206,9 +206,9 @@
         <div class="site-row">
             <div class="rank">#{{add $i 1}}</div>
             <div class="row-main">
-                <div class="row-name"><a href="/site/{{$s.Domain}}">{{$s.Name}}</a></div>
+                <div class="row-name"><a href="/site/{{$s.Domain}}">{{displayText $s.Name}}</a></div>
                 <div class="row-domain">{{$s.Domain}}</div>
-                {{if $s.Description}}<div class="row-desc">{{$s.Description}}</div>{{end}}
+                {{if $s.Description}}<div class="row-desc">{{displayText $s.Description}}</div>{{end}}
                 <div class="row-badges">
                     <span class="badge badge-category">{{$s.Category}}</span>
                     {{if $s.HasMCP}}<span class="badge badge-signal">MCP</span>{{end}}
