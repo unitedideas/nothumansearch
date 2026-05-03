@@ -288,6 +288,7 @@ func main() {
 	// Embeddable score badges: /badge/{domain}.svg
 	mux.Handle("/badge/", badgeHandler)
 	mux.HandleFunc("/api/v1/monitor/register", monitorHandler.Register)
+	mux.HandleFunc("/api/v1/admin/monitors", monitorHandler.AdminList)
 
 	// Monitor (free feature — email alerts when a site's agentic readiness drops)
 	mux.HandleFunc("/monitor", monitorHandler.LandingPage)

@@ -9,6 +9,8 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -150,6 +152,32 @@ func (h *MonitorHandler) LandingPage(w http.ResponseWriter, r *http.Request) {
 	if err := landingTmpl.Execute(w, nil); err != nil {
 		log.Printf("landing template: %v", err)
 	}
+}
+
+// GET /api/v1/admin/monitors — bearer auth list of recent monitors.
+func (h *MonitorHandler) AdminList(w http.ResponseWriter, r *http.Request) {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
+		return
+	}
+	if r.Header.Get("Authorization") != "Bearer "+adminKey {
+		writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+		return
+	}
+	limit := 100
+	if q := r.URL.Query().Get("limit"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil && n > 0 && n <= 500 {
+			limit = n
+		}
+	}
+	items, err := models.ListRecentMonitors(h.DB, limit)
+	if err != nil {
+		log.Printf("admin monitors: %v", err)
+		writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"monitors": items, "count": len(items)})
 }
 
 // writeJSON is a package-local helper matching api.go's pattern without

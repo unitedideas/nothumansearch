@@ -246,3 +246,35 @@ func UpdateMonitorCheck(db *sql.DB, id int64, score int, signalsHash string, not
 	`, id, score, signalsHash)
 	return err
 }
+
+// ListRecentMonitors returns the most recently created/updated monitor rows.
+func ListRecentMonitors(db *sql.DB, limit int) ([]Monitor, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	rows, err := db.Query(`
+		SELECT id, email, domain, token, last_score, last_signals_hash,
+		       created_at, last_checked_at, last_notified_at
+		FROM monitors
+		ORDER BY created_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Monitor
+	for rows.Next() {
+		m := Monitor{}
+		if err := rows.Scan(&m.ID, &m.Email, &m.Domain, &m.Token,
+			&m.LastScore, &m.LastSignalsHash, &m.CreatedAt,
+			&m.LastCheckedAt, &m.LastNotifiedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
