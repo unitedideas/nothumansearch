@@ -696,7 +696,9 @@ a { color:#d97757; text-decoration:none; }
 func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 	if h.WebhookSecret == "" {
 		log.Printf("fix webhook: webhook secret not configured (STRIPE_WEBHOOK_SECRET missing)")
-		http.Error(w, "webhook not configured", http.StatusInternalServerError)
+		// Return 2xx so Stripe stops retrying a webhook endpoint we can't
+		// authenticate yet (NHS can run in lead-only mode without Stripe wired).
+		writeJSON(w, 200, map[string]string{"ok": "true", "ignored": "webhook_not_configured"})
 		return
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 65536))
