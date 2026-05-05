@@ -177,3 +177,6 @@ date,channel,target,ref,product,notes,status
 2026-04-18,awesome-list-pr,jamesmurdza/awesome-ai-devtools,https://github.com/jamesmurdza/awesome-ai-devtools/pull/433,refreshed-PR-with-updated-placement-in-config-and-context-mgmt
 2026-04-18,awesome-list-pr,caramaschiHG/awesome-ai-agents-2026,https://github.com/caramaschiHG/awesome-ai-agents-2026/pull/163,submitted-nhs-protocol-tooling-section
 2026-04-18,public-gist,agent-ready-sites-wave,https://gist.github.com/unitedideas/c60bb35943ef609f99123bdfae146e55,categorized-list-of-120-sites-added-this-session
+2026-05-02,github-pr,bradAGI/awesome-cli-coding-agents,https://github.com/bradAGI/awesome-cli-coding-agents/pull/68,nothumansearch,Maintainer cherry-picked NHS entry into main in commit 9078ddd and closed PR as merged,merged
+2026-05-03,github-pr-close,InftyAI/Awesome-LLMOps,https://github.com/InftyAI/Awesome-LLMOps/pull/403,nothumansearch,Maintainer requested Project Request issue template instead of PR; author closed after filing follow-up issue,closed
+2026-05-03,github-issue,InftyAI/Awesome-LLMOps,https://github.com/InftyAI/Awesome-LLMOps/issues/421,nothumansearch,Project Request issue filed for Not Human Search per maintainer workflow,open

@@ -23,3 +23,4 @@ tools/health-guard.state
 tools/*.state
 tools/*.log
 tools/discover.log
+last_run
