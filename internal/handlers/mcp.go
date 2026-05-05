@@ -17,7 +17,8 @@ import (
 
 // MCPHandler exposes Not Human Search as a remote MCP (Model Context Protocol) server.
 // Agents can register this server via:
-//   claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
+//
+//	claude mcp add --transport http nothumansearch https://nothumansearch.ai/mcp
 //
 // Protocol: JSON-RPC 2.0 over Streamable HTTP (POST requests, JSON responses).
 // Spec: https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
@@ -379,6 +380,17 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 
 	argsJSON, _ := json.Marshal(params.Arguments)
 	go models.LogMCPRequest(h.DB, "tools/call", params.Name, argsJSON, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
+	go models.LogIntentEvent(h.DB, models.IntentEvent{
+		EventName:  "mcp_tool_call",
+		EntityType: "mcp_tool",
+		EntityID:   params.Name,
+		UserAgent:  ua,
+		IPHash:     ipHash,
+		IsBot:      true,
+		Metadata: map[string]any{
+			"arguments": params.Arguments,
+		},
+	})
 }
 
 // toolRegisterMonitor wraps the /api/v1/monitor/register REST handler so
@@ -623,12 +635,12 @@ func (h *MCPHandler) toolGetStats(w http.ResponseWriter, id json.RawMessage) {
 			{"type": "text", "text": text},
 		},
 		"structuredContent": map[string]any{
-			"total_sites":      total,
-			"avg_score":        avg,
-			"top_category":     top,
-			"added_this_week":  addedThisWeek,
-			"mcp_sites":        mcpSites,
-			"perfect_score":    perfectScore,
+			"total_sites":     total,
+			"avg_score":       avg,
+			"top_category":    top,
+			"added_this_week": addedThisWeek,
+			"mcp_sites":       mcpSites,
+			"perfect_score":   perfectScore,
 		},
 	})
 }

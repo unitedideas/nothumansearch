@@ -80,6 +80,9 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"window_sec": int(checkWindow.Seconds()),
 			"upgrade":    "Higher limits and CI-grade webhooks coming soon. Email hello@nothumansearch.ai to join the paid-tier waitlist.",
 		})
+		go models.LogIntentFromRequest(h.DB, r, "check_rate_limit_hit", "api", "/api/v1/check", map[string]any{
+			"limit": checkFreeLimit,
+		})
 		return
 	}
 	// Emit rate-limit headers on successful responses too so callers can pace themselves.
@@ -130,6 +133,13 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 502, map[string]string{"error": "crawl failed: " + crawlErr.Error()})
 		return
 	}
+	go models.LogIntentFromRequest(h.DB, r, "score_checked", "site", site.Domain, map[string]any{
+		"score":          site.AgenticScore,
+		"category":       site.Category,
+		"has_mcp":        site.HasMCPServer,
+		"has_openapi":    site.HasOpenAPI,
+		"structured_api": site.HasStructuredAPI,
+	})
 
 	// Persist the result so this check also improves the index. Fire-and-forget;
 	// failures here don't affect the caller's response.
@@ -143,10 +153,10 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	h.writeJSON(w, 200, map[string]any{
-		"domain":         site.Domain,
-		"url":            site.URL,
-		"agentic_score":  site.AgenticScore,
-		"category":       site.Category,
+		"domain":        site.Domain,
+		"url":           site.URL,
+		"agentic_score": site.AgenticScore,
+		"category":      site.Category,
 		"signals": map[string]bool{
 			"llms_txt":       site.HasLLMsTxt,
 			"ai_plugin":      site.HasAIPlugin,

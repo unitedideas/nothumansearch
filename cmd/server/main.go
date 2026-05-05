@@ -64,6 +64,11 @@ func main() {
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("mcp_requests prune: deleted %d rows", n)
 			}
+			if res, err := database.DB.Exec(`DELETE FROM intent_events WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("intent_events prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("intent_events prune: deleted %d rows", n)
+			}
 			if res, err := database.DB.Exec(`DELETE FROM submissions WHERE status IN ('failed','rejected','duplicate') AND created_at < now() - interval '30 days'`); err != nil {
 				log.Printf("submissions prune: %v", err)
 			} else if n, _ := res.RowsAffected(); n > 0 {
@@ -276,6 +281,7 @@ func main() {
 	mux.HandleFunc("/api/v1/verify-mcp", apiHandler.VerifyMCP)
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
+	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
 
 	// Paid fix-my-score intake + Stripe. /fix/success is registered before the

@@ -254,6 +254,7 @@ func (h *WebHandler) GuidePage(w http.ResponseWriter, r *http.Request) {
 // ScorePage renders the public /score UI — a form that POSTs to /api/v1/check
 // and displays the 7-signal breakdown inline. Free marketing surface.
 func (h *WebHandler) ScorePage(w http.ResponseWriter, r *http.Request) {
+	go models.LogIntentFromRequest(h.DB, r, "score_page_view", "page", "/score", nil)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "score.html", nil); err != nil {
 		log.Printf("template error: %v", err)
@@ -560,6 +561,12 @@ func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	go models.LogIntentFromRequest(h.DB, r, "site_report_view", "site", site.Domain, map[string]any{
+		"score":       site.AgenticScore,
+		"category":    site.Category,
+		"has_mcp":     site.HasMCPServer,
+		"has_openapi": site.HasOpenAPI,
+	})
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := h.tmpl.ExecuteTemplate(w, "site.html", site); err != nil {

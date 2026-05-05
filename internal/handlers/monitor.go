@@ -115,12 +115,23 @@ func (h *MonitorHandler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	go models.LogIntentFromRequest(h.DB, r, "monitor_signup", "site", m.Domain, map[string]any{
+		"email_domain": emailDomain(m.Email),
+	})
 
 	writeJSON(w, 201, map[string]interface{}{
 		"ok":              true,
 		"domain":          m.Domain,
 		"unsubscribe_url": h.BaseURL + "/monitor/unsubscribe/" + m.Token,
 	})
+}
+
+func emailDomain(email string) string {
+	parts := strings.Split(strings.TrimSpace(email), "@")
+	if len(parts) != 2 {
+		return ""
+	}
+	return strings.ToLower(parts[1])
 }
 
 // GET /monitor/unsubscribe/{token}

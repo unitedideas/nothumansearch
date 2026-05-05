@@ -172,6 +172,12 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 			ipHash := hex.EncodeToString(hash[:8])
 			models.LogSearch(h.DB, params.Query, total, r.UserAgent(), ipHash)
 		}()
+		go models.LogIntentFromRequest(h.DB, r, "search_query", "query", params.Query, map[string]any{
+			"results":  total,
+			"category": params.Category,
+			"tag":      params.Tag,
+			"has_mcp":  params.HasMCP,
+		})
 	}
 
 	h.writeJSON(w, 200, map[string]interface{}{
@@ -422,6 +428,32 @@ func (h *APIHandler) TrafficAnalytics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	data, err := models.GetTrafficAnalytics(h.DB, days)
+	if err != nil {
+		h.writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	data["days"] = days
+	h.writeJSON(w, 200, data)
+}
+
+func (h *APIHandler) SignalAnalytics(w http.ResponseWriter, r *http.Request) {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		h.writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
+		return
+	}
+	auth := r.Header.Get("Authorization")
+	if auth != "Bearer "+adminKey {
+		h.writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+		return
+	}
+	days := 14
+	if d := r.URL.Query().Get("days"); d != "" {
+		if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 90 {
+			days = n
+		}
+	}
+	data, err := models.GetIntentAnalytics(h.DB, days)
 	if err != nil {
 		h.writeJSON(w, 500, map[string]string{"error": "query failed"})
 		return

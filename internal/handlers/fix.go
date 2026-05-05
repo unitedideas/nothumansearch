@@ -218,6 +218,10 @@ func (h *FixHandler) intakeForm(w http.ResponseWriter, r *http.Request, host str
 		http.NotFound(w, r)
 		return
 	}
+	go models.LogIntentFromRequest(h.DB, r, "fix_page_view", "site", site.Domain, map[string]any{
+		"score":    site.AgenticScore,
+		"category": site.Category,
+	})
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
@@ -324,6 +328,12 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 		http.Error(w, "could not record intake", http.StatusInternalServerError)
 		return
 	}
+	go models.LogIntentFromRequest(h.DB, r, "fix_checkout_start", "geo_fix_job", strconv.FormatInt(j.ID, 10), map[string]any{
+		"host":         host,
+		"email_domain": emailDomain(email),
+		"repo_url":     repoURL != "",
+		"source":       "fix_form",
+	})
 
 	// No Stripe key configured — fall back to lead-capture instead of faking
 	// a payment. Record as status="lead" and bounce to the thank-you page.
@@ -484,6 +494,13 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		writeFixJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not record intake"})
 		return
 	}
+	go models.LogIntentFromRequest(h.DB, r, "fix_checkout_start", "geo_fix_job", strconv.FormatInt(j.ID, 10), map[string]any{
+		"host":         host,
+		"email_domain": emailDomain(email),
+		"repo_url":     repoURL != "",
+		"source":       "agentic_checkout",
+		"mode":         mode,
+	})
 	if mode == "stripe_acp_spt" {
 		if err := h.settleFixWithSPT(w, j, strings.TrimSpace(req.SPT), strings.TrimSpace(req.BuyerEmail)); err != nil {
 			log.Printf("fix: spt settlement: %v", err)
@@ -589,6 +606,16 @@ func (h *FixHandler) settleFixWithSPT(w http.ResponseWriter, j *models.GeoFixJob
 		return err
 	}
 	notify.DiscordAsync(fmt.Sprintf("💳 **NHS fix-my-score SPT paid** — %s · %s · $%d · PI %s", paid.Host, paid.Email, fixPriceCents/100, pi.ID))
+	models.LogIntentEvent(h.DB, models.IntentEvent{
+		EventName:  "fix_paid",
+		EntityType: "geo_fix_job",
+		EntityID:   strconv.FormatInt(paid.ID, 10),
+		Metadata: map[string]any{
+			"host":                     paid.Host,
+			"payment_mode":             "stripe_spt",
+			"stripe_payment_intent_id": pi.ID,
+		},
+	})
 	writeFixJSON(w, http.StatusCreated, map[string]interface{}{
 		"seller":                   "nothumansearch",
 		"product_id":               "nhs_geo_fix_my_score",
@@ -743,6 +770,18 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			msg += " · repo " + repoURL
 		}
 		notify.DiscordAsync(msg)
+		models.LogIntentEvent(h.DB, models.IntentEvent{
+			EventName:  "fix_paid",
+			EntityType: "geo_fix_job",
+			EntityID:   strconv.FormatInt(j.ID, 10),
+			Metadata: map[string]any{
+				"host":              host,
+				"email_domain":      emailDomain(email),
+				"stripe_session_id": cs.ID,
+				"amount_cents":      cs.AmountTotal,
+				"currency":          string(cs.Currency),
+			},
+		})
 	}
 
 	w.WriteHeader(http.StatusOK)
