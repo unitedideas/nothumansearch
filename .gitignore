@@ -24,3 +24,5 @@ tools/*.state
 tools/*.log
 tools/discover.log
 last_run
+ops/sweeper/
+ops/runbooks/sweeper.md
