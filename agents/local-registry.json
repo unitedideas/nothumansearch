@@ -1,0 +1,89 @@
+{
+  "business_slug": "nothumansearch",
+  "stage": "active",
+  "status": "proposed_for_review",
+  "agents": [
+    {
+      "id": "nothumansearch-operator",
+      "name": "nothumansearch Business Operator",
+      "kind": "operator",
+      "capabilities": [
+        "backlog_execution",
+        "state_updates",
+        "runbook_execution"
+      ],
+      "scope": "business:nothumansearch",
+      "definition_ref": "business://nothumansearch/agents/operator",
+      "expertise_ref": "business://nothumansearch/agent-memory/operator",
+      "owner": "nothumansearch",
+      "reuse_policy": "business_specific",
+      "private_safe": false
+    },
+    {
+      "id": "nothumansearch-business-researcher",
+      "name": "nothumansearch Business Researcher",
+      "kind": "business-researcher",
+      "capabilities": [
+        "market_research",
+        "competitor_tracking",
+        "customer_discovery"
+      ],
+      "scope": "business:nothumansearch",
+      "definition_ref": "business://nothumansearch/agents/business-researcher",
+      "expertise_ref": "business://nothumansearch/agent-memory/business-researcher",
+      "owner": "nothumansearch",
+      "reuse_policy": "business_specific",
+      "private_safe": false
+    },
+    {
+      "id": "nothumansearch-marketer",
+      "name": "nothumansearch Business Marketer",
+      "kind": "marketer",
+      "capabilities": [
+        "positioning",
+        "distribution_planning",
+        "campaign_execution"
+      ],
+      "scope": "business:nothumansearch",
+      "definition_ref": "business://nothumansearch/agents/marketer",
+      "expertise_ref": "business://nothumansearch/agent-memory/marketer",
+      "owner": "nothumansearch",
+      "reuse_policy": "business_specific",
+      "private_safe": false
+    },
+    {
+      "id": "nothumansearch-support",
+      "name": "nothumansearch Business Support Operator",
+      "kind": "support",
+      "capabilities": [
+        "support_triage",
+        "lead_followup",
+        "customer_evidence"
+      ],
+      "scope": "business:nothumansearch",
+      "definition_ref": "business://nothumansearch/agents/support",
+      "expertise_ref": "business://nothumansearch/agent-memory/support",
+      "owner": "nothumansearch",
+      "reuse_policy": "business_specific",
+      "private_safe": false
+    },
+    {
+      "id": "nothumansearch-channel-operator",
+      "name": "nothumansearch Channel Operator",
+      "kind": "channel-operator",
+      "capabilities": [
+        "x",
+        "linkedin",
+        "reddit",
+        "hn",
+        "directory_distribution"
+      ],
+      "scope": "business:nothumansearch",
+      "definition_ref": "business://nothumansearch/agents/channel-operator",
+      "expertise_ref": "business://nothumansearch/agent-memory/channel-operator",
+      "owner": "nothumansearch",
+      "reuse_policy": "business_specific",
+      "private_safe": false
+    }
+  ]
+}
