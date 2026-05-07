@@ -81,11 +81,11 @@ func TestExtractTitle(t *testing.T) {
 		// Nested structure; we just grab first <title>...</title>
 		"<head><meta><title>NHS</title></head>": "NHS",
 		// Missing end tag → empty
-		"<title>no closer":             "",
+		"<title>no closer": "",
 		// Missing start tag → empty
-		"<html>no title here</html>":   "",
+		"<html>no title here</html>": "",
 		// Empty string
-		"":                            "",
+		"": "",
 	}
 	for input, want := range cases {
 		if got := extractTitle(input); got != want {
@@ -157,7 +157,16 @@ func TestCategorize(t *testing.T) {
 		{"coinbase→finance", mk("coinbase.com", "Coinbase", "crypto"), "finance"},
 		{"openai→ai-tools", mk("openai.com", "OpenAI", "models"), "ai-tools"},
 		{"anthropic→ai-tools", mk("anthropic.com", "Anthropic", "models"), "ai-tools"},
+		{"cohere-not-here→ai-tools", mk("cohere.com", "Cohere", "language model API"), "ai-tools"},
+		{"here→developer", mk("here.com", "HERE", "Maps API"), "developer"},
 		{"shopify→ecommerce", mk("shopify.com", "Shopify", "stores"), "ecommerce"},
+		{"bernstein→developer", mk("bernstein.run", "Bernstein", "Multi-agent orchestration for CLI coding agents"), "developer"},
+		{"chartlibrary→finance", mk("chartlibrary.io", "Chart Library", "Cohort intelligence for stock chart patterns"), "finance"},
+		{"ansvar→security", mk("ansvar.eu", "Ansvar AI", "Auditable AI for legal, regulatory and security teams"), "security"},
+		{"rettfrabonden→ecommerce", mk("rettfrabonden.com", "Rett fra Bonden", "Finn lokalprodusert mat i Norge"), "ecommerce"},
+		{"opdstar→health", mk("opdstar.com", "OPDSTAR", "Taiwan outpatient medical record assistant"), "health"},
+		{"datamuse→data", mk("datamuse.com", "OneLook Thesaurus", "Plugin for searching for words"), "data"},
+		{"samiolearning→education", mk("samiolearning.com", "Samio Learning", "Kids app that adapts reading and math"), "education"},
 
 		// TLD fallbacks — when no domain rule matches
 		{"any-.ai→ai-tools", mk("random-startup.ai", "Random", ""), "ai-tools"},
