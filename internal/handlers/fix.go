@@ -104,12 +104,14 @@ func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 			"link":                     "Available inside Stripe Checkout when enabled on the Stripe account.",
 			"private_preview_required": []string{"stripe_acp", "x402"},
 			"endpoints": map[string]string{
-				"catalog":  h.BaseURL + "/api/v1/catalog",
-				"quote":    h.BaseURL + "/api/v1/quote",
-				"checkout": h.BaseURL + "/api/v1/checkout",
+				"catalog":        h.BaseURL + "/api/v1/catalog",
+				"quote":          h.BaseURL + "/api/v1/quote",
+				"checkout":       h.BaseURL + "/api/v1/checkout",
+				"api_subscribe":  h.BaseURL + "/api/v1/api-keys/subscribe",
+				"api_activation": h.BaseURL + "/api/v1/api-keys/activate",
 			},
 		},
-		"products": []map[string]interface{}{h.fixProduct()},
+		"products": h.commerceProducts(),
 	})
 }
 
@@ -122,6 +124,7 @@ func (h *FixHandler) AgentJSON(w http.ResponseWriter, r *http.Request) {
 			"agentic-readiness-search",
 			"mcp-server-discovery",
 			"geo-uplift-service",
+			"paid-api-keys",
 		},
 		"api": map[string]string{
 			"base_url": h.BaseURL + "/api/v1",
@@ -136,6 +139,7 @@ func (h *FixHandler) AgentJSON(w http.ResponseWriter, r *http.Request) {
 			"catalog":                   h.BaseURL + "/api/v1/catalog",
 			"quote":                     h.BaseURL + "/api/v1/quote",
 			"checkout":                  h.BaseURL + "/api/v1/checkout",
+			"api_subscribe":             h.BaseURL + "/api/v1/api-keys/subscribe",
 			"payment_modes":             []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
 			"agentic_payments_ready":    true,
 			"unsupported_payment_modes": []string{"stripe_acp", "x402", "mpp"},
@@ -169,6 +173,67 @@ func (h *FixHandler) fixProduct() map[string]interface{} {
 	}
 }
 
+func (h *FixHandler) apiProduct(plan models.APIPlan) map[string]interface{} {
+	return map[string]interface{}{
+		"id":          apiProductID(plan),
+		"name":        "Not Human Search API " + strings.Title(plan.Name),
+		"description": fmt.Sprintf("%d REST/MCP calls per month after the anonymous quota.", plan.MonthlyLimit),
+		"type":        "recurring_subscription",
+		"plan":        plan.Name,
+		"quota": map[string]interface{}{
+			"monthly_limit": plan.MonthlyLimit,
+			"unit":          "billable REST or MCP calls",
+		},
+		"price": map[string]interface{}{
+			"amount":   plan.PriceCents,
+			"currency": "USD",
+			"display":  fmt.Sprintf("$%d/mo", plan.PriceCents/100),
+			"interval": "month",
+		},
+		"required_metadata": []string{"email", "plan"},
+		"checkout": map[string]interface{}{
+			"mode":            "stripe_checkout",
+			"endpoint":        h.BaseURL + "/api/v1/api-keys/subscribe",
+			"method":          "POST",
+			"content_type":    "application/json",
+			"supported_modes": []string{"stripe_checkout", "stripe_link", "link"},
+			"example_body": map[string]string{
+				"email": "buyer@example.com",
+				"plan":  plan.Name,
+			},
+		},
+		"activation": map[string]interface{}{
+			"endpoint": h.BaseURL + "/api/v1/api-keys/activate?session_id={CHECKOUT_SESSION_ID}",
+			"method":   "GET",
+			"note":     "Raw API keys are shown once after paid Stripe checkout activation.",
+		},
+	}
+}
+
+func (h *FixHandler) commerceProducts() []map[string]interface{} {
+	products := []map[string]interface{}{h.fixProduct()}
+	for _, plan := range models.APIPlans() {
+		products = append(products, h.apiProduct(plan))
+	}
+	return products
+}
+
+func apiProductID(plan models.APIPlan) string {
+	return "nhs_api_" + plan.Name
+}
+
+func apiPlanFromProductID(productID string) (models.APIPlan, bool) {
+	id := strings.ToLower(strings.TrimSpace(productID))
+	id = strings.TrimPrefix(id, "api_")
+	id = strings.TrimPrefix(id, "nhs_api_")
+	switch id {
+	case "starter", "pro", "scale":
+		return models.APIPlanFor(id), true
+	default:
+		return models.APIPlan{}, false
+	}
+}
+
 func scoreFixEligible(site *models.Site) bool {
 	return site != nil && site.HasHardAgentSignal()
 }
@@ -177,20 +242,72 @@ func (h *FixHandler) CommerceCatalog(w http.ResponseWriter, r *http.Request) {
 	writeFixJSON(w, http.StatusOK, map[string]interface{}{
 		"seller":   "nothumansearch",
 		"currency": "USD",
-		"products": []map[string]interface{}{h.fixProduct()},
+		"products": h.commerceProducts(),
 	})
 }
 
 func (h *FixHandler) CommerceQuote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	productID := strings.TrimSpace(r.URL.Query().Get("product_id"))
+	if r.Method == http.MethodPost && r.Body != nil {
+		var req struct {
+			ProductID string `json:"product_id"`
+			ProductId string `json:"productId"`
+			Plan      string `json:"plan"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil && err != io.EOF {
+			writeFixJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
+			return
+		}
+		if productID == "" {
+			productID = req.ProductID
+		}
+		if productID == "" {
+			productID = req.ProductId
+		}
+		if productID == "" && req.Plan != "" {
+			productID = "nhs_api_" + req.Plan
+		}
+	}
+	if productID == "" || productID == "nhs_geo_fix_my_score" {
+		writeFixJSON(w, http.StatusOK, map[string]interface{}{
+			"seller":            "nothumansearch",
+			"product_id":        "nhs_geo_fix_my_score",
+			"currency":          "USD",
+			"amount":            fixPriceCents,
+			"total":             fixPriceCents,
+			"payment_mode":      "stripe_checkout",
+			"required_metadata": []string{"host", "email"},
+			"checkout_endpoint": h.BaseURL + "/api/v1/checkout",
+		})
+		return
+	}
+	plan, ok := apiPlanFromProductID(productID)
+	if !ok {
+		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown product_id"})
+		return
+	}
 	writeFixJSON(w, http.StatusOK, map[string]interface{}{
 		"seller":            "nothumansearch",
-		"product_id":        "nhs_geo_fix_my_score",
+		"product_id":        apiProductID(plan),
+		"plan":              plan.Name,
 		"currency":          "USD",
-		"amount":            fixPriceCents,
-		"total":             fixPriceCents,
+		"amount":            plan.PriceCents,
+		"total":             plan.PriceCents,
+		"billing_interval":  "month",
+		"monthly_limit":     plan.MonthlyLimit,
 		"payment_mode":      "stripe_checkout",
-		"required_metadata": []string{"host", "email"},
-		"checkout_endpoint": h.BaseURL + "/api/v1/checkout",
+		"required_metadata": []string{"email", "plan"},
+		"checkout_endpoint": h.BaseURL + "/api/v1/api-keys/subscribe",
+		"checkout_method":   "POST",
+		"checkout_payload": map[string]string{
+			"email": "buyer@example.com",
+			"plan":  plan.Name,
+		},
+		"activation_endpoint": h.BaseURL + "/api/v1/api-keys/activate?session_id={CHECKOUT_SESSION_ID}",
 	})
 }
 

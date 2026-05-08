@@ -156,10 +156,18 @@ POST /submit  Body: {"url": "https://example.com"}
 We crawl immediately and add it to the index.
 
 ### On-Demand Check (CI / pre-deploy)
-POST /check  Body: {"url": "https://example.com"}
+POST /api/v1/check  Body: {"url": "https://example.com"}
 Returns live agentic readiness score without waiting for the crawl queue.
 Free tier: 10 checks/hour per IP. Great for CI pipelines that fail the build
 when a site's agent signals regress.
+
+### Paid API Keys
+GET /api/v1/api-keys/subscribe
+Returns the available API plans and the machine contract for creating a Stripe Checkout session.
+
+POST /api/v1/api-keys/subscribe  Body: {"email": "you@example.com", "plan": "starter"}
+Plans: starter ($19/mo, 1,000 calls), pro ($49/mo, 10,000 calls), scale ($199/mo, 100,000 calls).
+Returns: {checkout_url, plan, monthly_limit, amount_cents, activation_url}
 
 ### Stats
 GET /stats
@@ -441,11 +449,20 @@ paths:
       operationId: getCommerceCatalog
       responses:
         "200":
-          description: Catalog for the fix-my-score service
+          description: Catalog for score-fix service and API subscription plans
   /quote:
     post:
       summary: Create a deterministic quote
       operationId: createCommerceQuote
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_id: { type: string, enum: [nhs_geo_fix_my_score, nhs_api_starter, nhs_api_pro, nhs_api_scale] }
+                plan:       { type: string, enum: [starter, pro, scale] }
       responses:
         "200":
           description: Quote with amount, total, currency, and required checkout metadata
@@ -472,6 +489,31 @@ paths:
           description: Stripe Checkout URL
         "501":
           description: Requested payment mode is not supported
+  /api-keys/subscribe:
+    get:
+      summary: List paid API key plans and checkout contract
+      operationId: getAPIKeySubscriptionPlans
+      responses:
+        "200":
+          description: Starter, pro, and scale API subscription plans
+    post:
+      summary: Create a Stripe Checkout session for a paid API key subscription
+      operationId: createAPIKeySubscriptionCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, plan]
+              properties:
+                email: { type: string, format: email }
+                plan:  { type: string, enum: [starter, pro, scale], default: starter }
+      responses:
+        "200":
+          description: Stripe Checkout URL and activation URL
+        "503":
+          description: Stripe is not configured
   /categories:
     get:
       summary: Get all category buckets and their counts
@@ -799,8 +841,9 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 		log.Printf("sitemap tags: %v", terr)
 	}
 
-	// Site pages
-	rows, err := h.DB.QueryContext(r.Context(), "SELECT domain, updated_at FROM sites WHERE crawl_status='success' AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true) ORDER BY agentic_score DESC LIMIT 49999")
+	// Site pages. Keep this tied to AgentFirstFilter so passive llms.txt-only
+	// rows never become public discovery targets through the sitemap.
+	rows, err := h.DB.QueryContext(r.Context(), "SELECT domain, updated_at FROM sites WHERE "+models.AgentFirstFilter+" ORDER BY agentic_score DESC LIMIT 49999")
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {

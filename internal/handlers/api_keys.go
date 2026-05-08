@@ -23,7 +23,13 @@ func NewAPIKeyHandler(db *sql.DB, baseURL string) *APIKeyHandler {
 }
 
 func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		h.subscribeDocument(w)
+		return
+	case http.MethodPost:
+		// Continue below.
+	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -85,10 +91,47 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeFixJSON(w, http.StatusOK, map[string]any{
-		"checkout_url":  s.URL,
-		"plan":          plan.Name,
-		"monthly_limit": plan.MonthlyLimit,
-		"amount_cents":  plan.PriceCents,
+		"checkout_url":   s.URL,
+		"plan":           plan.Name,
+		"monthly_limit":  plan.MonthlyLimit,
+		"amount_cents":   plan.PriceCents,
+		"activation_url": h.BaseURL + "/api/v1/api-keys/activate?session_id={CHECKOUT_SESSION_ID}",
+	})
+}
+
+func (h *APIKeyHandler) subscribeDocument(w http.ResponseWriter) {
+	plans := make([]map[string]any, 0, len(models.APIPlans()))
+	for _, plan := range models.APIPlans() {
+		plans = append(plans, map[string]any{
+			"id":            "nhs_api_" + plan.Name,
+			"plan":          plan.Name,
+			"name":          "Not Human Search API " + strings.Title(plan.Name),
+			"monthly_limit": plan.MonthlyLimit,
+			"price": map[string]any{
+				"amount":   plan.PriceCents,
+				"currency": "USD",
+				"display":  fmt.Sprintf("$%d/mo", plan.PriceCents/100),
+			},
+		})
+	}
+	writeFixJSON(w, http.StatusOK, map[string]any{
+		"seller":         "nothumansearch",
+		"product_family": "api_keys",
+		"description":    "Paid API keys for Not Human Search REST and MCP usage after the anonymous quota.",
+		"plans":          plans,
+		"subscribe": map[string]any{
+			"method":          "POST",
+			"endpoint":        h.BaseURL + "/api/v1/api-keys/subscribe",
+			"content_type":    "application/json",
+			"required_fields": []string{"email", "plan"},
+			"allowed_plans":   []string{"starter", "pro", "scale"},
+			"example_body": map[string]string{
+				"email": "buyer@example.com",
+				"plan":  "starter",
+			},
+			"response_fields": []string{"checkout_url", "plan", "monthly_limit", "amount_cents", "activation_url"},
+		},
+		"activate_after_checkout": h.BaseURL + "/api/v1/api-keys/activate?session_id={CHECKOUT_SESSION_ID}",
 	})
 }
 

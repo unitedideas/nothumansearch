@@ -31,6 +31,14 @@ type APIPlan struct {
 	PriceCents   int64
 }
 
+func APIPlans() []APIPlan {
+	return []APIPlan{
+		APIPlanFor("starter"),
+		APIPlanFor("pro"),
+		APIPlanFor("scale"),
+	}
+}
+
 func APIPlanFor(name string) APIPlan {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "pro":

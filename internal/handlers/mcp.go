@@ -457,10 +457,13 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 					Code:    -32042,
 					Message: message,
 					Data: map[string]any{
-						"limit":         limit,
-						"used":          used,
-						"reset_at_unix": models.QuotaResetUnix(),
-						"subscribe_url": h.BaseURL + "/api/v1/api-keys/subscribe",
+						"limit":            limit,
+						"used":             used,
+						"reset_at_unix":    models.QuotaResetUnix(),
+						"subscribe_url":    h.BaseURL + "/api/v1/api-keys/subscribe",
+						"subscribe_method": "POST",
+						"subscribe_fields": []string{"email", "plan"},
+						"plans_url":        h.BaseURL + "/api/v1/api-keys/subscribe",
 					},
 				},
 			})

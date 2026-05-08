@@ -90,12 +90,15 @@ func (g *UsageGate) consume(w http.ResponseWriter, r *http.Request, surface, met
 		status := http.StatusPaymentRequired
 		_ = models.RecordUsageEvent(g.DB, key, anonHash, surface, method, path, tool, 0, status, r.UserAgent())
 		writeQuotaJSON(w, status, map[string]any{
-			"error":         "quota_exceeded",
-			"message":       models.QuotaErrorMessage(limit),
-			"limit":         limit,
-			"used":          used,
-			"reset_at_unix": models.QuotaResetUnix(),
-			"subscribe_url": g.BaseURL + "/api/v1/api-keys/subscribe",
+			"error":            "quota_exceeded",
+			"message":          models.QuotaErrorMessage(limit),
+			"limit":            limit,
+			"used":             used,
+			"reset_at_unix":    models.QuotaResetUnix(),
+			"subscribe_url":    g.BaseURL + "/api/v1/api-keys/subscribe",
+			"subscribe_method": "POST",
+			"subscribe_fields": []string{"email", "plan"},
+			"plans_url":        g.BaseURL + "/api/v1/api-keys/subscribe",
 		})
 		return key, anonHash, limit, used, false
 	}
