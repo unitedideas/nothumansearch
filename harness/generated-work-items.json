@@ -1,0 +1,47 @@
+[
+  {
+    "title": "Triage NHS score-fix intake rows into real leads, paid fulfillment, and test cleanup",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "admin-geo-jobs:2026-05-08T05:09:16Z count=11 pending_test_like=8 paid_or_lead=2",
+    "priority": 90,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Read /api/v1/admin/geo-jobs with the NHS admin Bearer token using inline Keychain access and do not print emails, payment ids, or notes.",
+      "Create an ops ledger summarizing rows by status and host class, separating obvious test rows from real paid or lead-mode requests.",
+      "For any real paid or lead-mode row, create a separate public-gated fulfillment or customer-follow-up WorkItem instead of sending from the planner.",
+      "Add or document a cleanup path for stale test rows so the score-fix conversion surface can be monitored without noisy pending rows."
+    ]
+  },
+  {
+    "title": "Make the daily NHS recrawl health-aware and non-disruptive",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "tools/health-guard.log:2026-05-07T10:50-11:21Z api_status=000 during same morning as tools/recrawl.log full crawl success=9708 failed=483",
+    "priority": 85,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Inspect the launchd recrawl wrapper and app health guard to confirm whether the 2026-05-07 API brownout overlapped the full recrawl window.",
+      "Add a run lock, health preflight, and skip-or-throttle behavior so a recrawl does not continue at full pressure while the public API is unavailable.",
+      "Prefer bounded verification such as a small file crawl or recategorize-only smoke; do not trigger a full manual recrawl.",
+      "Record recrawl start, skip, throttle, completion, and health outcome lines in a durable log that the planner can read next run."
+    ]
+  },
+  {
+    "title": "Clean up NHS monitor signup noise and add confirmation or quarantine for spoof-looking domains",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "admin-monitors:2026-05-08T05:09:16Z count=2 includes zero-score carrd.co monitor plus claudereviews.com healthy monitor",
+    "priority": 75,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Inspect monitor registration and weekly check behavior for unconfirmed or spoof-looking domains without exposing email addresses.",
+      "Add a low-friction confirmation, quarantine, or admin cleanup path that prevents junk monitors from consuming weekly monitor checks.",
+      "Keep the 20-domains-per-email and per-IP write limits intact.",
+      "Verify with unit tests or a local handler smoke that valid monitor registrations still work and junk rows can be isolated or removed."
+    ]
+  }
+]
