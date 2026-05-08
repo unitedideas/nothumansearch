@@ -351,9 +351,10 @@ var botPatterns = []string{
 // /mcp gets its own table (mcp_requests). /health is internal infra noise.
 // These exclusions keep page_views focused on human/organic traffic.
 var noLogPathPrefixes = []string{
-	"/mcp",     // JSON-RPC endpoint — logged to mcp_requests table
-	"/health",  // internal Consul/Fly health checks
-	"/metrics", // Prometheus scrapers
+	"/mcp",            // JSON-RPC endpoint — logged to mcp_requests table
+	"/health",         // internal Consul/Fly health checks
+	"/metrics",        // Prometheus scrapers
+	"/webhook/stripe", // Stripe retries/probes are monitored separately
 }
 
 // shouldLogPageView returns false for paths we explicitly exclude.
