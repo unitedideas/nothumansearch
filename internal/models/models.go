@@ -7,19 +7,19 @@ import (
 )
 
 type Site struct {
-	ID          string         `json:"id"`
-	Domain      string         `json:"domain"`
-	URL         string         `json:"url"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
+	ID          string `json:"id"`
+	Domain      string `json:"domain"`
+	URL         string `json:"url"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 
-	HasLLMsTxt      bool `json:"has_llms_txt"`
-	HasAIPlugin     bool `json:"has_ai_plugin"`
-	HasOpenAPI      bool `json:"has_openapi"`
-	HasRobotsAI     bool `json:"has_robots_ai"`
+	HasLLMsTxt       bool `json:"has_llms_txt"`
+	HasAIPlugin      bool `json:"has_ai_plugin"`
+	HasOpenAPI       bool `json:"has_openapi"`
+	HasRobotsAI      bool `json:"has_robots_ai"`
 	HasStructuredAPI bool `json:"has_structured_api"`
-	HasMCPServer    bool `json:"has_mcp_server"`
-	HasSchemaOrg    bool `json:"has_schema_org"`
+	HasMCPServer     bool `json:"has_mcp_server"`
+	HasSchemaOrg     bool `json:"has_schema_org"`
 
 	LLMsTxtContent string `json:"llms_txt_content,omitempty"`
 	OpenAPISummary string `json:"openapi_summary,omitempty"`
@@ -29,8 +29,8 @@ type Site struct {
 	Category     string         `json:"category"`
 	Tags         pq.StringArray `json:"tags"`
 
-	IsVerified  bool   `json:"is_verified"`
-	IsFeatured  bool   `json:"is_featured"`
+	IsVerified bool `json:"is_verified"`
+	IsFeatured bool `json:"is_featured"`
 
 	HasFavicon bool   `json:"has_favicon"`
 	FaviconURL string `json:"favicon_url,omitempty"`
@@ -45,13 +45,13 @@ type Site struct {
 
 // AgenticScore weights
 const (
-	ScoreLLMsTxt      = 25
-	ScoreAIPlugin     = 20
-	ScoreOpenAPI      = 20
-	ScoreRobotsAI     = 5
+	ScoreLLMsTxt       = 25
+	ScoreAIPlugin      = 20
+	ScoreOpenAPI       = 20
+	ScoreRobotsAI      = 5
 	ScoreStructuredAPI = 15
-	ScoreMCPServer    = 10
-	ScoreSchemaOrg    = 5
+	ScoreMCPServer     = 10
+	ScoreSchemaOrg     = 5
 )
 
 func CalculateScore(s *Site) int {
@@ -78,4 +78,9 @@ func CalculateScore(s *Site) int {
 		score += ScoreSchemaOrg
 	}
 	return score
+}
+
+// HasHardAgentSignal mirrors AgentFirstFilter for in-memory call sites.
+func (s Site) HasHardAgentSignal() bool {
+	return s.HasStructuredAPI || s.HasOpenAPI || s.HasAIPlugin || s.HasMCPServer
 }

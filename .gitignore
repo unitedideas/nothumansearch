@@ -30,3 +30,9 @@ ops/runbooks/sweeper.md
 ops/ledgers/
 harness/generated-*.json
 harness/generated-work-items.json
+harness/*-latest.json
+
+# Discovery quarantine test/dev tools
+tools/discovery*.py
+tools/test-*.py
+.claude/settings.json

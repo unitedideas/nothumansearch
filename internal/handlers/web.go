@@ -107,7 +107,7 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 			default:
 				return false
 			}
-			return s.HasStructuredAPI || s.HasOpenAPI || s.HasAIPlugin || s.HasMCPServer
+			return s.HasHardAgentSignal()
 		},
 		"add":  func(a, b int) int { return a + b },
 		"sub":  func(a, b int) int { return a - b },

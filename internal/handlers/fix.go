@@ -169,6 +169,10 @@ func (h *FixHandler) fixProduct() map[string]interface{} {
 	}
 }
 
+func scoreFixEligible(site *models.Site) bool {
+	return site != nil && site.HasHardAgentSignal()
+}
+
 func (h *FixHandler) CommerceCatalog(w http.ResponseWriter, r *http.Request) {
 	writeFixJSON(w, http.StatusOK, map[string]interface{}{
 		"seller":   "nothumansearch",
@@ -215,6 +219,10 @@ func (h *FixHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *FixHandler) intakeForm(w http.ResponseWriter, r *http.Request, host string) {
 	site, err := models.GetSiteByDomain(h.DB, host)
 	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if !scoreFixEligible(site) {
 		http.NotFound(w, r)
 		return
 	}
@@ -305,7 +313,12 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 		http.Error(w, "valid email required", http.StatusBadRequest)
 		return
 	}
-	if _, err := models.GetSiteByDomain(h.DB, host); err != nil {
+	site, err := models.GetSiteByDomain(h.DB, host)
+	if err != nil {
+		http.Error(w, "unknown host", http.StatusNotFound)
+		return
+	}
+	if !scoreFixEligible(site) {
 		http.Error(w, "unknown host", http.StatusNotFound)
 		return
 	}
@@ -471,7 +484,12 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "valid email required", "required_metadata": []string{"host", "email"}})
 		return
 	}
-	if _, err := models.GetSiteByDomain(h.DB, host); err != nil {
+	site, err := models.GetSiteByDomain(h.DB, host)
+	if err != nil {
+		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown host"})
+		return
+	}
+	if !scoreFixEligible(site) {
 		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown host"})
 		return
 	}

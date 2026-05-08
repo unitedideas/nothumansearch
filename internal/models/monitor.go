@@ -2,6 +2,7 @@ package models
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
@@ -19,11 +20,14 @@ type Monitor struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	LastCheckedAt    *time.Time `json:"last_checked_at,omitempty"`
 	LastNotifiedAt   *time.Time `json:"last_notified_at,omitempty"`
+	Status           string     `json:"status"`
+	QuarantineReason *string    `json:"quarantine_reason,omitempty"`
+	QuarantinedAt    *time.Time `json:"quarantined_at,omitempty"`
 }
 
 var (
-	ErrInvalidEmail  = errors.New("invalid email")
-	ErrInvalidDomain = errors.New("invalid domain")
+	ErrInvalidEmail    = errors.New("invalid email")
+	ErrInvalidDomain   = errors.New("invalid domain")
 	ErrTooManyMonitors = errors.New("too many monitors for this email")
 )
 
@@ -31,6 +35,44 @@ var (
 // address can hold. Prevents a script from filling the monitors table with
 // arbitrary domains and turning the weekly worker into a crawl amplifier.
 const MaxMonitorsPerEmail = 20
+
+const (
+	MonitorStatusActive      = "active"
+	MonitorStatusQuarantined = "quarantined"
+)
+
+var sharedHostApexDomains = map[string]bool{
+	"carrd.co":      true,
+	"github.io":     true,
+	"gitlab.io":     true,
+	"glitch.me":     true,
+	"herokuapp.com": true,
+	"netlify.app":   true,
+	"pages.dev":     true,
+	"repl.co":       true,
+	"vercel.app":    true,
+	"webflow.io":    true,
+	"wixsite.com":   true,
+}
+
+func MonitorInitialStatus(domain string) (string, *string) {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	domain = strings.TrimPrefix(domain, "www.")
+	if sharedHostApexDomains[domain] {
+		reason := "shared-host apex domain requires admin review"
+		return MonitorStatusQuarantined, &reason
+	}
+	return MonitorStatusActive, nil
+}
+
+func RedactEmail(email string) (domain string, hash string) {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	if at := strings.LastIndex(normalized, "@"); at >= 0 && at < len(normalized)-1 {
+		domain = normalized[at+1:]
+	}
+	sum := sha256.Sum256([]byte(normalized))
+	return domain, hex.EncodeToString(sum[:])[:16]
+}
 
 // privateHostPrefixes lists hostname shapes that must never be monitored —
 // SSRF from the worker crawling arbitrary internal IPs / metadata endpoints.
@@ -165,17 +207,26 @@ func RegisterMonitor(db *sql.DB, email, domain string) (*Monitor, error) {
 	if err != nil {
 		return nil, err
 	}
+	status, quarantineReason := MonitorInitialStatus(domain)
 
 	row := db.QueryRow(`
-		INSERT INTO monitors (email, domain, token)
-		VALUES ($1, $2, $3)
+		INSERT INTO monitors (email, domain, token, status, quarantine_reason, quarantined_at)
+		VALUES ($1, $2, $3, $4, $5, CASE WHEN $4 = 'quarantined' THEN NOW() ELSE NULL END)
 		ON CONFLICT (email, domain) DO UPDATE SET created_at = NOW()
-		RETURNING id, email, domain, token, created_at
-	`, email, domain, token)
+		RETURNING id, email, domain, token, status, quarantine_reason, quarantined_at, created_at
+	`, email, domain, token, status, quarantineReason)
 
 	m := &Monitor{}
-	if err := row.Scan(&m.ID, &m.Email, &m.Domain, &m.Token, &m.CreatedAt); err != nil {
+	var reason sql.NullString
+	var quarantinedAt sql.NullTime
+	if err := row.Scan(&m.ID, &m.Email, &m.Domain, &m.Token, &m.Status, &reason, &quarantinedAt, &m.CreatedAt); err != nil {
 		return nil, err
+	}
+	if reason.Valid {
+		m.QuarantineReason = &reason.String
+	}
+	if quarantinedAt.Valid {
+		m.QuarantinedAt = &quarantinedAt.Time
 	}
 	return m, nil
 }
@@ -183,14 +234,24 @@ func RegisterMonitor(db *sql.DB, email, domain string) (*Monitor, error) {
 func GetMonitorByToken(db *sql.DB, token string) (*Monitor, error) {
 	row := db.QueryRow(`
 		SELECT id, email, domain, token, last_score, last_signals_hash,
-		       created_at, last_checked_at, last_notified_at
+		       created_at, last_checked_at, last_notified_at,
+		       status, quarantine_reason, quarantined_at
 		FROM monitors WHERE token = $1
 	`, token)
 	m := &Monitor{}
+	var reason sql.NullString
+	var quarantinedAt sql.NullTime
 	if err := row.Scan(&m.ID, &m.Email, &m.Domain, &m.Token,
 		&m.LastScore, &m.LastSignalsHash, &m.CreatedAt,
-		&m.LastCheckedAt, &m.LastNotifiedAt); err != nil {
+		&m.LastCheckedAt, &m.LastNotifiedAt, &m.Status,
+		&reason, &quarantinedAt); err != nil {
 		return nil, err
+	}
+	if reason.Valid {
+		m.QuarantineReason = &reason.String
+	}
+	if quarantinedAt.Valid {
+		m.QuarantinedAt = &quarantinedAt.Time
 	}
 	return m, nil
 }
@@ -205,9 +266,10 @@ func DeleteMonitorByToken(db *sql.DB, token string) error {
 func ListDueMonitors(db *sql.DB, cutoff time.Time, limit int) ([]Monitor, error) {
 	rows, err := db.Query(`
 		SELECT id, email, domain, token, last_score, last_signals_hash,
-		       created_at, last_checked_at, last_notified_at
+		       created_at, last_checked_at, last_notified_at,
+		       status, quarantine_reason, quarantined_at
 		FROM monitors
-		WHERE last_checked_at IS NULL OR last_checked_at < $1
+		WHERE status = 'active' AND (last_checked_at IS NULL OR last_checked_at < $1)
 		ORDER BY last_checked_at NULLS FIRST
 		LIMIT $2
 	`, cutoff, limit)
@@ -218,10 +280,19 @@ func ListDueMonitors(db *sql.DB, cutoff time.Time, limit int) ([]Monitor, error)
 	var out []Monitor
 	for rows.Next() {
 		m := Monitor{}
+		var reason sql.NullString
+		var quarantinedAt sql.NullTime
 		if err := rows.Scan(&m.ID, &m.Email, &m.Domain, &m.Token,
 			&m.LastScore, &m.LastSignalsHash, &m.CreatedAt,
-			&m.LastCheckedAt, &m.LastNotifiedAt); err != nil {
+			&m.LastCheckedAt, &m.LastNotifiedAt, &m.Status,
+			&reason, &quarantinedAt); err != nil {
 			return nil, err
+		}
+		if reason.Valid {
+			m.QuarantineReason = &reason.String
+		}
+		if quarantinedAt.Valid {
+			m.QuarantinedAt = &quarantinedAt.Time
 		}
 		out = append(out, m)
 	}
@@ -257,7 +328,8 @@ func ListRecentMonitors(db *sql.DB, limit int) ([]Monitor, error) {
 	}
 	rows, err := db.Query(`
 		SELECT id, email, domain, token, last_score, last_signals_hash,
-		       created_at, last_checked_at, last_notified_at
+		       created_at, last_checked_at, last_notified_at,
+		       status, quarantine_reason, quarantined_at
 		FROM monitors
 		ORDER BY created_at DESC
 		LIMIT $1
@@ -269,10 +341,19 @@ func ListRecentMonitors(db *sql.DB, limit int) ([]Monitor, error) {
 	var out []Monitor
 	for rows.Next() {
 		m := Monitor{}
+		var reason sql.NullString
+		var quarantinedAt sql.NullTime
 		if err := rows.Scan(&m.ID, &m.Email, &m.Domain, &m.Token,
 			&m.LastScore, &m.LastSignalsHash, &m.CreatedAt,
-			&m.LastCheckedAt, &m.LastNotifiedAt); err != nil {
+			&m.LastCheckedAt, &m.LastNotifiedAt, &m.Status,
+			&reason, &quarantinedAt); err != nil {
 			return nil, err
+		}
+		if reason.Valid {
+			m.QuarantineReason = &reason.String
+		}
+		if quarantinedAt.Valid {
+			m.QuarantinedAt = &quarantinedAt.Time
 		}
 		out = append(out, m)
 	}

@@ -68,7 +68,9 @@ def parse_rows(path: Path) -> list[DiscoveryRow]:
     return rows
 
 
-def build_report(rows: list[DiscoveryRow]) -> dict[str, object]:
+def _aggregate(
+    rows: list[DiscoveryRow],
+) -> tuple[Counter[str], Counter[str], Counter[str], Counter[str], Counter[str]]:
     primary = Counter(row.primary_bucket for row in rows)
     category = Counter(row.category for row in rows)
     hard_by_category = Counter(row.category for row in rows if row.has_hard_signal)
@@ -77,10 +79,73 @@ def build_report(rows: list[DiscoveryRow]) -> dict[str, object]:
         ",".join(sorted(row.signals)) if row.signals else "none"
         for row in rows
     )
+    return primary, category, hard_by_category, soft_by_category, signal_sets
+
+
+def quality_gate(
+    total: int,
+    hard: int,
+    low: int,
+    other_hard_signal: int,
+    other_low_signal: int,
+) -> dict[str, str]:
+    if total == 0:
+        return {"status": "pass", "trigger": "empty_sample"}
+    if low > hard:
+        return {
+            "status": "review",
+            "trigger": "low_signal_rows_exceed_hard_signal_rows",
+        }
+    if other_low_signal > other_hard_signal:
+        return {
+            "status": "review",
+            "trigger": "category_other_low_signal_exceeds_hard_signal",
+        }
+    return {"status": "pass", "trigger": "none"}
+
+
+def build_report(rows: list[DiscoveryRow]) -> dict[str, object]:
+    primary, category, hard_by_category, soft_by_category, _ = _aggregate(rows)
+    total = len(rows)
+    hard = primary["hard_agent_signal"]
+    low = total - hard
+    other_low_signal = soft_by_category["other"]
+    other_hard_signal = hard_by_category["other"]
+    return {
+        "counts": {
+            "sample_rows": total,
+            "hard_signal_rows": hard,
+            "low_signal_rows": low,
+            "hard_signal_rate": round(hard / total, 4) if total else 0,
+            "category_other_low_signal": other_low_signal,
+            "category_other_hard_agent_signal": other_hard_signal,
+        },
+        "sample_breakdown": {
+            "hard_agent_signal": hard,
+            "llms_only": primary["llms_only"],
+            "schema_only": primary["schema_only"],
+            "zero_score": primary["zero_score"],
+            "passive_or_soft_signal": primary["passive_or_soft_signal"],
+            "category_other": category["other"],
+            "category_other_low_signal": other_low_signal,
+            "category_other_hard_agent_signal": other_hard_signal,
+        },
+        "quality_gate": quality_gate(
+            total,
+            hard,
+            low,
+            other_hard_signal,
+            other_low_signal,
+        ),
+    }
+
+
+def build_legacy_report(rows: list[DiscoveryRow]) -> dict[str, object]:
+    primary, category, hard_by_category, soft_by_category, signal_sets = _aggregate(rows)
 
     total = len(rows)
     hard = primary["hard_agent_signal"]
-    soft = total - hard
+    low = total - hard
     other = category["other"]
     return {
         "sample_source": "tools/discover.err",
@@ -92,7 +157,7 @@ def build_report(rows: list[DiscoveryRow]) -> dict[str, object]:
             "low_signal": soft_by_category["other"],
         },
         "hard_signal_rows": hard,
-        "low_signal_rows": soft,
+        "low_signal_rows": low,
         "hard_signal_rate": round(hard / total, 4) if total else 0,
         "top_categories": dict(category.most_common(8)),
         "top_signal_sets": dict(signal_sets.most_common(8)),
@@ -114,10 +179,20 @@ def main() -> int:
         "--output",
         help="optional JSON output path; parent directory must already exist",
     )
+    parser.add_argument(
+        "--format",
+        choices=("planner", "legacy"),
+        default="planner",
+        help="planner emits the sanitized quarantine-compatible schema",
+    )
     args = parser.parse_args()
 
     rows = parse_rows(Path(args.input))
-    report = build_report(rows)
+    report = (
+        build_report(rows)
+        if args.format == "planner"
+        else build_legacy_report(rows)
+    )
     rendered = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
         Path(args.output).write_text(rendered + "\n", encoding="utf-8")
