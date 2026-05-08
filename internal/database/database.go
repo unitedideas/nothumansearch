@@ -49,40 +49,41 @@ func RunMigrations(dir string) error {
 	}
 	sort.Strings(files)
 
+	var failures int
 	for _, f := range files {
 		data, err := os.ReadFile(filepath.Join(dir, f))
 		if err != nil {
 			return fmt.Errorf("read %s: %w", f, err)
 		}
-		// Execute each statement individually so one failure doesn't block the rest.
-		// Split on semicolons that end a statement (simple split, works for DDL).
-		stmts := strings.Split(string(data), ";")
-		for _, stmt := range stmts {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			// Skip pure-comment pieces (every non-blank line starts with --).
-			// NOTE: do NOT short-circuit on HasPrefix("--") alone — a real
-			// statement with a leading comment block ("-- doc\nCREATE TABLE …")
-			// would be skipped entirely. Check every line.
-			lines := strings.Split(stmt, "\n")
-			hasCode := false
-			for _, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if trimmed != "" && !strings.HasPrefix(trimmed, "--") {
-					hasCode = true
-					break
-				}
-			}
-			if !hasCode {
-				continue
-			}
+		for _, stmt := range migrationStatements(string(data)) {
 			if _, err := DB.Exec(stmt); err != nil {
 				log.Printf("migration %s statement error (continuing): %v", f, err)
+				failures++
 			}
 		}
 		log.Printf("migration applied: %s", f)
 	}
+	if failures > 0 {
+		return fmt.Errorf("%d migration statements failed", failures)
+	}
 	return nil
+}
+
+func migrationStatements(data string) []string {
+	var uncommented []string
+	for _, line := range strings.Split(data, "\n") {
+		if idx := strings.Index(line, "--"); idx >= 0 {
+			line = line[:idx]
+		}
+		uncommented = append(uncommented, line)
+	}
+
+	var statements []string
+	for _, stmt := range strings.Split(strings.Join(uncommented, "\n"), ";") {
+		stmt = strings.TrimSpace(stmt)
+		if stmt != "" {
+			statements = append(statements, stmt)
+		}
+	}
+	return statements
 }
