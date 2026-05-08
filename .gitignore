@@ -26,5 +26,6 @@ tools/discover.log
 last_run
 ops/sweeper/
 ops/runbooks/sweeper.md
+ops/ledgers/
 harness/generated-*.json
 harness/generated-work-items.json
