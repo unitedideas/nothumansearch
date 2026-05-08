@@ -311,7 +311,7 @@ func GetSiteByDomain(db *sql.DB, domain string) (*Site, error) {
 const AgentFirstFilter = "crawl_status='success' AND (has_structured_api = true OR has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
 
 func GetStats(db *sql.DB) (totalSites, avgScore int, topCategory string) {
-	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE " + AgentFirstFilter).Scan(&totalSites, &avgScore)
+	db.QueryRow("SELECT count(*), COALESCE(AVG(agentic_score), 0)::int FROM sites WHERE "+AgentFirstFilter).Scan(&totalSites, &avgScore)
 	db.QueryRow("SELECT category FROM sites WHERE " + AgentFirstFilter + " GROUP BY category ORDER BY count(*) DESC LIMIT 1").Scan(&topCategory)
 	return
 }
@@ -466,6 +466,9 @@ func TopTags(db *sql.DB, limit int) ([]TagCount, error) {
 // LogMCPRequest records an MCP JSON-RPC request for analytics. Called as a
 // goroutine so it never blocks the handler response.
 func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, resultCount int, userAgent, ipHash string, durationMs int) {
+	if db == nil {
+		return
+	}
 	var args *string
 	if len(arguments) > 0 {
 		s := string(arguments)

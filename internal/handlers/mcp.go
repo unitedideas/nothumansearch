@@ -142,17 +142,18 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if req.Method == "initialize" || req.Method == "tools/list" {
 		if h.discoveryRateLimiter == nil {
-			h.discoveryRateLimiter = newMCPDiscoveryRateLimiter(120, time.Hour)
+			h.discoveryRateLimiter = newMCPDiscoveryRateLimiter(90, time.Hour)
 		}
 		remaining, retryAfter, ok := h.discoveryRateLimiter.allow(ipHash+":"+req.Method, time.Now())
 		resetSeconds := int(retryAfter.Seconds())
 		if resetSeconds < 1 {
 			resetSeconds = 1
 		}
-		w.Header().Set("X-RateLimit-Limit", "90")
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", h.discoveryRateLimiter.limit))
 		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(retryAfter).Unix()))
 		if !ok {
+			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", fmt.Sprintf("%d", resetSeconds))
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(rpcResponse{
@@ -162,7 +163,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Code:    -32029,
 					Message: "rate limit exceeded for MCP discovery calls; retry after the indicated number of seconds",
 					Data: map[string]any{
-						"limit":       90,
+						"limit":       h.discoveryRateLimiter.limit,
 						"window":      "1h",
 						"retry_after": resetSeconds,
 					},
