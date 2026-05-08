@@ -112,7 +112,7 @@ func main() {
 // to every site in the DB in a single pass — no HTTP, no re-scoring. Useful
 // after adding new domainRules/keyword rules when recrawl is slow or blocked.
 func recategorizeAll() {
-	rows, err := database.DB.Query(`SELECT id, domain, name, description, category,
+	rows, err := database.DB.Query(`SELECT id, domain, name, description, category, tags,
 		has_llms_txt, has_ai_plugin, has_openapi, has_robots_ai, has_structured_api, has_mcp_server, has_schema_org
 		FROM sites`)
 	if err != nil {
@@ -128,7 +128,7 @@ func recategorizeAll() {
 	var all []row
 	for rows.Next() {
 		var r row
-		if err := rows.Scan(&r.id, &r.site.Domain, &r.site.Name, &r.site.Description, &r.oldCat,
+		if err := rows.Scan(&r.id, &r.site.Domain, &r.site.Name, &r.site.Description, &r.oldCat, &r.site.Tags,
 			&r.site.HasLLMsTxt, &r.site.HasAIPlugin, &r.site.HasOpenAPI, &r.site.HasRobotsAI,
 			&r.site.HasStructuredAPI, &r.site.HasMCPServer, &r.site.HasSchemaOrg); err != nil {
 			log.Printf("scan: %v", err)

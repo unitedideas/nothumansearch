@@ -1,6 +1,6 @@
 -- 012_geo_fix_jobs.sql
 -- Paid GEO-uplift intake queue. Each row = one "Fix my score for $199" order.
--- Created at /fix/{host} intake; paid_at set by Stripe webhook;
+-- Created at /fix/{host} intake, paid_at set by Stripe webhook,
 -- completed_at set manually (or by a future fulfillment worker).
 
 CREATE TABLE IF NOT EXISTS geo_fix_jobs (

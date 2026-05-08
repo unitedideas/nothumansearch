@@ -167,6 +167,11 @@ func TestCategorize(t *testing.T) {
 		{"opdstar→health", mk("opdstar.com", "OPDSTAR", "Taiwan outpatient medical record assistant"), "health"},
 		{"datamuse→data", mk("datamuse.com", "OneLook Thesaurus", "Plugin for searching for words"), "data"},
 		{"samiolearning→education", mk("samiolearning.com", "Samio Learning", "Kids app that adapts reading and math"), "education"},
+		{"simplepdf tag fallback→productivity", mk("simplepdf.com", "Free PDF Editor Online", "Edit, fill, and sign PDFs in your browser", "pdf", "document"), "productivity"},
+		{"ctojobshq tag fallback→jobs", mk("ctojobshq.com", "CTO Jobs HQ", "Browse curated CTO roles", "jobs"), "jobs"},
+		{"authress security tag fallback→security", mk("authress.io", "Authress", "Login and access control API", "authentication", "security"), "security"},
+		{"testingbot tag fallback→developer", mk("testingbot.com", "Cross Browser Testing", "Automated Testing", "testing"), "developer"},
+		{"link payment tag fallback→finance", mk("link.com", "Link", "Wallet for AI economy", "payment"), "finance"},
 
 		// TLD fallbacks — when no domain rule matches
 		{"any-.ai→ai-tools", mk("random-startup.ai", "Random", ""), "ai-tools"},

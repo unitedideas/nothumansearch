@@ -693,11 +693,13 @@ func categorize(site *models.Site) string {
 		"polygon.io":     "finance",
 		"coinbase.com":   "finance",
 		"wise.com":       "finance",
+		"link.com":       "finance",
 		"shopify":        "ecommerce",
 		"bigcommerce":    "ecommerce",
 		"woocommerce":    "ecommerce",
 		"snipcart":       "ecommerce",
 		"square.com":     "ecommerce",
+		"squareup.com":   "ecommerce",
 		"openai":         "ai-tools",
 		"anthropic":      "ai-tools",
 		"cohere":         "ai-tools",
@@ -737,6 +739,7 @@ func categorize(site *models.Site) string {
 		"modal.com":      "developer",
 		"cloudflare":     "developer",
 		"github.com":     "developer",
+		"aws.amazon.com": "developer",
 		"sentry.io":      "developer",
 		"grafana":        "developer",
 		"datadog":        "developer",
@@ -1669,6 +1672,22 @@ func categorize(site *models.Site) string {
 		"fragbin.com":             "developer",
 		"bigdatacloud.com":        "data",
 		"foxit.com":               "productivity",
+
+		// Batch 14: high-score tag-fallback validation set (2026-05-07).
+		"simplepdf.com":       "productivity",
+		"ctojobshq.com":       "jobs",
+		"reed.co.uk":          "jobs",
+		"testingbot.com":      "developer",
+		"authress.io":         "security",
+		"blz.run":             "developer",
+		"websitellm.com":      "ai-tools",
+		"apilayer.com":        "developer",
+		"abstractapi.com":     "developer",
+		"apistax.io":          "developer",
+		"screenshotlayer.com": "developer",
+		"pdflayer.com":        "productivity",
+		"mailboxlayer.com":    "communication",
+		"languagelayer.com":   "ai-tools",
 	}
 	for domainKey, cat := range domainRules {
 		if domainRuleMatches(d, domainKey) {
@@ -1726,7 +1745,7 @@ func categorize(site *models.Site) string {
 		{"education", []string{"education platform", "online course", "learning platform", "tutorial platform"}},
 		{"ecommerce", []string{"ecommerce", "online store", "shopping", "retail platform"}},
 		{"finance", []string{"fintech", "payment processing", "banking", "trading platform", "investment"}},
-		{"security", []string{"cybersecurity", "identity verification", "vulnerability", "penetration testing"}},
+		{"security", []string{"cybersecurity", "identity verification", "access control api", "vulnerability", "penetration testing"}},
 		{"ai-tools", []string{"language model", "machine learning", "inference", "embeddings", "text-to-speech", "speech-to-text", "generative ai"}},
 		{"data", []string{"database", "data warehouse", "analytics platform", "etl", "data integration", "data pipeline"}},
 		{"developer", []string{"developer platform", "devtool", "developer tool", "hosting platform", "deployment", "runtime", "infrastructure"}},
@@ -1791,7 +1810,45 @@ func categorize(site *models.Site) string {
 		return "developer"
 	}
 
+	tags := append(pq.StringArray{}, site.Tags...)
+	tags = append(tags, generateTags(site)...)
+	if cat := categoryFromTags(tags); cat != "" {
+		return cat
+	}
+
 	return "other"
+}
+
+func categoryFromTags(tags pq.StringArray) string {
+	tagSet := map[string]bool{}
+	for _, tag := range tags {
+		tagSet[tag] = true
+	}
+
+	orderedRules := []struct {
+		cat  string
+		tags []string
+	}{
+		{"jobs", []string{"jobs"}},
+		{"health", []string{"healthcare"}},
+		{"education", []string{"education"}},
+		{"ecommerce", []string{"ecommerce", "shipping", "travel"}},
+		{"finance", []string{"fintech"}},
+		{"security", []string{"security"}},
+		{"communication", []string{"messaging", "email", "notifications", "social-media"}},
+		{"productivity", []string{"calendar", "crm", "forms", "pdf", "document"}},
+		{"developer", []string{"devtools", "testing", "hosting", "monitoring"}},
+		{"data", []string{"database", "data-pipeline", "vector-db"}},
+		{"ai-tools", []string{"ai", "ml", "vector-db", "translation", "image-generation", "video-generation"}},
+	}
+	for _, rule := range orderedRules {
+		for _, tag := range rule.tags {
+			if tagSet[tag] {
+				return rule.cat
+			}
+		}
+	}
+	return ""
 }
 
 func domainRuleMatches(domain, key string) bool {
