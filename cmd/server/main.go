@@ -111,6 +111,8 @@ func main() {
 		log.Fatalf("digest template: %v", err)
 	}
 	fixHandler := handlers.NewFixHandler(database.DB, baseURL)
+	apiKeyHandler := handlers.NewAPIKeyHandler(database.DB, baseURL)
+	usageGate := handlers.NewUsageGate(database.DB, baseURL)
 
 	mux := http.NewServeMux()
 
@@ -271,14 +273,16 @@ func main() {
 	mux.HandleFunc("/api/v1/products", fixHandler.CommerceCatalog)
 	mux.HandleFunc("/api/v1/quote", fixHandler.CommerceQuote)
 	mux.HandleFunc("/api/v1/checkout", fixHandler.AgenticCheckout)
-	mux.HandleFunc("/api/v1/search", apiHandler.Search)
-	mux.HandleFunc("/api/v1/site/", apiHandler.GetSite)
-	mux.HandleFunc("/api/v1/sites/", apiHandler.GetSite)
+	mux.HandleFunc("/api/v1/api-keys/subscribe", apiKeyHandler.Subscribe)
+	mux.HandleFunc("/api/v1/api-keys/activate", apiKeyHandler.Activate)
+	mux.Handle("/api/v1/search", usageGate.Billable("rest", "/api/v1/search", http.HandlerFunc(apiHandler.Search)))
+	mux.Handle("/api/v1/site/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
+	mux.Handle("/api/v1/sites/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/top", apiHandler.Top)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
-	mux.HandleFunc("/api/v1/verify-mcp", apiHandler.VerifyMCP)
+	mux.Handle("/api/v1/verify-mcp", usageGate.Billable("rest", "/api/v1/verify-mcp", http.HandlerFunc(apiHandler.VerifyMCP)))
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
@@ -289,7 +293,7 @@ func main() {
 	mux.HandleFunc("/fix/success", fixHandler.SuccessPage)
 	mux.HandleFunc("/fix/", fixHandler.ServeHTTP)
 	mux.HandleFunc("/webhook/stripe", fixHandler.HandleWebhook)
-	mux.Handle("/api/v1/check", checkHandler)
+	mux.Handle("/api/v1/check", usageGate.Billable("rest", "/api/v1/check", checkHandler))
 
 	// Embeddable score badges: /badge/{domain}.svg
 	mux.Handle("/badge/", badgeHandler)

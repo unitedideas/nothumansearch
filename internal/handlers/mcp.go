@@ -27,6 +27,7 @@ type MCPHandler struct {
 	DB                   *sql.DB
 	BaseURL              string
 	discoveryRateLimiter *mcpDiscoveryRateLimiter
+	usageGate            *UsageGate
 }
 
 func NewMCPHandler(db *sql.DB, baseURL string) *MCPHandler {
@@ -34,6 +35,7 @@ func NewMCPHandler(db *sql.DB, baseURL string) *MCPHandler {
 		DB:                   db,
 		BaseURL:              baseURL,
 		discoveryRateLimiter: newMCPDiscoveryRateLimiter(90, time.Hour),
+		usageGate:            NewUsageGate(db, baseURL),
 	}
 }
 
@@ -199,7 +201,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		go models.LogMCPRequest(h.DB, "tools/list", "", nil, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 
 	case "tools/call":
-		h.handleToolCall(w, req, start, ua, ipHash)
+		h.handleToolCall(w, r, req, start, ua, ipHash)
 
 	default:
 		h.writeError(w, req.ID, -32601, "method not found: "+req.Method)
@@ -415,7 +417,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 	}
 }
 
-func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start time.Time, ua, ipHash string) {
+func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcRequest, start time.Time, ua, ipHash string) {
 	var params struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
@@ -423,6 +425,35 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		h.writeError(w, req.ID, -32602, "invalid params")
 		return
+	}
+
+	if isNHSBillableMCPTool(params.Name) {
+		_, _, limit, used, err := h.usageGate.ConsumeMCP(r, params.Name)
+		if err != nil {
+			status := http.StatusPaymentRequired
+			message := models.QuotaErrorMessage(limit)
+			if err.Error() == "invalid_api_key" {
+				status = http.StatusUnauthorized
+				message = "API key was not found or is inactive"
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_ = json.NewEncoder(w).Encode(rpcResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error: &rpcError{
+					Code:    -32042,
+					Message: message,
+					Data: map[string]any{
+						"limit":         limit,
+						"used":          used,
+						"reset_at_unix": models.QuotaResetUnix(),
+						"subscribe_url": h.BaseURL + "/api/v1/api-keys/subscribe",
+					},
+				},
+			})
+			return
+		}
 	}
 
 	switch params.Name {
@@ -467,6 +498,15 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, req rpcRequest, start
 			"arguments": params.Arguments,
 		},
 	})
+}
+
+func isNHSBillableMCPTool(name string) bool {
+	switch name {
+	case "search_agents", "search", "get_site_details", "check_url", "verify_mcp", "find_mcp_servers":
+		return true
+	default:
+		return false
+	}
 }
 
 // toolRegisterMonitor wraps the /api/v1/monitor/register REST handler so

@@ -749,6 +749,10 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		if cs.Metadata["product"] == "nhs_api_subscription" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		// Only handle sessions tagged as nhs_fix_my_score.
 		if cs.Metadata["product"] != "nhs_fix_my_score" {
 			w.WriteHeader(http.StatusOK)
@@ -782,6 +786,24 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 				"currency":          string(cs.Currency),
 			},
 		})
+	} else if event.Type == "customer.subscription.updated" || event.Type == "customer.subscription.deleted" {
+		var sub gostripe.Subscription
+		if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+			log.Printf("fix webhook: subscription unmarshal: %v", err)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if sub.Metadata["product"] != "nhs_api_subscription" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		customerID := ""
+		if sub.Customer != nil {
+			customerID = sub.Customer.ID
+		}
+		if err := models.UpsertSubscriptionStatus(h.DB, customerID, sub.ID, string(sub.Status), sub.Metadata["plan"]); err != nil {
+			log.Printf("fix webhook: subscription status: %v", err)
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)
