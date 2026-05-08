@@ -104,3 +104,65 @@ func TestCategorize_SpamShortCircuit(t *testing.T) {
 		t.Errorf("categorize = %q, want \"spam\" (isSpam short-circuit missed)", got)
 	}
 }
+
+func TestCategorize_LiveOtherCleanupRules(t *testing.T) {
+	cases := []struct {
+		name string
+		site models.Site
+		want string
+	}{
+		{
+			name: "current time api domain",
+			site: models.Site{
+				Domain: "a.currenttimeutc.com",
+				Tags:   []string{"llms-txt", "api", "mcp"},
+			},
+			want: "data",
+		},
+		{
+			name: "live furniture store",
+			site: models.Site{
+				Domain:      "murphyfurniture.ie",
+				Name:        "Murphy Furniture - Best Home Furniture Stores",
+				Description: "Home furniture store with wardrobes, beds, mattresses, and dining room products.",
+			},
+			want: "ecommerce",
+		},
+		{
+			name: "live telehealth app",
+			site: models.Site{
+				Domain:      "doctornow.co.kr",
+				Name:        "DoctorNow telemedicine app",
+				Description: "Remote doctor visits, pharmacy delivery, pediatrics, dermatology, and prescription service.",
+			},
+			want: "health",
+		},
+		{
+			name: "live feature flag product",
+			site: models.Site{
+				Domain:      "bucket.co",
+				Name:        "Reflag: Feature flags on autopilot",
+				Description: "TypeScript feature management that gets developers back to building.",
+			},
+			want: "developer",
+		},
+		{
+			name: "openapi alone stays uncategorized",
+			site: models.Site{
+				Domain:     "unknown-openapi.example",
+				HasOpenAPI: true,
+				Tags:       []string{"api", "openapi"},
+			},
+			want: "other",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := categorize(&tc.site)
+			if got != tc.want {
+				t.Errorf("categorize(%q)=%q, want %q", tc.site.Domain, got, tc.want)
+			}
+		})
+	}
+}
