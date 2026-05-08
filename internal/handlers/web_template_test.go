@@ -59,4 +59,16 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 	if !strings.Contains(siteOut.String(), "+25 llms.txt") {
 		t.Fatalf("expected pointer site render to include score reasons")
 	}
+	if strings.Contains(siteOut.String(), "Fix this for $199") {
+		t.Fatalf("expected passive llms-only site to omit score-fix CTA")
+	}
+
+	site.HasStructuredAPI = true
+	var hardSignalOut bytes.Buffer
+	if err := h.tmpl.ExecuteTemplate(&hardSignalOut, "site.html", site); err != nil {
+		t.Fatalf("execute hard-signal site template: %v", err)
+	}
+	if !strings.Contains(hardSignalOut.String(), "Fix this for $199") {
+		t.Fatalf("expected low-score hard-signal site to include score-fix CTA")
+	}
 }

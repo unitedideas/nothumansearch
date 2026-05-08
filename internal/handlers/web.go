@@ -94,6 +94,21 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 			}
 			return out
 		},
+		"hasHardAgentSignal": func(v any) bool {
+			var s models.Site
+			switch site := v.(type) {
+			case models.Site:
+				s = site
+			case *models.Site:
+				if site == nil {
+					return false
+				}
+				s = *site
+			default:
+				return false
+			}
+			return s.HasStructuredAPI || s.HasOpenAPI || s.HasAIPlugin || s.HasMCPServer
+		},
 		"add":  func(a, b int) int { return a + b },
 		"sub":  func(a, b int) int { return a - b },
 		"tof":  func(a int) float64 { return float64(a) },

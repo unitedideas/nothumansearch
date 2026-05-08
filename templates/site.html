@@ -145,7 +145,7 @@
             </div>
         </div>
 
-        {{if lt .AgenticScore 70}}
+        {{if and (lt .AgenticScore 70) (hasHardAgentSignal .)}}
         <div style="margin:20px 0;padding:16px 20px;background:var(--surface);border:1px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
             <div style="flex:1 1 300px;min-width:0;">
                 <div style="font-weight:600;font-size:15px;margin-bottom:4px;">Raise this score to 95+</div>
