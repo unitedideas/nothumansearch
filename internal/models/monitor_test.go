@@ -1,6 +1,9 @@
 package models
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestNormalizeDomain(t *testing.T) {
 	tests := []struct {
@@ -56,6 +59,44 @@ func TestValidateEmail(t *testing.T) {
 		if _, err := ValidateEmail(e); err == nil {
 			t.Errorf("ValidateEmail(%q) should have errored", e)
 		}
+	}
+}
+
+func TestMonitorInitialStatusQuarantinesSharedHostApex(t *testing.T) {
+	tests := []struct {
+		domain string
+		status string
+	}{
+		{"carrd.co", MonitorStatusQuarantined},
+		{"github.io", MonitorStatusQuarantined},
+		{"example.com", MonitorStatusActive},
+		{"project.carrd.co", MonitorStatusActive},
+		{"docs.pages.dev", MonitorStatusActive},
+	}
+	for _, tc := range tests {
+		got, reason := MonitorInitialStatus(tc.domain)
+		if got != tc.status {
+			t.Errorf("MonitorInitialStatus(%q) status = %q, want %q", tc.domain, got, tc.status)
+		}
+		if got == MonitorStatusQuarantined && (reason == nil || *reason == "") {
+			t.Errorf("MonitorInitialStatus(%q) quarantined without reason", tc.domain)
+		}
+		if got == MonitorStatusActive && reason != nil {
+			t.Errorf("MonitorInitialStatus(%q) active with reason %q", tc.domain, *reason)
+		}
+	}
+}
+
+func TestRedactEmail(t *testing.T) {
+	domain, hash := RedactEmail("Owner+Monitor@Example.COM")
+	if domain != "example.com" {
+		t.Fatalf("RedactEmail domain = %q, want example.com", domain)
+	}
+	if hash == "" || strings.Contains(hash, "owner") || strings.Contains(hash, "@") {
+		t.Fatalf("RedactEmail hash exposes raw email data: %q", hash)
+	}
+	if len(hash) != 16 {
+		t.Fatalf("RedactEmail hash len = %d, want 16", len(hash))
 	}
 }
 
