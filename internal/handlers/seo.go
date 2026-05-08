@@ -316,19 +316,6 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"method":      "GET",
 			},
 			{
-				"name":        "top_sites_rest",
-				"description": "REST version of get_top_sites — returns top-scored sites as JSON, filterable by category or signal (has_mcp, has_llms_txt). Cached 5min. For agents that don't speak MCP.",
-				"endpoint":    h.BaseURL + "/api/v1/top",
-				"method":      "GET",
-				"parameters": map[string]interface{}{
-					"category":     map[string]string{"type": "string", "description": "Filter by category"},
-					"has_mcp":      map[string]string{"type": "boolean", "description": "Return only sites with a verified MCP server"},
-					"has_openapi":  map[string]string{"type": "boolean"},
-					"has_llms_txt": map[string]string{"type": "boolean"},
-					"limit":        map[string]string{"type": "integer", "description": "Default 50, max 100"},
-				},
-			},
-			{
 				"name":        "register_monitor",
 				"description": "Subscribe an email to get alerted when the indicated domain's agentic readiness score drops.",
 				"endpoint":    h.BaseURL + "/api/v1/monitor/register",
@@ -387,9 +374,9 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 			"type": "openapi",
 			"url":  h.BaseURL + "/openapi.yaml",
 		},
-		"logo_url":       h.BaseURL + "/static/img/logo.svg",
-		"contact_email":    "hello@nothumansearch.ai",
-		"legal_info_url":   h.BaseURL + "/about",
+		"logo_url":          h.BaseURL + "/static/img/logo.svg",
+		"contact_email":     "hello@nothumansearch.ai",
+		"legal_info_url":    h.BaseURL + "/about",
 		"refund_policy_url": h.BaseURL + "/about#refund",
 	})
 }
