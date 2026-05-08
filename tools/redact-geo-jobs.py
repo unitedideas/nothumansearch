@@ -62,8 +62,36 @@ def is_test_like(job):
     )
 
 
+def empty_output(error):
+    json.dump(
+        {
+            "error": error,
+            "count": 0,
+            "summary": [],
+            "by_status_host_class": [],
+            "age_buckets": [],
+            "real_paid_or_lead_refs": [],
+            "test_like_refs": [],
+        },
+        sys.stdout,
+        indent=2,
+        sort_keys=True,
+    )
+    sys.stdout.write("\n")
+
+
 def main():
-    payload = json.load(sys.stdin)
+    raw = sys.stdin.read()
+    if not raw.strip():
+        empty_output("empty_input")
+        return
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        empty_output("invalid_json_input")
+        return
+
     jobs = payload.get("jobs", [])
     now = dt.datetime.now(dt.timezone.utc)
 
