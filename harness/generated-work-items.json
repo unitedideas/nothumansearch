@@ -1,20 +1,5 @@
 [
   {
-    "title": "Install separate launchd windows for NHS seed refresh and full recrawl",
-    "source_family": "ops",
-    "source_agent": "qlimit-business-worker",
-    "source_ref": "ops/ledgers/work_machine_8e8e5c3b83074580.md",
-    "source_work_item": "work_machine_8e8e5c3b83074580",
-    "priority": 84,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Update the Owl-side launchd configuration so seed refresh invokes tools/seed-refresh.sh in its own window and full recrawl invokes tools/full-recrawl.sh in the full-recrawl window.",
-      "Keep the launchd jobs non-overlapping at the wrapper level and preserve the dry-run fixture path for future validation.",
-      "Verify the installed launchd ProgramArguments and record observed evidence without triggering a manual full recrawl."
-    ]
-  },
-  {
     "title": "Teach planner intake to distinguish seed-refresh and full-recrawl health events",
     "source_family": "ops",
     "source_agent": "qlimit-business-worker",
@@ -27,21 +12,6 @@
       "Read wrapper=seed-refresh and wrapper=full-recrawl lines from tools/recrawl-health.log as separate operational surfaces.",
       "Alert only when the same wrapper skips twice in a row, throttles for more than one run, or completes with api_ok=0.",
       "Keep raw crawler output out of planner summaries unless a failure line is needed for diagnosis."
-    ]
-  },
-  {
-    "title": "Fix NHS launchd Fly CLI execution for recrawl, discovery, and monitor jobs",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/recrawl.log:2026-05-07T22:42:48Z security lookup error plus fly config perms failure; tools/monitor-check.log and tools/discover.log show prior fly auth failures",
-    "priority": 88,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Reproduce the launchd-safe Fly invocation path without printing tokens or process environments.",
-      "Make recrawl, discovery, and monitor wrappers use the same non-interactive Fly auth/config approach and fail closed with a concise log line if Fly cannot run.",
-      "Verify with dry-run or harmless Fly command execution from the wrapper context, not a full recrawl.",
-      "Record observed evidence in the relevant tool log or ops ledger."
     ]
   },
   {

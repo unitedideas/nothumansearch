@@ -376,15 +376,20 @@ def crawl_via_ssh(domains):
     print(f"Piping {len(domains)} domains to crawler via fly ssh in batches of {BATCH_SIZE}...")
     submitted = 0
     errors = 0
+    fly_bin = "/opt/homebrew/bin/fly"
+    if not os.path.exists(fly_bin):
+        print("  [crawler] fly CLI not found, falling back to HTTP submit")
+        return -1, 0
     try:
-        fly_bin = "/opt/homebrew/bin/fly"
-        token = subprocess.check_output(
+        token_check = subprocess.run(
             ["/usr/bin/security", "find-generic-password", "-a", "foundry", "-s", "fly-api-token", "-w"],
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-        ).decode("utf-8").strip()
-        env = dict(os.environ)
-        env["FLY_ACCESS_TOKEN"] = token
-        env.setdefault("HOME", "/Users/owlassist")
+            timeout=5,
+        )
+        if token_check.returncode != 0:
+            print("  [crawler] fly token missing from Keychain", file=sys.stderr)
+            return 0, len(domains)
 
         for idx in range(0, len(domains), BATCH_SIZE):
             batch = domains[idx : idx + BATCH_SIZE]
@@ -403,10 +408,17 @@ def crawl_via_ssh(domains):
             print(f"  [batch {idx // BATCH_SIZE + 1}] {len(batch)} domains")
             try:
                 result = subprocess.run(
-                    [fly_bin, "ssh", "console", "-a", "nothumansearch", "-C",
-                     remote_cmd],
+                    [
+                        "/bin/bash",
+                        "-lc",
+                        (
+                            "env -i HOME=/Users/owlassist "
+                            "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin "
+                            "FLY_ACCESS_TOKEN=\"$(/usr/bin/security find-generic-password -a foundry -s fly-api-token -w)\" "
+                            f"{fly_bin} ssh console -a nothumansearch -C {shlex.quote(remote_cmd)}"
+                        ),
+                    ],
                     timeout=SSH_TIMEOUT_SECONDS,
-                    env=env,
                 )
             except subprocess.TimeoutExpired:
                 print(f"  [crawler] batch timeout after {SSH_TIMEOUT_SECONDS}s")
@@ -417,11 +429,8 @@ def crawl_via_ssh(domains):
             else:
                 errors += len(batch)
         return submitted, errors
-    except FileNotFoundError:
-        print("  [crawler] fly CLI not found, falling back to HTTP submit")
-        return -1, 0
-    except subprocess.CalledProcessError:
-        print("  [crawler] fly token missing from Keychain", file=sys.stderr)
+    except subprocess.SubprocessError as e:
+        print(f"  [crawler] fly invocation failed: {e}", file=sys.stderr)
         return 0, len(domains)
 
 
