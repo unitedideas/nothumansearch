@@ -26,6 +26,10 @@ report = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 history_path = pathlib.Path(sys.argv[2])
 quarantine = report["quarantine"]
 guards = report["public_guards"]
+try:
+    rendered_history_path = history_path.relative_to(pathlib.Path.cwd())
+except ValueError:
+    rendered_history_path = history_path
 
 print(
     "discovery_quality_refresh "
@@ -34,6 +38,6 @@ print(
     f"category_other_low_signal={quarantine['category_other_low_signal']} "
     f"quarantine_active={str(quarantine['active']).lower()} "
     f"planner_priority={guards['planner_priority']} "
-    f"history={history_path.relative_to(pathlib.Path.cwd())}"
+    f"history={rendered_history_path}"
 )
 PY

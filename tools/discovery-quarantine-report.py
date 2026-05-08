@@ -7,6 +7,7 @@ It emits no candidate domains, URLs, or row identifiers.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any
@@ -126,6 +127,67 @@ def build_quarantine_report(artifact: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_observed_at(value: str | None) -> datetime:
+    if not value:
+        return _utc_now()
+    normalized = value
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    observed = datetime.fromisoformat(normalized)
+    if observed.tzinfo is None:
+        observed = observed.replace(tzinfo=timezone.utc)
+    return observed.astimezone(timezone.utc)
+
+
+def build_history_entry(
+    report: dict[str, Any],
+    observed_at: str | None = None,
+) -> dict[str, Any]:
+    observed = _parse_observed_at(observed_at)
+    week_start = (observed.date()).toordinal() - observed.weekday()
+    quarantine = report["quarantine"]
+    public_guards = report["public_guards"]
+
+    return {
+        "history_key": (
+            f"discovery-quarantine:{observed.date().fromordinal(week_start).isoformat()}"
+        ),
+        "observed_at": observed.isoformat().replace("+00:00", "Z"),
+        "week_start": observed.date().fromordinal(week_start).isoformat(),
+        "source": report["source"],
+        "sample_rows": int(quarantine["hard_signal_rows"])
+        + int(quarantine["low_signal_rows"]),
+        "hard_signal_rows": int(quarantine["hard_signal_rows"]),
+        "low_signal_rows": int(quarantine["low_signal_rows"]),
+        "category_other_low_signal": int(quarantine["category_other_low_signal"]),
+        "quarantine": {"active": bool(quarantine["active"])},
+        "planner_priority": public_guards["planner_priority"],
+        "planner_scope": "business-local only; never public ranking or score-fix targeting",
+    }
+
+
+def append_history_entry(
+    history_path: Path,
+    entry: dict[str, Any],
+) -> None:
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    existing: list[dict[str, Any]] = []
+    if history_path.exists():
+        for raw_line in history_path.read_text(encoding="utf-8").splitlines():
+            if raw_line.strip():
+                existing.append(json.loads(raw_line))
+
+    history_key = entry.get("history_key")
+    retained = [row for row in existing if row.get("history_key") != history_key]
+    retained.append(entry)
+    rendered = "\n".join(json.dumps(row, sort_keys=True) for row in retained)
+    history_path.write_text(rendered + "\n", encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -138,6 +200,14 @@ def main() -> int:
         default="harness/discovery-quarantine-latest.json",
         help="aggregate-only quarantine report path",
     )
+    parser.add_argument(
+        "--history-output",
+        help="optional JSONL path for weekly aggregate quarantine trend history",
+    )
+    parser.add_argument(
+        "--observed-at",
+        help="optional ISO-8601 timestamp for deterministic history tests",
+    )
     args = parser.parse_args()
 
     artifact = load_planner_artifact(Path(args.input))
@@ -145,6 +215,11 @@ def main() -> int:
     rendered = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
         Path(args.output).write_text(rendered + "\n", encoding="utf-8")
+    if args.history_output:
+        append_history_entry(
+            Path(args.history_output),
+            build_history_entry(report, args.observed_at),
+        )
     print(rendered)
     return 0
 

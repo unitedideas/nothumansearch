@@ -79,6 +79,58 @@ class DiscoveryQuarantineReportTest(unittest.TestCase):
         self.assertNotIn("candidate_domains", rendered)
         self.assertNotIn("example.com", rendered)
 
+    def test_builds_weekly_history_entry_without_candidate_fields(self):
+        report = reporter.build_quarantine_report(artifact())
+        entry = reporter.build_history_entry(report, "2026-05-08T12:34:56Z")
+
+        self.assertEqual(entry["history_key"], "discovery-quarantine:2026-05-04")
+        self.assertEqual(entry["week_start"], "2026-05-04")
+        self.assertEqual(entry["sample_rows"], 11)
+        self.assertEqual(entry["hard_signal_rows"], 3)
+        self.assertEqual(entry["low_signal_rows"], 8)
+        self.assertEqual(entry["category_other_low_signal"], 7)
+        self.assertEqual(entry["quarantine"], {"active": True})
+        self.assertEqual(entry["planner_priority"], "quarantine_first")
+        self.assertIn("business-local only", entry["planner_scope"])
+        self.assertNotIn("example", json.dumps(entry))
+
+    def test_appends_history_entry_as_jsonl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = pathlib.Path(tmp) / "history.jsonl"
+            report = reporter.build_quarantine_report(artifact())
+            entry = reporter.build_history_entry(report, "2026-05-08T12:34:56Z")
+
+            reporter.append_history_entry(history_path, entry)
+
+            lines = history_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(lines), 1)
+        loaded = json.loads(lines[0])
+        self.assertEqual(loaded["history_key"], "discovery-quarantine:2026-05-04")
+        self.assertNotIn("candidate_domains", lines[0])
+        self.assertNotIn("example.com", lines[0])
+
+    def test_history_entry_replaces_same_week_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = pathlib.Path(tmp) / "history.jsonl"
+            report = reporter.build_quarantine_report(artifact())
+
+            reporter.append_history_entry(
+                history_path,
+                reporter.build_history_entry(report, "2026-05-08T12:34:56Z"),
+            )
+            reporter.append_history_entry(
+                history_path,
+                reporter.build_history_entry(report, "2026-05-09T12:34:56Z"),
+            )
+
+            lines = history_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertEqual(len(lines), 1)
+        loaded = json.loads(lines[0])
+        self.assertEqual(loaded["history_key"], "discovery-quarantine:2026-05-04")
+        self.assertEqual(loaded["observed_at"], "2026-05-09T12:34:56Z")
+
 
 if __name__ == "__main__":
     unittest.main()
