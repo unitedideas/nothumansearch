@@ -2,6 +2,7 @@
 """Emit redacted aggregates for /api/v1/admin/geo-jobs JSON."""
 
 import datetime as dt
+import argparse
 import json
 import sys
 from collections import Counter
@@ -62,34 +63,41 @@ def is_test_like(job):
     )
 
 
-def empty_output(error):
-    json.dump(
-        {
-            "error": error,
-            "count": 0,
-            "summary": [],
-            "by_status_host_class": [],
-            "age_buckets": [],
-            "real_paid_or_lead_refs": [],
-            "test_like_refs": [],
-        },
-        sys.stdout,
-        indent=2,
-        sort_keys=True,
-    )
+def empty_output(error, aggregate_only=False):
+    output = {
+        "error": error,
+        "count": 0,
+        "summary": [],
+        "by_status_host_class": [],
+        "age_buckets": [],
+    }
+    if not aggregate_only:
+        output["real_paid_or_lead_refs"] = []
+        output["test_like_refs"] = []
+    json.dump(output, sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Emit redacted aggregates for /api/v1/admin/geo-jobs JSON."
+    )
+    parser.add_argument(
+        "--aggregate-only",
+        action="store_true",
+        help="omit row refs and emit only aggregate-safe buckets",
+    )
+    args = parser.parse_args()
+
     raw = sys.stdin.read()
     if not raw.strip():
-        empty_output("empty_input")
+        empty_output("empty_input", args.aggregate_only)
         return
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
-        empty_output("invalid_json_input")
+        empty_output("invalid_json_input", args.aggregate_only)
         return
 
     jobs = payload.get("jobs", [])
@@ -136,9 +144,10 @@ def main():
             {"class": key[0], "status": key[1], "age_bucket": key[2], "count": count}
             for key, count in sorted(by_age.items())
         ],
-        "real_paid_or_lead_refs": real_paid_or_lead_refs,
-        "test_like_refs": test_like_refs,
     }
+    if not args.aggregate_only:
+        output["real_paid_or_lead_refs"] = real_paid_or_lead_refs
+        output["test_like_refs"] = test_like_refs
     json.dump(output, sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
 
