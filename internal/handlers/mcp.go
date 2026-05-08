@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/crawler"
@@ -23,12 +24,54 @@ import (
 // Protocol: JSON-RPC 2.0 over Streamable HTTP (POST requests, JSON responses).
 // Spec: https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
 type MCPHandler struct {
-	DB      *sql.DB
-	BaseURL string
+	DB                   *sql.DB
+	BaseURL              string
+	discoveryRateLimiter *mcpDiscoveryRateLimiter
 }
 
 func NewMCPHandler(db *sql.DB, baseURL string) *MCPHandler {
-	return &MCPHandler{DB: db, BaseURL: baseURL}
+	return &MCPHandler{
+		DB:                   db,
+		BaseURL:              baseURL,
+		discoveryRateLimiter: newMCPDiscoveryRateLimiter(90, time.Hour),
+	}
+}
+
+type mcpDiscoveryRateLimiter struct {
+	mu      sync.Mutex
+	limit   int
+	window  time.Duration
+	buckets map[string]mcpDiscoveryBucket
+}
+
+type mcpDiscoveryBucket struct {
+	count   int
+	resetAt time.Time
+}
+
+func newMCPDiscoveryRateLimiter(limit int, window time.Duration) *mcpDiscoveryRateLimiter {
+	return &mcpDiscoveryRateLimiter{
+		limit:   limit,
+		window:  window,
+		buckets: map[string]mcpDiscoveryBucket{},
+	}
+}
+
+func (l *mcpDiscoveryRateLimiter) allow(key string, now time.Time) (remaining int, retryAfter time.Duration, ok bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	b := l.buckets[key]
+	if b.resetAt.IsZero() || !now.Before(b.resetAt) {
+		b = mcpDiscoveryBucket{resetAt: now.Add(l.window)}
+	}
+	if b.count >= l.limit {
+		l.buckets[key] = b
+		return 0, time.Until(b.resetAt), false
+	}
+	b.count++
+	l.buckets[key] = b
+	return l.limit - b.count, time.Until(b.resetAt), true
 }
 
 // JSON-RPC 2.0 envelope types
@@ -95,6 +138,38 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(req.ID) == 0 {
 		w.WriteHeader(http.StatusAccepted)
 		return
+	}
+
+	if req.Method == "initialize" || req.Method == "tools/list" {
+		if h.discoveryRateLimiter == nil {
+			h.discoveryRateLimiter = newMCPDiscoveryRateLimiter(120, time.Hour)
+		}
+		remaining, retryAfter, ok := h.discoveryRateLimiter.allow(ipHash+":"+req.Method, time.Now())
+		resetSeconds := int(retryAfter.Seconds())
+		if resetSeconds < 1 {
+			resetSeconds = 1
+		}
+		w.Header().Set("X-RateLimit-Limit", "90")
+		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(retryAfter).Unix()))
+		if !ok {
+			w.Header().Set("Retry-After", fmt.Sprintf("%d", resetSeconds))
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(rpcResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error: &rpcError{
+					Code:    -32029,
+					Message: "rate limit exceeded for MCP discovery calls; retry after the indicated number of seconds",
+					Data: map[string]any{
+						"limit":       90,
+						"window":      "1h",
+						"retry_after": resetSeconds,
+					},
+				},
+			})
+			return
+		}
 	}
 
 	switch req.Method {
