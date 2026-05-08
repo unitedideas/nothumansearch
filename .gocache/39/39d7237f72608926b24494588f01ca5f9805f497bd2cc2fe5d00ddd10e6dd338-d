@@ -1,0 +1,14 @@
+# test log
+getenv STRIPE_SECRET_KEY
+getenv STRIPE_WEBHOOK_SECRET
+getenv STRIPE_SECRET_KEY
+getenv STRIPE_WEBHOOK_SECRET
+stat ../../templates
+open ../../templates
+open ../../templates/about.html
+open ../../templates/digest.html
+open ../../templates/guide.html
+open ../../templates/home.html
+open ../../templates/report.html
+open ../../templates/score.html
+open ../../templates/site.html
