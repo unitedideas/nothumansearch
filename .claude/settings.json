@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "post-stop": [
+      {
+        "name": "commit-discipline",
+        "command": "bash",
+        "script": "git status --porcelain | grep -q . && { echo 'ERROR: Uncommitted changes in nothumansearch. Commit with: git add + git commit + git push origin HEAD'; exit 1; } || exit 0"
+      }
+    ]
+  }
+}
