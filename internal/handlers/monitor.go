@@ -120,9 +120,12 @@ func (h *MonitorHandler) Register(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, 201, map[string]interface{}{
-		"ok":              true,
-		"domain":          m.Domain,
-		"unsubscribe_url": h.BaseURL + "/monitor/unsubscribe/" + m.Token,
+		"ok":                true,
+		"domain":            m.Domain,
+		"monitoring_active": m.Status == models.MonitorStatusActive,
+		"status":            m.Status,
+		"quarantine_reason": m.QuarantineReason,
+		"unsubscribe_url":   h.BaseURL + "/monitor/unsubscribe/" + m.Token,
 	})
 }
 
@@ -268,7 +271,11 @@ document.getElementById('f').addEventListener('submit', async (e) => {
   const msg = document.getElementById('msg');
   if (r.ok) {
     msg.className = 'ok';
-    msg.textContent = "Watching " + j.domain + ". You'll get an email if anything breaks.";
+    if (j.monitoring_active) {
+      msg.textContent = "Watching " + j.domain + ". You'll get an email if anything breaks.";
+    } else {
+      msg.textContent = "Queued " + j.domain + " for review. Shared-host root domains are not monitored until an admin approves them.";
+    }
     e.target.reset();
   } else {
     msg.className = 'err';

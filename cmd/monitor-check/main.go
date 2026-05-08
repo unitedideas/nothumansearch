@@ -69,11 +69,19 @@ func main() {
 		site, cerr := crawler.CrawlSite("https://" + domain)
 		for _, m := range byDomain[domain] {
 			if err := handleOne(database.DB, mailer, baseURL, &m, site, cerr, *dry); err != nil {
-				log.Printf("  %s (%s): error: %v", m.Domain, m.Email, err)
+				log.Printf("  %s (%s): error: %v", m.Domain, monitorLogIdentity(m.Email), err)
 			}
 		}
 	}
 	log.Printf("monitor-check done")
+}
+
+func monitorLogIdentity(email string) string {
+	domain, hash := models.RedactEmail(email)
+	if domain == "" {
+		return "email_hash=" + hash
+	}
+	return "email_domain=" + domain + " email_hash=" + hash
 }
 
 // handleOne applies a single crawl result to a single monitor row.
@@ -207,7 +215,7 @@ func maybeAlert(db *sql.DB, mailer *email.Client, baseURL string, m *models.Moni
 <a href="%s">Unsubscribe</a></p>`, reason, siteURL, siteURL, m.Domain, unsubURL)
 	textBody := fmt.Sprintf("%s\n\nFull breakdown: %s\n\nUnsubscribe: %s\n", reason, siteURL, unsubURL)
 
-	log.Printf("  -> ALERT %s: %s", m.Email, reason)
+	log.Printf("  -> ALERT %s: %s", monitorLogIdentity(m.Email), reason)
 	if dry {
 		return nil
 	}
