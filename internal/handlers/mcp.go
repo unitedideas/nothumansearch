@@ -107,7 +107,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"description": "MCP server for Not Human Search — search the agentic web.",
 			"transport":   "streamable-http",
 			"endpoint":    h.BaseURL + "/mcp",
-			"tools":       []string{"search_agents", "get_site_details", "get_stats", "list_categories", "get_top_sites", "submit_site", "register_monitor", "verify_mcp"},
+			"tools":       h.toolNames(),
 			"setup": map[string]string{
 				"claude_code": "claude mcp add --transport http nothumansearch " + h.BaseURL + "/mcp",
 			},
@@ -415,6 +415,18 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			},
 		},
 	}
+}
+
+func (h *MCPHandler) toolNames() []string {
+	tools := h.toolDefinitions()
+	names := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		name, ok := tool["name"].(string)
+		if ok && name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcRequest, start time.Time, ua, ipHash string) {

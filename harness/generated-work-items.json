@@ -1,17 +1,32 @@
 [
   {
-    "title": "Triage and fulfill real NHS score-fix paid or lead rows",
+    "title": "Convert the three real pending NHS score-fix candidates without exposing customer data",
     "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "ops/ledgers/geo-fix-intake-triage-2026-05-08.md plus planner refresh 2026-05-08T10:09:08Z",
-    "priority": 90,
+    "source_agent": "business-agent-not-human-search",
+    "source_ref": "ops/ledgers/score-fix-redacted-triage-2026-05-08.md",
+    "priority": 86,
     "public": true,
     "human_gate_kind": "public_action_lock",
     "acceptance_criteria": [
-      "Read /api/v1/admin/geo-jobs with the NHS admin Bearer token using inline Keychain access and pipe the response through tools/redact-geo-jobs.py before writing any artifact.",
-      "Reconcile the sanitized snapshots that disagree between paid_or_lead=2 and lead=1 paid=2 without printing emails, payment IDs, notes, or raw customer rows.",
-      "For each real paid or lead-mode row, create or complete a row-specific fulfillment/customer-follow-up action only after checking duplicate ledgers and taking the required sync-state public-action lock.",
-      "Write an aggregate ops ledger with counts by status and host class; keep stale test cleanup as a separate production-data mutation task."
+      "Re-read /api/v1/admin/geo-jobs with the NHS admin Bearer token using inline Keychain access and pipe the response through tools/redact-geo-jobs.py before writing any artifact.",
+      "Target only the three redacted real_candidate pending rows from the 2026-05-08 aggregate; do not treat test-like paid or lead rows as customer fulfillment.",
+      "Before any row-specific customer follow-up, check duplicate ledgers and take a sync-state public-action lock with a stable dedupe key.",
+      "Keep public artifacts aggregate-only unless the locked follow-up channel requires row-specific execution evidence."
+    ]
+  },
+  {
+    "title": "Archive or clean up test-like NHS score-fix rows with a gated production-data mutation task",
+    "source_family": "ops",
+    "source_agent": "business-agent-not-human-search",
+    "source_ref": "ops/ledgers/score-fix-redacted-triage-2026-05-08.md",
+    "priority": 80,
+    "public": false,
+    "human_gate_kind": "production_data_mutation",
+    "acceptance_criteria": [
+      "Use the redaction helper to produce row IDs, status, age bucket, and host class only; never write emails, Stripe IDs, hostnames, notes, or raw rows.",
+      "Confirm each cleanup candidate is test-like by high-confidence markers before mutating production data.",
+      "Prefer an explicit test_archived status if schema support is added; otherwise perform a dry-run candidate list first.",
+      "After cleanup, re-run the redacted aggregate and confirm pending score-fix rows represent real checkout abandonment."
     ]
   },
   {

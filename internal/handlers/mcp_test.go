@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -43,5 +44,34 @@ func TestMCPDiscoveryRateLimitBucketsByMethod(t *testing.T) {
 	rr = postMCP(t, h, "initialize")
 	if rr.Code != http.StatusOK {
 		t.Fatalf("initialize should use a separate method bucket, got status %d; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMCPGetAdvertisesCanonicalToolList(t *testing.T) {
+	h := NewMCPHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /mcp status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload struct {
+		Tools []string `json:"tools"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode GET /mcp JSON: %v", err)
+	}
+
+	want := h.toolNames()
+	if len(payload.Tools) != len(want) {
+		t.Fatalf("GET /mcp advertises %d tools, want %d: got=%v want=%v", len(payload.Tools), len(want), payload.Tools, want)
+	}
+	for i := range want {
+		if payload.Tools[i] != want[i] {
+			t.Fatalf("GET /mcp tool %d = %q, want %q", i, payload.Tools[i], want[i])
+		}
 	}
 }
