@@ -1,20 +1,5 @@
 [
   {
-    "title": "Restore launchd-safe Fly auth for NHS monitor and discovery wrappers",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/monitor-check.log:2026-05-08T12:07:11Z fly token missing; tools/discover.log:2026-05-08T03:02:44Z fly_token_missing; tools/recrawl-health.log:2026-05-08T03:03:02Z fly_unavailable",
-    "priority": 94,
-    "public": false,
-    "human_gate_kind": "credential_required",
-    "acceptance_criteria": [
-      "Verify the canonical Fly credential service for launchd wrappers using redacted SET/MISSING evidence only; do not print, copy, or commit the token.",
-      "Make monitor-check, discovery, seed-refresh, and full-recrawl wrappers share the same noninteractive Fly auth/config path or fail closed with one concise log line.",
-      "Verify with harmless wrapper-context commands or dry-run remote command construction; do not run a full recrawl or broad discovery crawl.",
-      "Record non-secret proof in the relevant tool log or ops ledger before any monitor or discovery expansion depends on Fly SSH."
-    ]
-  },
-  {
     "title": "Turn NHS discovery quarantine aggregates into an execution gate",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",

@@ -5,12 +5,12 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 export HOME="/Users/owlassist"
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${APP_DIR}/tools/fly-auth.sh"
 WRAPPER_NAME="${NHS_RECRAWL_WRAPPER_NAME:-$(basename "$0" .sh)}"
 LOG_FILE="${NHS_RECRAWL_LOG_FILE:-${APP_DIR}/tools/${WRAPPER_NAME}.log}"
 HEALTH_LOG="${NHS_RECRAWL_HEALTH_LOG:-${APP_DIR}/tools/recrawl-health.log}"
 GUARD_LOG="${APP_DIR}/tools/health-guard.log"
 LOCK_DIR="${NHS_RECRAWL_LOCK_DIR:-${APP_DIR}/tools/${WRAPPER_NAME}.lock}"
-FLY_BIN="/opt/homebrew/bin/fly"
 HEALTH_URL="${NHS_RECRAWL_HEALTH_URL:-https://nothumansearch.ai/api/v1/stats}"
 HEALTH_FIXTURE="${NHS_RECRAWL_HEALTH_FIXTURE:-}"
 FULL_WORKERS="${NHS_RECRAWL_WORKERS:-10}"
@@ -23,12 +23,14 @@ api_ok="0"
 workers="$FULL_WORKERS"
 
 fly_ssh() {
-  if ! /usr/bin/security find-generic-password -a foundry -s fly-api-token -w >/dev/null 2>&1; then
-    log_health "event=remote_skip reason=fly_token_missing"
-    echo "$(date '+%Y-%m-%d %H:%M:%S') NHS $WRAPPER_NAME skipped: fly token missing" >> "$LOG_FILE"
+  local reason
+  reason="$(nhs_fly_unavailable_reason)"
+  if [[ -n "$reason" ]]; then
+    log_health "event=remote_skip reason=$reason"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') NHS $WRAPPER_NAME skipped: $reason" >> "$LOG_FILE"
     return 1
   fi
-  env -i HOME="/Users/owlassist" PATH="$PATH" FLY_ACCESS_TOKEN="$(/usr/bin/security find-generic-password -a foundry -s fly-api-token -w)" "$FLY_BIN" ssh console -a nothumansearch -C "$1"
+  nhs_fly_ssh "$1"
 }
 
 log_health() {

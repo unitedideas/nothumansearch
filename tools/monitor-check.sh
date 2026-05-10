@@ -8,9 +8,9 @@ set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 export HOME="/Users/owlassist"
-FLY_BIN="/opt/homebrew/bin/fly"
 
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+source "${APP_DIR}/tools/fly-auth.sh"
 LOG_FILE="${APP_DIR}/tools/monitor-check.log"
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') NHS monitor-check starting" >> "$LOG_FILE"
@@ -24,12 +24,12 @@ if [[ "${NHS_MONITOR_CHECK_DRY_RUN:-0}" == "1" ]]; then
   exit 0
 fi
 
-if ! /usr/bin/security find-generic-password -a foundry -s fly-api-token -w >/dev/null 2>&1; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') NHS monitor-check skipped: fly token missing" >> "$LOG_FILE"
+FLY_REASON="$(nhs_fly_unavailable_reason)"
+if [[ -n "$FLY_REASON" ]]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') NHS monitor-check skipped: $FLY_REASON" >> "$LOG_FILE"
   exit 1
 fi
 
-env -i HOME="/Users/owlassist" PATH="$PATH" FLY_ACCESS_TOKEN="$(/usr/bin/security find-generic-password -a foundry -s fly-api-token -w)" \
-  "$FLY_BIN" ssh console -a nothumansearch -C "$REMOTE_COMMAND" >> "$LOG_FILE" 2>&1
+nhs_fly_ssh "$REMOTE_COMMAND" >> "$LOG_FILE" 2>&1
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') NHS monitor-check done" >> "$LOG_FILE"
