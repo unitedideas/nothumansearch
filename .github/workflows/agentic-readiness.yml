@@ -7,8 +7,19 @@ on:
     branches: [main]
     paths:
       - 'templates/**'
+      - 'harness/discovery-quality-latest.json'
+      - 'harness/discovery-quarantine-latest.json'
+      - 'internal/models/queries.go'
+      - 'internal/handlers/digest.go'
+      - 'internal/handlers/fix.go'
       - 'internal/handlers/seo.go'
       - 'internal/handlers/mcp.go'
+      - 'tools/discovery-quality-report.py'
+      - 'tools/discovery-quarantine-report.py'
+      - 'tools/quality-gate-discovery.py'
+      - 'tools/test-discovery-quality-report.py'
+      - 'tools/test-discovery-quarantine-report.py'
+      - 'tools/quality-gate-discovery-test.py'
 
 jobs:
   check:
@@ -18,3 +29,21 @@ jobs:
         with:
           domain: nothumansearch.ai
           min-score: 95
+  discovery-quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Run discovery quality gate tests
+        run: |
+          python3 -m unittest \
+            tools/test-discovery-quality-report.py \
+            tools/test-discovery-quarantine-report.py \
+            tools/quality-gate-discovery-test.py
+      - name: Verify aggregate-only discovery quarantine gate
+        run: |
+          python3 tools/quality-gate-discovery.py \
+            --quarantine harness/discovery-quarantine-latest.json \
+            --repo-root .

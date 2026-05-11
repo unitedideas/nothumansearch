@@ -15,6 +15,7 @@ from typing import Any
 
 EXPECTED_TOP_LEVEL = {
     "artifact_policy",
+    "hard_signal_other_review",
     "public_guards",
     "quarantine",
     "recommended_actions",
@@ -144,10 +145,28 @@ def validate_public_handler_filters(repo_root: Path) -> None:
         )
 
 
+def validate_score_fix_targeting(repo_root: Path) -> None:
+    fix_text = (repo_root / "internal/handlers/fix.go").read_text(encoding="utf-8")
+    web_text = (repo_root / "templates/site.html").read_text(encoding="utf-8")
+    if "site.HasHardAgentSignal()" not in fix_text:
+        raise DiscoveryQualityGateError(
+            "score-fix checkout must require models.Site.HasHardAgentSignal"
+        )
+    if "scoreFixEligible(site)" not in fix_text:
+        raise DiscoveryQualityGateError(
+            "score-fix checkout paths must call scoreFixEligible"
+        )
+    if "(hasHardAgentSignal .)" not in web_text:
+        raise DiscoveryQualityGateError(
+            "score-fix CTA must require hasHardAgentSignal in site template"
+        )
+
+
 def run_gate(quarantine_path: Path, repo_root: Path) -> dict[str, Any]:
     report = load_quarantine(quarantine_path)
     validate_agent_first_filter(extract_agent_first_filter(repo_root))
     validate_public_handler_filters(repo_root)
+    validate_score_fix_targeting(repo_root)
     return report
 
 

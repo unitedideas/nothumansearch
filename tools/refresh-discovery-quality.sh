@@ -17,6 +17,10 @@ python3 "$ROOT/tools/discovery-quarantine-report.py" \
   --output "$QUARANTINE_OUTPUT" \
   --history-output "$HISTORY_OUTPUT" >/dev/null
 
+python3 "$ROOT/tools/quality-gate-discovery.py" \
+  --quarantine "$QUARANTINE_OUTPUT" \
+  --repo-root "$ROOT" >/dev/null
+
 python3 - "$QUARANTINE_OUTPUT" "$HISTORY_OUTPUT" <<'PY'
 import json
 import pathlib
