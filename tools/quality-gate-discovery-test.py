@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 
-MODULE_PATH = pathlib.Path(__file__).with_name("discovery-quality-gate.py")
+MODULE_PATH = pathlib.Path(__file__).with_name("quality-gate-discovery.py")
 SPEC = importlib.util.spec_from_file_location("discovery_quality_gate", MODULE_PATH)
 gate = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -54,7 +54,14 @@ def quarantine_artifact(**overrides):
     return data
 
 
-def write_repo(root, agent_filter=None, seo_sql="", digest_sql=""):
+def write_repo(
+    root,
+    agent_filter=None,
+    seo_sql="",
+    digest_sql="",
+    fix_go=None,
+    site_template=None,
+):
     agent_filter = agent_filter or (
         "crawl_status='success' AND (has_structured_api = true OR "
         "has_openapi = true OR has_ai_plugin = true OR has_mcp_server = true)"
@@ -69,6 +76,17 @@ def write_repo(root, agent_filter=None, seo_sql="", digest_sql=""):
     )
     (handlers_dir / "seo.go").write_text(seo_sql, encoding="utf-8")
     (handlers_dir / "digest.go").write_text(digest_sql, encoding="utf-8")
+    (handlers_dir / "fix.go").write_text(
+        fix_go
+        or "package handlers\nfunc scoreFixEligible(site Site) bool { return site.HasHardAgentSignal() }\nfunc checkout() { scoreFixEligible(site) }\n",
+        encoding="utf-8",
+    )
+    templates_dir = root / "templates"
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "site.html").write_text(
+        site_template or "{{if and (lt .AgenticScore 70) (hasHardAgentSignal .)}}",
+        encoding="utf-8",
+    )
 
 
 class DiscoveryQualityGateTest(unittest.TestCase):
@@ -132,6 +150,33 @@ class DiscoveryQualityGateTest(unittest.TestCase):
             quarantine.write_text(json.dumps(quarantine_artifact()), encoding="utf-8")
 
             with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "public discovery SQL"):
+                gate.run_gate(quarantine, root)
+
+    def test_gate_rejects_score_fix_checkout_without_hard_signal_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_repo(
+                root,
+                fix_go=(
+                    "package handlers\n"
+                    "func scoreFixEligible(site Site) bool { return site.AgenticScore < 70 }\n"
+                    "func checkout() { scoreFixEligible(site) }\n"
+                ),
+            )
+            quarantine = root / "quarantine.json"
+            quarantine.write_text(json.dumps(quarantine_artifact()), encoding="utf-8")
+
+            with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "score-fix checkout"):
+                gate.run_gate(quarantine, root)
+
+    def test_gate_rejects_score_fix_cta_without_hard_signal_guard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_repo(root, site_template="{{if lt .AgenticScore 70}}")
+            quarantine = root / "quarantine.json"
+            quarantine.write_text(json.dumps(quarantine_artifact()), encoding="utf-8")
+
+            with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "score-fix CTA"):
                 gate.run_gate(quarantine, root)
 
 
