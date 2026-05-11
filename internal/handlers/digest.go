@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 // DigestHandler renders /digest — a weekly public snapshot of the MCP /
@@ -169,14 +171,12 @@ func (h *DigestHandler) gather(r *http.Request) (*digestData, error) {
 
 	// Category distribution — agent-first sites only.
 	catRows, err := h.DB.QueryContext(ctx, `
-		SELECT category, COUNT(*) AS n
-		  FROM sites
-		 WHERE crawl_status = 'success'
-		   AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true
-		        OR has_ai_plugin = true OR has_mcp_server = true)
-		 GROUP BY category
-		 ORDER BY n DESC
-		 LIMIT 20`)
+			SELECT category, COUNT(*) AS n
+			  FROM sites
+			 WHERE `+models.AgentFirstFilter+`
+			 GROUP BY category
+			 ORDER BY n DESC
+			 LIMIT 20`)
 	if err != nil {
 		return nil, fmt.Errorf("category query: %w", err)
 	}
@@ -198,15 +198,13 @@ func (h *DigestHandler) gather(r *http.Request) (*digestData, error) {
 
 	// Ecosystem health — totals across agent-first filter.
 	if err := h.DB.QueryRowContext(ctx, `
-		SELECT
-		  COUNT(*),
-		  COUNT(*) FILTER (WHERE has_mcp_server = true),
-		  COUNT(*) FILTER (WHERE has_llms_txt = true),
-		  COUNT(*) FILTER (WHERE has_openapi = true)
-		FROM sites
-		WHERE crawl_status = 'success'
-		  AND (has_structured_api = true OR has_llms_txt = true OR has_openapi = true
-		       OR has_ai_plugin = true OR has_mcp_server = true)`,
+			SELECT
+			  COUNT(*),
+			  COUNT(*) FILTER (WHERE has_mcp_server = true),
+			  COUNT(*) FILTER (WHERE has_llms_txt = true),
+			  COUNT(*) FILTER (WHERE has_openapi = true)
+			FROM sites
+			WHERE `+models.AgentFirstFilter,
 	).Scan(&d.TotalSites, &d.MCPVerified, &d.LlmsTxtCount, &d.OpenAPICount); err != nil {
 		log.Printf("digest health counts: %v", err)
 	}
