@@ -20,6 +20,7 @@ on:
       - 'tools/test-discovery-quality-report.py'
       - 'tools/test-discovery-quarantine-report.py'
       - 'tools/quality-gate-discovery-test.py'
+      - 'tools/fixtures/discovery-quarantine-ci.json'
 
 jobs:
   check:
@@ -45,5 +46,5 @@ jobs:
       - name: Verify aggregate-only discovery quarantine gate
         run: |
           python3 tools/quality-gate-discovery.py \
-            --quarantine harness/discovery-quarantine-latest.json \
+            --quarantine tools/fixtures/discovery-quarantine-ci.json \
             --repo-root .
