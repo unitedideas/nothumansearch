@@ -518,7 +518,7 @@ func ListMonitorAdminActionCounts(db *sql.DB, days int) ([]MonitorAdminActionCou
 	}
 	defer rows.Close()
 
-	var out []MonitorAdminActionCount
+	out := make([]MonitorAdminActionCount, 0)
 	for rows.Next() {
 		var item MonitorAdminActionCount
 		if err := rows.Scan(&item.Day, &item.Action, &item.Count); err != nil {

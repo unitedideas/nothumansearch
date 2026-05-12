@@ -22,6 +22,7 @@ Privacy boundary:
 
 - Committed artifacts contain only schema, aggregate-safe action names, and implementation notes.
 - Admin action reporting returns day/action/count only.
+- Empty aggregate windows return `counts: []`, not `null`, for stable callers.
 - Raw emails, submitted domains, unsubscribe tokens, and private review notes remain confined to the authenticated admin workflow and database rows.
 
 Verification:
