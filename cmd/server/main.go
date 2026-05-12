@@ -287,6 +287,7 @@ func main() {
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
+	mux.HandleFunc("/api/v1/admin/geo-jobs/action", fixHandler.AdminAction)
 
 	// Paid fix-my-score intake + Stripe. /fix/success is registered before the
 	// catch-all /fix/ so it wins the match.

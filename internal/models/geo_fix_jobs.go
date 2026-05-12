@@ -2,6 +2,9 @@ package models
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -19,6 +22,12 @@ type GeoFixJob struct {
 	CompletedAt     *time.Time `json:"completed_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+const GeoFixJobActionMarkInternalTest = "mark_internal_test"
+
+func ValidGeoFixJobAdminAction(action string) bool {
+	return strings.TrimSpace(action) == GeoFixJobActionMarkInternalTest
 }
 
 // CreateGeoFixJob inserts an intake record before redirect to Stripe. Status
@@ -130,4 +139,58 @@ func ListGeoFixJobs(db *sql.DB, limit int) ([]GeoFixJob, error) {
 		out = append(out, j)
 	}
 	return out, nil
+}
+
+// ApplyGeoFixJobAdminAction performs private admin-only cleanup actions.
+// It intentionally supports only internal Foundry-owned pending-row cleanup;
+// customer-facing rows still require the public-action lock/email ledger flow.
+func ApplyGeoFixJobAdminAction(db *sql.DB, jobID int64, action, operator, source, notes string) error {
+	action = strings.TrimSpace(action)
+	operator = strings.TrimSpace(operator)
+	source = strings.TrimSpace(source)
+	notes = strings.TrimSpace(notes)
+	if !ValidGeoFixJobAdminAction(action) {
+		return errors.New("invalid geo-fix admin action")
+	}
+	if operator == "" {
+		return errors.New("geo-fix admin operator required")
+	}
+	if source == "" {
+		source = "admin_api"
+	}
+	privateNote := fmt.Sprintf("admin_action=%s operator=%s source=%s", action, operator, source)
+	if notes != "" {
+		privateNote += ": " + notes
+	}
+
+	res, err := db.Exec(`
+		UPDATE geo_fix_jobs
+		SET status = 'internal_test',
+		    completed_at = COALESCE(completed_at, NOW()),
+		    updated_at = NOW(),
+		    notes = CASE
+		        WHEN NULLIF($2, '') IS NULL THEN notes
+		        WHEN notes IS NULL OR notes = '' THEN $2
+		        ELSE notes || E'\n' || $2
+		    END
+		WHERE id = $1
+		  AND status = 'pending'
+		  AND (
+		    host IN ('nothumansearch.ai', 'nothumansearch.com', 'aidevboard.com', '8bitconcepts.com', 'bringyour.ai')
+		    OR host LIKE '%.nothumansearch.ai'
+		    OR host LIKE '%.nothumansearch.com'
+		    OR host LIKE '%.aidevboard.com'
+		    OR host LIKE '%.8bitconcepts.com'
+		    OR host LIKE '%.bringyour.ai'
+		  )`,
+		jobID, privateNote)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

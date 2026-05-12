@@ -27,3 +27,14 @@ func TestSiteHasHardAgentSignal(t *testing.T) {
 		})
 	}
 }
+
+func TestValidGeoFixJobAdminAction(t *testing.T) {
+	if !ValidGeoFixJobAdminAction(GeoFixJobActionMarkInternalTest) {
+		t.Fatalf("ValidGeoFixJobAdminAction(%q) = false", GeoFixJobActionMarkInternalTest)
+	}
+	for _, action := range []string{"send_followup", "delete_job", "mark_paid", ""} {
+		if ValidGeoFixJobAdminAction(action) {
+			t.Fatalf("ValidGeoFixJobAdminAction(%q) = true, want false", action)
+		}
+	}
+}

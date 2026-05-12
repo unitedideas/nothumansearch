@@ -946,13 +946,7 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/admin/geo-jobs — bearer auth, same pattern as TrafficAnalytics.
 func (h *FixHandler) AdminList(w http.ResponseWriter, r *http.Request) {
-	adminKey := os.Getenv("ADMIN_API_KEY")
-	if adminKey == "" {
-		writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
-		return
-	}
-	if r.Header.Get("Authorization") != "Bearer "+adminKey {
-		writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+	if !h.requireAdmin(w, r) {
 		return
 	}
 	limit := 100
@@ -967,4 +961,74 @@ func (h *FixHandler) AdminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]interface{}{"jobs": jobs, "count": len(jobs)})
+}
+
+func (h *FixHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
+		return false
+	}
+	if r.Header.Get("Authorization") != "Bearer "+adminKey {
+		writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+		return false
+	}
+	return true
+}
+
+// POST /api/v1/admin/geo-jobs/action
+func (h *FixHandler) AdminAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, 405, map[string]string{"error": "POST required"})
+		return
+	}
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	var req struct {
+		ID       int64  `json:"id"`
+		Action   string `json:"action"`
+		Operator string `json:"operator"`
+		Source   string `json:"source"`
+		Notes    string `json:"notes"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "invalid json"})
+		return
+	}
+	if req.ID <= 0 {
+		writeJSON(w, 400, map[string]string{"error": "geo-fix job id required"})
+		return
+	}
+	if !models.ValidGeoFixJobAdminAction(req.Action) {
+		writeJSON(w, 400, map[string]string{"error": "invalid action"})
+		return
+	}
+	if strings.TrimSpace(req.Operator) == "" {
+		writeJSON(w, 400, map[string]string{"error": "operator required"})
+		return
+	}
+	action := strings.TrimSpace(req.Action)
+	operator := strings.TrimSpace(req.Operator)
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = "admin_api"
+	}
+	if err := models.ApplyGeoFixJobAdminAction(h.DB, req.ID, action, operator, source, req.Notes); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, 404, map[string]string{"error": "geo-fix job not found or not eligible for this action"})
+			return
+		}
+		log.Printf("admin geo-fix action: %v", err)
+		writeJSON(w, 500, map[string]string{"error": "action failed"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"ok":         true,
+		"id":         req.ID,
+		"action":     action,
+		"operator":   operator,
+		"source":     source,
+		"audited_at": time.Now().UTC().Format(time.RFC3339),
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -86,5 +87,66 @@ func TestCommerceQuoteSupportsAPIPlans(t *testing.T) {
 	}
 	if payload.ActivationEndpoint == "" {
 		t.Fatalf("activation endpoint missing")
+	}
+}
+
+func TestGeoFixAdminActionRequiresBearerAuth(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/geo-jobs/action", bytes.NewBufferString(`{"id":1}`))
+	rr := httptest.NewRecorder()
+
+	h.AdminAction(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("AdminAction status = %d, want 401; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGeoFixAdminActionRejectsInvalidActionBeforeDB(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/geo-jobs/action", bytes.NewBufferString(`{
+		"id": 1,
+		"action": "send_followup",
+		"operator": "business-agent-not-human-search"
+	}`))
+	req.Header.Set("Authorization", "Bearer test-admin-key")
+	rr := httptest.NewRecorder()
+
+	h.AdminAction(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("AdminAction status = %d, want 400; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGeoFixAdminActionRequiresOperatorBeforeDB(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/geo-jobs/action", bytes.NewBufferString(`{
+		"id": 1,
+		"action": "mark_internal_test"
+	}`))
+	req.Header.Set("Authorization", "Bearer test-admin-key")
+	rr := httptest.NewRecorder()
+
+	h.AdminAction(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("AdminAction status = %d, want 400; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGeoFixAdminActionRequiresConfiguredAdminKey(t *testing.T) {
+	os.Unsetenv("ADMIN_API_KEY")
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/geo-jobs/action", bytes.NewBufferString(`{"id":1}`))
+	rr := httptest.NewRecorder()
+
+	h.AdminAction(rr, req)
+
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("AdminAction status = %d, want 503; body=%s", rr.Code, rr.Body.String())
 	}
 }
