@@ -69,6 +69,13 @@
         .cta { display:flex; gap:12px; justify-content:center; margin-top:24px; flex-wrap:wrap; }
         .cta a { color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:8px 16px; border-radius:6px; font-size:13px; cursor:pointer; }
         .cta a:hover { background:var(--accent); color:#fff; }
+        .owner-next { margin:22px 0 4px; padding:16px; background:#0a0a0b; border:1px solid rgba(217,119,87,0.34); border-radius:8px; }
+        .owner-next h3 { font-size:14px; color:var(--text); margin-bottom:6px; }
+        .owner-next p { color:var(--text-muted); font-size:13px; line-height:1.55; margin-bottom:12px; }
+        .owner-actions { display:flex; gap:10px; flex-wrap:wrap; }
+        .owner-actions a { display:inline-block; color:var(--accent); text-decoration:none; border:1px solid var(--accent); padding:8px 14px; border-radius:6px; font-size:13px; font-weight:600; }
+        .owner-actions a.primary { background:var(--accent); color:#fff; }
+        .owner-actions a:hover { background:var(--accent); color:#fff; }
         .embed { margin-top:28px; padding-top:20px; border-top:1px solid var(--border); }
         .embed h3 { font-size:14px; margin-bottom:6px; color:var(--text); }
         .embed p { color:var(--text-muted); font-size:12px; margin-bottom:14px; line-height:1.5; }
@@ -207,6 +214,25 @@
             if (n >= 40) return 'Partial';
             return 'Basic';
         }
+        function ownerNextHTML(score, sig, domain) {
+            const hasHardSignal = !!(sig.ai_plugin || sig.openapi || sig.structured_api || sig.mcp_server);
+            const encodedDomain = encodeURIComponent(domain);
+            const monitorURL = '/monitor?domain=' + encodedDomain;
+            const guideURL = '/guide';
+            const fixURL = '/fix/' + encodedDomain;
+            const needsRemediation = score < 70 && hasHardSignal;
+            const lead = needsRemediation
+                ? 'This site has at least one hard agent surface, but it is missing public signals agents use before calling or buying.'
+                : 'Keep this score under watch. NHS can alert you if an agent-facing signal disappears on a future crawl.';
+            const actions = [
+                '<a class="primary" href="' + monitorURL + '">Monitor this score</a>',
+                '<a href="' + guideURL + '">Improve public signals</a>'
+            ];
+            if (needsRemediation) {
+                actions.splice(1, 0, '<a href="' + fixURL + '">Get implementation help</a>');
+            }
+            return '<div class="owner-next"><h3>Site owner next step</h3><p>' + lead + '</p><div class="owner-actions">' + actions.join('') + '</div></div>';
+        }
 
         async function runCheck(e) {
             e.preventDefault();
@@ -260,6 +286,7 @@
                     '<div class="result-domain">' + dom + '</div>' +
                     '<div class="signals">' + sigHTML + '</div>' +
                     reasonHTML +
+                    ownerNextHTML(data.agentic_score, sig, dom) +
                     '<div class="cta">' +
                         '<a href="' + (data.report_url || ('/site/' + dom)) + '">Full report</a>' +
                         '<a href="/#submit">Submit to directory</a>' +

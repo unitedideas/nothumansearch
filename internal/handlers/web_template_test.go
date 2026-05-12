@@ -72,3 +72,32 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 		t.Fatalf("expected low-score hard-signal site to include score-fix CTA")
 	}
 }
+
+func TestScoreTemplateIncludesOwnerHandoffWithoutPaidRanking(t *testing.T) {
+	h, err := NewWebHandler(nil, "../../templates")
+	if err != nil {
+		t.Fatalf("parse templates: %v", err)
+	}
+
+	var out bytes.Buffer
+	if err := h.tmpl.ExecuteTemplate(&out, "score.html", nil); err != nil {
+		t.Fatalf("execute score template: %v", err)
+	}
+	html := out.String()
+	for _, want := range []string{
+		"Site owner next step",
+		"Monitor this score",
+		"Get implementation help",
+		"Improve public signals",
+		"score < 70 && hasHardSignal",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected score template to contain %q", want)
+		}
+	}
+	for _, banned := range []string{"paid ranking", "paid placement", "score bypass"} {
+		if strings.Contains(strings.ToLower(html), banned) {
+			t.Fatalf("score template contains banned paid-ranking language %q", banned)
+		}
+	}
+}
