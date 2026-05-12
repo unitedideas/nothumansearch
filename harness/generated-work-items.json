@@ -1,24 +1,24 @@
 [
   {
-    "title": "Run locked follow-up for real pending NHS score-fix checkout starts",
+    "title": "Reconcile NHS score-fix pending rows after locked follow-up",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-12T13:08:39Z count=11 real_pending=3 test_like=8 real_paid_or_lead=0; age_buckets real_pending=7_29d:3",
-    "priority": 94,
-    "public": true,
-    "human_gate_kind": "public_action_lock",
+    "source_ref": "ops/ledgers/score-fix-pending-followup-2026-05-12.md sent=2 external_pending_followups; tools/geo-jobs-redacted-read.sh:2026-05-12T15:09:12Z count=11 real_pending=3 test_like=8 real_paid_or_lead=0; remaining real_pending includes foundry_owned=1 and previously-contacted dot_com=2",
+    "priority": 80,
+    "public": false,
+    "human_gate_kind": null,
     "acceptance_criteria": [
-      "Re-read /api/v1/admin/geo-jobs through tools/geo-jobs-redacted-read.sh before selecting any row-specific follow-up.",
-      "Check duplicate ledgers and take the required sync-state public-action lock before any customer-visible email, reply, or fulfillment message.",
-      "Create row-specific drafts or sends only inside the approved locked public-action flow; do not put raw emails, hostnames, payment ids, or notes into planner artifacts.",
-      "Update the score-fix ops ledger with aggregate-only counts and the final public-action proof URL or message id when a later worker acts."
+      "Re-read tools/geo-jobs-redacted-read.sh and the score-fix follow-up ledger before changing any customer-visible workflow.",
+      "Mark or ledger the two already-contacted external pending rows as follow-up-sent using only private/admin state; do not send another email unless a new public-action lock and duplicate check prove it is due.",
+      "Exclude the foundry-owned pending row from customer follow-up and classify it as internal/test or cleanup in private state.",
+      "Append aggregate-only proof to the score-fix ops ledger showing remaining pending counts by class and host class, without raw emails, hostnames, row IDs, Stripe IDs, or notes."
     ]
   },
   {
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "ops/ledgers/taxonomy-other-redacted-sampler-2026-05-12.md; harness/discovery-quarantine-latest.json hard_signal_other_review.rows=132; live categories 2026-05-12T13:08:39Z total_sites=4238 other=775 avg_score=27",
+    "source_ref": "ops/ledgers/taxonomy-other-redacted-sampler-2026-05-12.md; harness/discovery-quarantine-latest.json hard_signal_other_review.rows=132; live categories 2026-05-12T15:09:12Z total_sites=4238 other=775 avg_score=35",
     "priority": 76,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -33,7 +33,7 @@
     "title": "Exercise private NHS monitor admin actions and record aggregate counts",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/monitor-actions-redacted-read.sh:2026-05-12T13:08:39Z counts=[]; ops/ledgers/monitor-quarantine-boundary-2026-05-08.md; monitor admin actions already implemented",
+    "source_ref": "tools/monitor-actions-redacted-read.sh:2026-05-12T15:09:12Z counts=[]; ops/ledgers/monitor-quarantine-boundary-2026-05-08.md; monitor admin actions already implemented",
     "priority": 72,
     "public": false,
     "human_gate_kind": null,
