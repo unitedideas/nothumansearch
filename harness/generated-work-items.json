@@ -1,9 +1,24 @@
 [
   {
+    "title": "Keep NHS score-fix pending rows reconciled without another customer touch",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "ops/ledgers/score-fix-pending-followup-2026-05-12.md; tools/geo-jobs-redacted-read.sh current aggregate count=11 real_pending=3 test_like=8 real_paid_or_lead=0; remaining classes dot_com_follow_up_sent=2 foundry_owned_internal_cleanup=1",
+    "priority": 80,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Re-read tools/geo-jobs-redacted-read.sh and ops/ledgers/score-fix-pending-followup-2026-05-12.md before changing any score-fix state.",
+      "Do not send another customer-visible score-fix email; the two external pending rows already have follow-up proof unless a future duplicate check and fresh public-action lock prove a new touch is due.",
+      "Classify or clean up the foundry-owned pending row as internal/test-only in private state.",
+      "Append aggregate-only proof showing pending counts by class and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
+    ]
+  },
+  {
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "ops/ledgers/taxonomy-other-redacted-sampler-2026-05-12.md; harness/discovery-quarantine-latest.json hard_signal_other_review.rows=132; live categories 2026-05-12T15:09:12Z total_sites=4238 other=775 avg_score=35",
+    "source_ref": "ops/ledgers/taxonomy-other-redacted-sampler-2026-05-12.md; harness/discovery-quarantine-latest.json hard_signal_other_review.rows=132; live categories 2026-05-12 total_sites=4238 other=775 avg_score=27",
     "priority": 76,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -11,7 +26,22 @@
       "Use the committed aggregate-only taxonomy sampler to review category=other hard-signal rows without emitting domains, URLs, row IDs, names, or descriptions into planner artifacts.",
       "Provide or point the sampler at a proper NHS REST API key; admin Bearer keys do not satisfy the public API quota boundary and must not be substituted.",
       "Convert only high-confidence reusable taxonomy patterns into narrow category-rule work; keep low-signal and passive rows quarantine/audit-only.",
-      "Verify with the sampler tests and a bounded aggregate refresh; do not run a full manual recrawl."
+      "Verify with sampler tests and a bounded aggregate refresh; do not run a full manual recrawl."
+    ]
+  },
+  {
+    "title": "Add aggregate seed-refresh quality gate for passive-only daily seed intake",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "tools/seed-refresh.log:2026-05-12 success=475 failed=8 with visible passive-only rows; harness/discovery-quarantine-latest.json low_signal_rows=571 hard_signal_rows=308; live categories other=775 spam=1",
+    "priority": 74,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Create or extend a committed aggregate-only report for daily seed-refresh output that counts hard-signal rows versus llms-only, schema-only, zero-score, and category=other low-signal rows without recording domains.",
+      "Keep AgentFirstFilter intact and keep passive-only rows out of public search and score-fix targeting.",
+      "If the passive-only share exceeds the existing discovery quarantine threshold, write a business-local handoff row for bounded review rather than triggering another broad crawl.",
+      "Verify with fixture-backed tests plus a bounded aggregate refresh; do not run a full manual recrawl."
     ]
   }
 ]
