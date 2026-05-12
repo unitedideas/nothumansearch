@@ -256,7 +256,13 @@ func (h *MonitorHandler) AdminAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "operator required"})
 		return
 	}
-	if err := models.ApplyMonitorAdminAction(h.DB, req.ID, req.Action, req.Operator, req.Source, req.Notes); err != nil {
+	action := strings.TrimSpace(req.Action)
+	operator := strings.TrimSpace(req.Operator)
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = "admin_api"
+	}
+	if err := models.ApplyMonitorAdminAction(h.DB, req.ID, action, operator, source, req.Notes); err != nil {
 		if err == sql.ErrNoRows {
 			writeJSON(w, 404, map[string]string{"error": "monitor not found"})
 			return
@@ -268,9 +274,9 @@ func (h *MonitorHandler) AdminAction(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"ok":         true,
 		"id":         req.ID,
-		"action":     req.Action,
-		"operator":   strings.TrimSpace(req.Operator),
-		"source":     strings.TrimSpace(req.Source),
+		"action":     action,
+		"operator":   operator,
+		"source":     source,
 		"audited_at": time.Now().UTC().Format(time.RFC3339),
 	})
 }
@@ -341,6 +347,12 @@ a{color:#d97757}</style></head>
 </div>
 
 <script>
+const monitorParams = new URLSearchParams(window.location.search);
+const monitorDomain = monitorParams.get('domain');
+if (monitorDomain) {
+  document.getElementById('monitor-domain').value = monitorDomain;
+}
+
 document.getElementById('f').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
