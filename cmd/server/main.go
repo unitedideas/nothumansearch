@@ -299,6 +299,8 @@ func main() {
 	mux.Handle("/badge/", badgeHandler)
 	mux.HandleFunc("/api/v1/monitor/register", monitorHandler.Register)
 	mux.HandleFunc("/api/v1/admin/monitors", monitorHandler.AdminList)
+	mux.HandleFunc("/api/v1/admin/monitors/action", monitorHandler.AdminAction)
+	mux.HandleFunc("/api/v1/admin/monitors/actions", monitorHandler.AdminActionCounts)
 
 	// Monitor (free feature — email alerts when a site's agentic readiness drops)
 	mux.HandleFunc("/monitor", monitorHandler.LandingPage)

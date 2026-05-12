@@ -87,6 +87,47 @@ func TestMonitorInitialStatusQuarantinesSharedHostApex(t *testing.T) {
 	}
 }
 
+func TestActiveMonitorDuePredicateExcludesQuarantinedRows(t *testing.T) {
+	predicate := ActiveMonitorDuePredicateForTest()
+	if !strings.Contains(predicate, "status = 'active'") {
+		t.Fatalf("due monitor predicate must require active status, got %q", predicate)
+	}
+	if strings.Contains(predicate, "quarantined") {
+		t.Fatalf("due monitor predicate should exclude quarantined rows by active-only filter, got %q", predicate)
+	}
+}
+
+func TestValidMonitorAdminAction(t *testing.T) {
+	valid := []string{
+		MonitorAdminActionApproveMonitoring,
+		MonitorAdminActionKeepQuarantined,
+		MonitorAdminActionRequestScoreRerun,
+		MonitorAdminActionRemediationOffered,
+	}
+	for _, action := range valid {
+		if !ValidMonitorAdminAction(action) {
+			t.Fatalf("ValidMonitorAdminAction(%q) = false", action)
+		}
+	}
+	if ValidMonitorAdminAction("delete_monitor") {
+		t.Fatal("destructive monitor admin action should not be valid")
+	}
+}
+
+func TestMonitorAdminActionCountsQueryIsAggregateOnly(t *testing.T) {
+	query := strings.ToLower(MonitorAdminActionCountsQueryForTest())
+	for _, want := range []string{"date_trunc", "action", "count(*)", "group by"} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("monitor admin action counts query missing %q: %s", want, query)
+		}
+	}
+	for _, forbidden := range []string{"email", "domain", "token", "notes", "private_review_notes", "payment"} {
+		if strings.Contains(query, forbidden) {
+			t.Fatalf("monitor admin action counts query exposes %q: %s", forbidden, query)
+		}
+	}
+}
+
 func TestRedactEmail(t *testing.T) {
 	domain, hash := RedactEmail("Owner+Monitor@Example.COM")
 	if domain != "example.com" {
@@ -156,16 +197,16 @@ func TestIs172Private_Boundaries(t *testing.T) {
 	public := []string{
 		"172.0.0.0",
 		"172.1.1.1",
-		"172.15.255.255",  // one below range
-		"172.32.0.0",      // one above range
+		"172.15.255.255", // one below range
+		"172.32.0.0",     // one above range
 		"172.33.1.1",
 		"172.100.0.0",
 		"172.255.255.255",
 		// Edge cases the routine must not mis-classify
-		"172.1",            // no dot after
-		"172.",             // empty second octet
-		"172..1",           // double dot
-		"172.16",           // range-valid first-two-octets but no third
+		"172.1",  // no dot after
+		"172.",   // empty second octet
+		"172..1", // double dot
+		"172.16", // range-valid first-two-octets but no third
 		// 3-digit octet must reject regardless of the first-2-digits trick
 		"172.160.0.0",
 		"172.300.0.0",
@@ -185,7 +226,9 @@ func TestIs172Private_Boundaries(t *testing.T) {
 // TestSanitizeUTF8 locks in the NUL-byte + invalid-UTF-8 stripping contract.
 // Prevents regression of the SAVE FAIL bug fixed in commit a3fd496 where
 // favicon URLs containing 0x00 would reach Postgres and trigger:
-//   pq: invalid byte sequence for encoding "UTF8": 0x00 (22021)
+//
+//	pq: invalid byte sequence for encoding "UTF8": 0x00 (22021)
+//
 // 0x00 is valid UTF-8 (passes utf8.ValidString) but Postgres rejects it in
 // text columns — so sanitizeUTF8 must strip it unconditionally.
 func TestSanitizeUTF8_NulByte(t *testing.T) {

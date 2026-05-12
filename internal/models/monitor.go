@@ -25,6 +25,12 @@ type Monitor struct {
 	QuarantinedAt    *time.Time `json:"quarantined_at,omitempty"`
 }
 
+type MonitorAdminActionCount struct {
+	Day    time.Time `json:"day"`
+	Action string    `json:"action"`
+	Count  int       `json:"count"`
+}
+
 var (
 	ErrInvalidEmail    = errors.New("invalid email")
 	ErrInvalidDomain   = errors.New("invalid domain")
@@ -39,6 +45,20 @@ const MaxMonitorsPerEmail = 20
 const (
 	MonitorStatusActive      = "active"
 	MonitorStatusQuarantined = "quarantined"
+)
+
+const (
+	MonitorAdminActionApproveMonitoring  = "approve_monitoring"
+	MonitorAdminActionKeepQuarantined    = "keep_quarantined"
+	MonitorAdminActionRequestScoreRerun  = "request_score_rerun"
+	MonitorAdminActionRemediationOffered = "remediation_offered"
+	activeMonitorDuePredicate            = "status = 'active' AND (last_checked_at IS NULL OR last_checked_at < $1)"
+	monitorAdminActionCountsQuery        = `
+		SELECT date_trunc('day', created_at)::date AS day, action, COUNT(*)::int
+		FROM monitor_admin_actions
+		WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+		GROUP BY day, action
+		ORDER BY day DESC, action ASC`
 )
 
 var sharedHostApexDomains = map[string]bool{
@@ -269,7 +289,7 @@ func ListDueMonitors(db *sql.DB, cutoff time.Time, limit int) ([]Monitor, error)
 		       created_at, last_checked_at, last_notified_at,
 		       status, quarantine_reason, quarantined_at
 		FROM monitors
-		WHERE status = 'active' AND (last_checked_at IS NULL OR last_checked_at < $1)
+		WHERE `+activeMonitorDuePredicate+`
 		ORDER BY last_checked_at NULLS FIRST
 		LIMIT $2
 	`, cutoff, limit)
@@ -299,6 +319,14 @@ func ListDueMonitors(db *sql.DB, cutoff time.Time, limit int) ([]Monitor, error)
 	return out, rows.Err()
 }
 
+func ActiveMonitorDuePredicateForTest() string {
+	return activeMonitorDuePredicate
+}
+
+func MonitorAdminActionCountsQueryForTest() string {
+	return monitorAdminActionCountsQuery
+}
+
 // UpdateMonitorCheck records a check result. notified=true also bumps
 // last_notified_at so we can rate-limit alerts.
 func UpdateMonitorCheck(db *sql.DB, id int64, score int, signalsHash string, notified bool) error {
@@ -315,6 +343,24 @@ func UpdateMonitorCheck(db *sql.DB, id int64, score int, signalsHash string, not
 		                     last_checked_at=NOW()
 		WHERE id=$1
 	`, id, score, signalsHash)
+	return err
+}
+
+// QuarantineMonitorCheck records a check result while removing the monitor
+// from the weekly active-check queue. Used for first-check junk rows that
+// should remain auditable but should not keep generating crawl work.
+func QuarantineMonitorCheck(db *sql.DB, id int64, score int, signalsHash string, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "monitor requires admin review"
+	}
+	_, err := db.Exec(`
+		UPDATE monitors SET status=$2, quarantine_reason=$3,
+		                     quarantined_at=COALESCE(quarantined_at, NOW()),
+		                     last_score=$4, last_signals_hash=$5,
+		                     last_checked_at=NOW()
+		WHERE id=$1
+	`, id, MonitorStatusQuarantined, reason, score, signalsHash)
 	return err
 }
 
@@ -356,6 +402,129 @@ func ListRecentMonitors(db *sql.DB, limit int) ([]Monitor, error) {
 			m.QuarantinedAt = &quarantinedAt.Time
 		}
 		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func ValidMonitorAdminAction(action string) bool {
+	switch strings.TrimSpace(action) {
+	case MonitorAdminActionApproveMonitoring,
+		MonitorAdminActionKeepQuarantined,
+		MonitorAdminActionRequestScoreRerun,
+		MonitorAdminActionRemediationOffered:
+		return true
+	default:
+		return false
+	}
+}
+
+func ApplyMonitorAdminAction(db *sql.DB, monitorID int64, action, operator, source, notes string) error {
+	action = strings.TrimSpace(action)
+	operator = strings.TrimSpace(operator)
+	source = strings.TrimSpace(source)
+	notes = strings.TrimSpace(notes)
+	if !ValidMonitorAdminAction(action) {
+		return errors.New("invalid monitor admin action")
+	}
+	if operator == "" {
+		return errors.New("monitor admin operator required")
+	}
+	if source == "" {
+		source = "admin_api"
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`
+		INSERT INTO monitor_admin_actions (monitor_id, action, operator, source, notes)
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+	`, monitorID, action, operator, source, notes); err != nil {
+		return err
+	}
+
+	var update string
+	switch action {
+	case MonitorAdminActionApproveMonitoring:
+		update = `
+			UPDATE monitors
+			SET status='active',
+			    quarantine_reason=NULL,
+			    last_admin_action=$2,
+			    last_admin_action_at=NOW(),
+			    last_admin_operator=$3,
+			    last_admin_source=$4,
+			    private_review_notes=COALESCE(NULLIF($5, ''), private_review_notes)
+			WHERE id=$1`
+	case MonitorAdminActionKeepQuarantined:
+		update = `
+			UPDATE monitors
+			SET status='quarantined',
+			    quarantine_reason=COALESCE(NULLIF($5, ''), quarantine_reason, 'kept quarantined by admin review'),
+			    quarantined_at=COALESCE(quarantined_at, NOW()),
+			    last_admin_action=$2,
+			    last_admin_action_at=NOW(),
+			    last_admin_operator=$3,
+			    last_admin_source=$4,
+			    private_review_notes=COALESCE(NULLIF($5, ''), private_review_notes)
+			WHERE id=$1`
+	case MonitorAdminActionRequestScoreRerun:
+		update = `
+			UPDATE monitors
+			SET score_rerun_requested_at=NOW(),
+			    last_admin_action=$2,
+			    last_admin_action_at=NOW(),
+			    last_admin_operator=$3,
+			    last_admin_source=$4,
+			    private_review_notes=COALESCE(NULLIF($5, ''), private_review_notes)
+			WHERE id=$1`
+	case MonitorAdminActionRemediationOffered:
+		update = `
+			UPDATE monitors
+			SET remediation_offered_at=NOW(),
+			    last_admin_action=$2,
+			    last_admin_action_at=NOW(),
+			    last_admin_operator=$3,
+			    last_admin_source=$4,
+			    private_review_notes=COALESCE(NULLIF($5, ''), private_review_notes)
+			WHERE id=$1`
+	}
+
+	res, err := tx.Exec(update, monitorID, action, operator, source, notes)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return sql.ErrNoRows
+	}
+	return tx.Commit()
+}
+
+func ListMonitorAdminActionCounts(db *sql.DB, days int) ([]MonitorAdminActionCount, error) {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 365 {
+		days = 365
+	}
+	rows, err := db.Query(monitorAdminActionCountsQuery, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []MonitorAdminActionCount
+	for rows.Next() {
+		var item MonitorAdminActionCount
+		if err := rows.Scan(&item.Day, &item.Action, &item.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
 	}
 	return out, rows.Err()
 }

@@ -170,13 +170,7 @@ func (h *MonitorHandler) LandingPage(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/admin/monitors — bearer auth list of recent monitors.
 func (h *MonitorHandler) AdminList(w http.ResponseWriter, r *http.Request) {
-	adminKey := os.Getenv("ADMIN_API_KEY")
-	if adminKey == "" {
-		writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
-		return
-	}
-	if r.Header.Get("Authorization") != "Bearer "+adminKey {
-		writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+	if !h.requireAdmin(w, r) {
 		return
 	}
 	limit := 100
@@ -192,6 +186,93 @@ func (h *MonitorHandler) AdminList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"monitors": items, "count": len(items)})
+}
+
+// GET /api/v1/admin/monitors/actions — aggregate-only audit counts.
+func (h *MonitorHandler) AdminActionCounts(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	days := 30
+	if q := r.URL.Query().Get("days"); q != "" {
+		if n, err := strconv.Atoi(q); err == nil && n > 0 && n <= 365 {
+			days = n
+		}
+	}
+	items, err := models.ListMonitorAdminActionCounts(h.DB, days)
+	if err != nil {
+		log.Printf("admin monitor action counts: %v", err)
+		writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"days":   days,
+		"counts": items,
+	})
+}
+
+func (h *MonitorHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	adminKey := os.Getenv("ADMIN_API_KEY")
+	if adminKey == "" {
+		writeJSON(w, 503, map[string]string{"error": "admin endpoint not configured"})
+		return false
+	}
+	if r.Header.Get("Authorization") != "Bearer "+adminKey {
+		writeJSON(w, 401, map[string]string{"error": "invalid admin key"})
+		return false
+	}
+	return true
+}
+
+// POST /api/v1/admin/monitors/action
+func (h *MonitorHandler) AdminAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		writeJSON(w, 405, map[string]string{"error": "POST required"})
+		return
+	}
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	var req struct {
+		ID       int64  `json:"id"`
+		Action   string `json:"action"`
+		Operator string `json:"operator"`
+		Source   string `json:"source"`
+		Notes    string `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "invalid json"})
+		return
+	}
+	if req.ID <= 0 {
+		writeJSON(w, 400, map[string]string{"error": "monitor id required"})
+		return
+	}
+	if !models.ValidMonitorAdminAction(req.Action) {
+		writeJSON(w, 400, map[string]string{"error": "invalid action"})
+		return
+	}
+	if strings.TrimSpace(req.Operator) == "" {
+		writeJSON(w, 400, map[string]string{"error": "operator required"})
+		return
+	}
+	if err := models.ApplyMonitorAdminAction(h.DB, req.ID, req.Action, req.Operator, req.Source, req.Notes); err != nil {
+		if err == sql.ErrNoRows {
+			writeJSON(w, 404, map[string]string{"error": "monitor not found"})
+			return
+		}
+		log.Printf("admin monitor action: %v", err)
+		writeJSON(w, 500, map[string]string{"error": "action failed"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"ok":         true,
+		"id":         req.ID,
+		"action":     req.Action,
+		"operator":   strings.TrimSpace(req.Operator),
+		"source":     strings.TrimSpace(req.Source),
+		"audited_at": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // writeJSON is a package-local helper matching api.go's pattern without
