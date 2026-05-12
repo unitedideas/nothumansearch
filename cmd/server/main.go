@@ -293,7 +293,7 @@ func main() {
 	mux.HandleFunc("/fix/success", fixHandler.SuccessPage)
 	mux.HandleFunc("/fix/", fixHandler.ServeHTTP)
 	mux.HandleFunc("/webhook/stripe", fixHandler.HandleWebhook)
-	mux.Handle("/api/v1/check", usageGate.Billable("rest", "/api/v1/check", checkHandler))
+	mux.Handle("/api/v1/check", checkHandler)
 
 	// Embeddable score badges: /badge/{domain}.svg
 	mux.Handle("/badge/", badgeHandler)

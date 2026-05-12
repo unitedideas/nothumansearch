@@ -75,10 +75,15 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
 		h.writeJSON(w, 429, map[string]any{
-			"error":      "rate limit exceeded",
-			"limit":      checkFreeLimit,
-			"window_sec": int(checkWindow.Seconds()),
-			"upgrade":    "Higher limits and CI-grade webhooks coming soon. Email hello@nothumansearch.ai to join the paid-tier waitlist.",
+			"error":            "rate limit exceeded",
+			"limit":            checkFreeLimit,
+			"window_sec":       int(checkWindow.Seconds()),
+			"reset_at_unix":    resetUnix,
+			"plans_url":        "https://nothumansearch.ai/api/v1/api-keys/subscribe",
+			"subscribe_url":    "https://nothumansearch.ai/api/v1/api-keys/subscribe",
+			"subscribe_method": "POST",
+			"subscribe_fields": []string{"email", "plan"},
+			"upgrade":          "Higher limits are available through paid API keys.",
 		})
 		go models.LogIntentFromRequest(h.DB, r, "check_rate_limit_hit", "api", "/api/v1/check", map[string]any{
 			"limit": checkFreeLimit,
