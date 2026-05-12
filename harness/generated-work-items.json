@@ -1,20 +1,5 @@
 [
   {
-    "title": "Reconcile NHS score-fix pending rows after locked follow-up",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "ops/ledgers/score-fix-pending-followup-2026-05-12.md sent=2 external_pending_followups; tools/geo-jobs-redacted-read.sh:2026-05-12T15:09:12Z count=11 real_pending=3 test_like=8 real_paid_or_lead=0; remaining real_pending includes foundry_owned=1 and previously-contacted dot_com=2",
-    "priority": 80,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Re-read tools/geo-jobs-redacted-read.sh and the score-fix follow-up ledger before changing any customer-visible workflow.",
-      "Mark or ledger the two already-contacted external pending rows as follow-up-sent using only private/admin state; do not send another email unless a new public-action lock and duplicate check prove it is due.",
-      "Exclude the foundry-owned pending row from customer follow-up and classify it as internal/test or cleanup in private state.",
-      "Append aggregate-only proof to the score-fix ops ledger showing remaining pending counts by class and host class, without raw emails, hostnames, row IDs, Stripe IDs, or notes."
-    ]
-  },
-  {
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
@@ -27,21 +12,6 @@
       "Provide or point the sampler at a proper NHS REST API key; admin Bearer keys do not satisfy the public API quota boundary and must not be substituted.",
       "Convert only high-confidence reusable taxonomy patterns into narrow category-rule work; keep low-signal and passive rows quarantine/audit-only.",
       "Verify with the sampler tests and a bounded aggregate refresh; do not run a full manual recrawl."
-    ]
-  },
-  {
-    "title": "Exercise private NHS monitor admin actions and record aggregate counts",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/monitor-actions-redacted-read.sh:2026-05-12T15:09:12Z counts=[]; ops/ledgers/monitor-quarantine-boundary-2026-05-08.md; monitor admin actions already implemented",
-    "priority": 72,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Use the private bearer-auth admin workflow to review only quarantined monitor rows; keep raw emails, submitted domains, tokens, private notes, and payment identifiers out of committed artifacts.",
-      "Apply exactly one appropriate action for each reviewed row: approve_monitoring, keep_quarantined, request_score_rerun, or remediation_offered.",
-      "Rerun tools/monitor-actions-redacted-read.sh and append only day/action/count aggregates to ops/ledgers/monitor-quarantine-boundary-2026-05-08.md.",
-      "Verify active monitor checks still exclude quarantined rows until an approve_monitoring action is recorded."
     ]
   }
 ]
