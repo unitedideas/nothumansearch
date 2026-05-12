@@ -223,8 +223,8 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 					},
 					"category": map[string]any{
 						"type":        "string",
-						"description": "Filter by category",
-						"enum":        []string{"ai-tools", "developer", "data", "jobs", "finance", "ecommerce", "health", "education", "security", "communication", "productivity", "news"},
+						"description": searchCategoryDescription(),
+						"enum":        publicSearchCategories,
 					},
 					"min_score": map[string]any{
 						"type":        "integer",
@@ -357,7 +357,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 				"properties": map[string]any{
 					"category": map[string]any{
 						"type":        "string",
-						"description": "Filter by category (e.g. 'developer', 'finance', 'ai-tools'). Omit for all categories.",
+						"description": searchCategoryDescription() + " Omit for all categories.",
 					},
 					"limit": map[string]any{
 						"type":        "integer",
@@ -403,7 +403,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 					},
 					"category": map[string]any{
 						"type":        "string",
-						"description": "Filter by category (e.g. 'developer', 'finance', 'ai-tools'). Omit for all categories.",
+						"description": searchCategoryDescription() + " Omit for all categories.",
 					},
 					"limit": map[string]any{
 						"type":        "integer",

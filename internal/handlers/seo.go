@@ -18,6 +18,37 @@ type SEOHandler struct {
 	BaseURL string
 }
 
+var publicSearchCategories = []string{
+	"ai-tools",
+	"developer",
+	"data",
+	"finance",
+	"ecommerce",
+	"jobs",
+	"security",
+	"health",
+	"education",
+	"communication",
+	"productivity",
+	"news",
+}
+
+var auditSearchCategories = []string{"other", "spam"}
+
+func publicSearchCategoryCSV() string {
+	return strings.Join(publicSearchCategories, ", ")
+}
+
+func searchCategoryDescription() string {
+	return "Filter by public category (" + publicSearchCategoryCSV() + "). Audit-only buckets may appear in /api/v1/categories as other or spam, but are not promoted as discovery inventory."
+}
+
+func searchCategoryOpenAPIEnum() string {
+	cats := append([]string{}, publicSearchCategories...)
+	cats = append(cats, auditSearchCategories...)
+	return strings.Join(cats, ", ")
+}
+
 func NewSEOHandler(db *sql.DB, baseURL string) *SEOHandler {
 	return &SEOHandler{DB: db, BaseURL: baseURL}
 }
@@ -112,8 +143,10 @@ func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=300")
 
 	var totalSites int
-	if err := h.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM sites WHERE "+models.AgentFirstFilter).Scan(&totalSites); err != nil {
-		log.Printf("llms.txt count query: %v", err)
+	if h.DB != nil {
+		if err := h.DB.QueryRowContext(r.Context(), "SELECT count(*) FROM sites WHERE "+models.AgentFirstFilter).Scan(&totalSites); err != nil {
+			log.Printf("llms.txt count query: %v", err)
+		}
 	}
 
 	fmt.Fprintf(w, `# Not Human Search
@@ -179,7 +212,7 @@ Designed for embedding / mirroring: stable URL, cached 5min, no auth. Max 100 re
 
 ### Categories
 GET /categories
-Returns: {categories: [{name, count}]} — all 12 buckets with live counts.
+Returns: {categories: [{name, count}]} — live public categories plus audit-only buckets when present.
 
 ### Monitor a Site
 POST /monitor/register  Body: {"email": "you@x.com", "domain": "site.com"}
@@ -187,7 +220,8 @@ Email alert when a site's agentic readiness drops. Returns an unsubscribe URL.
 Free tier: multiple monitors per email allowed, one per domain.
 
 ## Categories
-ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity.
+Public categories: %s.
+Audit-only buckets: other, spam. These are exposed for transparency and filtering, not promoted as agent-ready inventory.
 
 ## Scoring (0-100)
 - llms.txt: 25 pts
@@ -221,7 +255,7 @@ Report: %s/report
 - Q2 2026 agent-ready sites curation (120 categorized): https://gist.github.com/unitedideas/c60bb35943ef609f99123bdfae146e55
 - NHS Score Check GitHub Action (fail CI on score drop): https://github.com/unitedideas/nhs-score-check-action
 - Q2 2026 MCP Ecosystem Health data + methodology: https://8bitconcepts.com/research/q2-2026-mcp-ecosystem-health.html
-`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
+`, totalSites, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, publicSearchCategoryCSV(), h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL, h.BaseURL)
 }
 
 func (h *SEOHandler) LLMsFullTxt(w http.ResponseWriter, r *http.Request) {
@@ -295,7 +329,7 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"method":      "GET",
 				"parameters": map[string]interface{}{
 					"q":            map[string]string{"type": "string", "description": "Search query"},
-					"category":     map[string]string{"type": "string", "description": "Filter by category (ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity)"},
+					"category":     map[string]string{"type": "string", "description": searchCategoryDescription()},
 					"tag":          map[string]string{"type": "string", "description": "Filter by exact tag (e.g. mcp, openapi, llms-txt, payment, search)"},
 					"min_score":    map[string]string{"type": "integer", "description": "Minimum agentic readiness score (0-100)"},
 					"has_api":      map[string]string{"type": "boolean", "description": "Filter to sites with structured APIs"},
@@ -574,7 +608,8 @@ paths:
           description: Search query (matches name, description, domain)
         - name: category
           in: query
-          schema: { type: string, enum: [ai-tools, developer, data, jobs, finance, ecommerce, health, education, security, communication, productivity, other] }
+          schema: { type: string, enum: [%s] }
+          description: Public categories plus audit-only buckets other and spam. Do not treat audit-only buckets as promoted discovery inventory.
         - name: tag
           in: query
           schema: { type: string }
@@ -711,7 +746,7 @@ paths:
         - in: query
           name: category
           schema: { type: string }
-          description: Filter by category (e.g. ai-tools, developer, commerce)
+          description: Public category filter. Audit-only buckets other and spam may be queried directly but are not promoted as discovery inventory.
         - in: query
           name: has_mcp
           schema: { type: boolean }
@@ -761,7 +796,7 @@ components:
         tags: { type: array, items: { type: string } }
         is_verified: { type: boolean }
         is_featured: { type: boolean }
-`, h.BaseURL)
+`, h.BaseURL, searchCategoryOpenAPIEnum())
 }
 
 type sitemapURL struct {
