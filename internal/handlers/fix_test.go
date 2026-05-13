@@ -21,6 +21,9 @@ func TestScoreFixEligibleRequiresHardSignal(t *testing.T) {
 	if !scoreFixEligible(&models.Site{HasOpenAPI: true}) {
 		t.Fatal("hard-signal site should be score-fix eligible")
 	}
+	if scoreFixEligible(&models.Site{AgenticScore: fixTargetScore, HasOpenAPI: true}) {
+		t.Fatal("site already at the target score should not be score-fix eligible")
+	}
 }
 
 func TestCommerceCatalogIncludesAPIPlans(t *testing.T) {

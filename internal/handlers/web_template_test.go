@@ -71,6 +71,15 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 	if !strings.Contains(hardSignalOut.String(), "Fix this for $199") {
 		t.Fatalf("expected low-score hard-signal site to include score-fix CTA")
 	}
+
+	site.AgenticScore = 95
+	var highScoreOut bytes.Buffer
+	if err := h.tmpl.ExecuteTemplate(&highScoreOut, "site.html", site); err != nil {
+		t.Fatalf("execute high-score hard-signal site template: %v", err)
+	}
+	if strings.Contains(highScoreOut.String(), "Fix this for $199") {
+		t.Fatalf("expected high-score hard-signal site to omit score-fix CTA")
+	}
 }
 
 func TestScoreTemplateIncludesOwnerHandoffWithoutPaidRanking(t *testing.T) {

@@ -37,6 +37,7 @@ import (
 )
 
 const fixPriceCents = 19900
+const fixTargetScore = 95
 
 type FixHandler struct {
 	DB            *sql.DB
@@ -235,7 +236,7 @@ func apiPlanFromProductID(productID string) (models.APIPlan, bool) {
 }
 
 func scoreFixEligible(site *models.Site) bool {
-	return site != nil && site.HasHardAgentSignal()
+	return site != nil && site.HasHardAgentSignal() && site.AgenticScore < fixTargetScore
 }
 
 func (h *FixHandler) CommerceCatalog(w http.ResponseWriter, r *http.Request) {
@@ -340,6 +341,10 @@ func (h *FixHandler) intakeForm(w http.ResponseWriter, r *http.Request, host str
 		return
 	}
 	if !scoreFixEligible(site) {
+		if site.HasHardAgentSignal() && site.AgenticScore >= fixTargetScore {
+			h.scoreFixCompletePage(w, site)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
@@ -418,6 +423,43 @@ textarea { min-height: 80px; resize: vertical; }
 		site.Domain, site.Domain, site.Domain)
 }
 
+func (h *FixHandler) scoreFixCompletePage(w http.ResponseWriter, site *models.Site) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head>
+<title>%s already meets the NHS score target</title>
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#0d0d0e; --surface:#1a1a1b; --border:#2a2a2b; --text:#e0e0e0; --text-muted:#888; --accent:#d97757; }
+body { font-family:'Inter', -apple-system, sans-serif; background:var(--bg); color:var(--text); margin:0; padding:2rem 1rem; }
+.wrap { max-width:640px; margin:0 auto; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem; }
+h1 { color:var(--accent); font-size:1.5rem; margin:0 0 0.5rem; }
+.host { font-family:'IBM Plex Mono',monospace; font-size:1rem; color:#aaa; margin-bottom:1rem; }
+.score { font-family:'IBM Plex Mono',monospace; font-size:2rem; font-weight:700; color:var(--accent); }
+p { color:#ccc; line-height:1.6; }
+.actions { display:flex; gap:12px; flex-wrap:wrap; margin-top:1.5rem; }
+.btn { display:inline-block; background:var(--accent); color:var(--bg); padding:12px 18px; border-radius:8px; font-weight:700; font-family:'IBM Plex Mono',monospace; font-size:0.9rem; text-decoration:none; }
+.btn.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="card">
+    <h1>%s already meets the target</h1>
+    <div class="host">Currently: <span class="score">%d</span> <span style="color:#888;font-size:0.85rem;">&middot; target: %d+</span></div>
+    <p>This site does not need the paid score-fix implementation path. The useful next step is to monitor it so missing public agent-readiness signals are caught after future deploys.</p>
+    <div class="actions">
+      <a class="btn" href="/monitor?domain=%s">Monitor this score</a>
+      <a class="btn secondary" href="/site/%s">Back to score report</a>
+    </div>
+  </div>
+</div>
+</body></html>`,
+		site.Domain, site.Domain, site.AgenticScore, fixTargetScore,
+		url.QueryEscape(site.Domain), url.PathEscape(site.Domain))
+}
+
 func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host string) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
@@ -436,6 +478,10 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 		return
 	}
 	if !scoreFixEligible(site) {
+		if site.HasHardAgentSignal() && site.AgenticScore >= fixTargetScore {
+			http.Error(w, "score already meets target; monitor this score instead", http.StatusConflict)
+			return
+		}
 		http.Error(w, "unknown host", http.StatusNotFound)
 		return
 	}
@@ -607,6 +653,17 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !scoreFixEligible(site) {
+		if site.HasHardAgentSignal() && site.AgenticScore >= fixTargetScore {
+			writeFixJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":       "score_already_meets_target",
+				"score":       site.AgenticScore,
+				"target":      fixTargetScore,
+				"monitor_url": h.BaseURL + "/monitor?domain=" + url.QueryEscape(site.Domain),
+				"site_url":    h.BaseURL + "/site/" + url.PathEscape(site.Domain),
+				"note":        "Paid score-fix is for missing public agent-readiness signals, not ranking placement or score bypass.",
+			})
+			return
+		}
 		writeFixJSON(w, http.StatusNotFound, map[string]string{"error": "unknown host"})
 		return
 	}
