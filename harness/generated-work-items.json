@@ -1,17 +1,17 @@
 [
   {
-    "title": "Keep NHS score-fix pending rows reconciled without another customer touch",
+    "title": "Restore worker credential path for NHS score-fix internal cleanup",
     "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-13T00:08:07Z count=11 real_pending=3 test_like=8 real_paid_or_lead=0; by_status_host_class real_pending dot_com=2 foundry_owned=1; ops/ledgers/score-fix-pending-followup-2026-05-12.md already records sent=2 external_pending_followups",
-    "priority": 80,
+    "source_agent": "business-worker-nothumansearch",
+    "source_ref": "ops/ledgers/score-fix-pending-followup-2026-05-12.md#work_machine_5392113708569a11",
+    "priority": 78,
     "public": false,
-    "human_gate_kind": null,
+    "human_gate_kind": "credential_required",
     "acceptance_criteria": [
-      "Re-read tools/geo-jobs-redacted-read.sh and ops/ledgers/score-fix-pending-followup-2026-05-12.md before changing any score-fix state.",
-      "Do not send another customer-visible score-fix email; the two external pending rows already have follow-up proof unless a future duplicate check and fresh public-action lock prove a new touch is due.",
-      "Classify or clean up the foundry-owned pending row as internal/test-only in private state.",
-      "Append aggregate-only proof showing pending counts by class and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
+      "Re-read tools/geo-jobs-redacted-read.sh and ops/ledgers/score-fix-pending-followup-2026-05-12.md before changing score-fix state.",
+      "Restore or provide the repo helper's admin Keychain service without printing credentials; use only non-secret SET/missing evidence.",
+      "If the helper can fetch aggregate-only admin state, use the existing private admin action only for the foundry-owned pending row and keep external pending rows untouched.",
+      "Append aggregate-only proof by pending action class and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
     ]
   },
   {
