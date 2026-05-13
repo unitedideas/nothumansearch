@@ -4,16 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>State of the Agentic Web — Not Human Search</title>
-    <meta name="description" content="Live data on how well the web serves AI agents. Signal adoption rates, category breakdowns, and top-scoring sites across {{.Total}} indexed domains.">
+    <meta name="description" content="Live data on how well the agent-first web serves AI agents. Signal adoption rates, category breakdowns, and top-scoring sites across {{.Total}} agent-first indexed domains.">
     <meta property="og:title" content="State of the Agentic Web">
-    <meta property="og:description" content="Live data on agentic readiness across {{.Total}} sites. Average score: {{.AvgScore}}/100. Only {{.HighScore}} sites score 70+.">
+    <meta property="og:description" content="Live data on agentic readiness across {{.Total}} agent-first sites. Average score: {{.AvgScore}}/100. {{.HighScore}} sites score 70+.">
     <meta property="og:type" content="article">
     <meta property="og:url" content="https://nothumansearch.ai/report">
     <meta property="og:site_name" content="Not Human Search">
     <meta property="og:image" content="https://nothumansearch.ai/static/img/og-default.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="State of the Agentic Web">
-    <meta name="twitter:description" content="Live data: only {{.HighScore}} of {{.Total}} sites score 70+ on agentic readiness.">
+    <meta name="twitter:description" content="Live data: {{.HighScore}} of {{.Total}} agent-first sites score 70+ on agentic readiness.">
     <link rel="canonical" href="https://nothumansearch.ai/report">
     <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,7 +24,7 @@
       "@context": "https://schema.org",
       "@type": "TechArticle",
       "headline": "State of the Agentic Web",
-      "description": "Live data on how well the web serves AI agents across {{.Total}} indexed sites.",
+      "description": "Live data on how well the agent-first web serves AI agents across {{.Total}} indexed sites.",
       "url": "https://nothumansearch.ai/report",
       "publisher": {"@type": "Organization", "name": "Not Human Search", "url": "https://nothumansearch.ai"}
     }
@@ -87,12 +87,12 @@
     </header>
 
     <h1>State of the Agentic Web</h1>
-    <p class="subtitle">Live data on how well the web serves AI agents. Updated with every recrawl.</p>
+    <p class="subtitle">Live data on how well agent-first sites serve AI agents. Updated with every recrawl.</p>
 
     <div class="hero-stats">
         <div class="stat-card">
             <div class="stat-value">{{.Total}}</div>
-            <div class="stat-label">Sites Indexed</div>
+            <div class="stat-label">Agent-First Sites</div>
         </div>
         <div class="stat-card">
             <div class="stat-value">{{printf "%.1f" .AvgScore}}</div>
@@ -109,7 +109,7 @@
     </div>
 
     <h2>Signal Adoption</h2>
-    <p>How many of the {{.Total}} indexed sites expose each agentic signal. llms.txt leads adoption, but most sites stop there — only 4% pair it with a structured API.</p>
+    <p>How many of the {{.Total}} agent-first indexed sites expose each agentic signal. A site must expose a hard signal such as a structured API, OpenAPI spec, ai-plugin manifest, or MCP server to appear in this report.</p>
 
     <div class="signal-grid">
         <div class="signal">
@@ -150,7 +150,7 @@
     </div>
 
     <div class="callout">
-        <strong>Key finding:</strong> {{printf "%.0f" (divf (mulf (tof .LlmsTxt) 100) (tof .Total))}}% of sites publish llms.txt — but only {{printf "%.0f" (divf (mulf (tof .OpenAPI) 100) (tof .Total))}}% expose an OpenAPI spec. The agentic web is still mostly content, not APIs. Sites that pair llms.txt with an MCP server ({{.LlmsMCP}} sites) score dramatically higher than content-only sites.
+        <strong>Key finding:</strong> {{printf "%.0f" (divf (mulf (tof .LlmsTxt) 100) (tof .Total))}}% of agent-first sites publish llms.txt, while {{printf "%.0f" (divf (mulf (tof .OpenAPI) 100) (tof .Total))}}% expose an OpenAPI spec. Sites that pair llms.txt with an MCP server ({{.LlmsMCP}} sites) score dramatically higher than passive content-only sites, which are excluded from this report.
     </div>
 
     <h2>Categories</h2>

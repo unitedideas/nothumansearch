@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 
@@ -79,6 +80,59 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 	}
 	if strings.Contains(highScoreOut.String(), "Fix this for $199") {
 		t.Fatalf("expected high-score hard-signal site to omit score-fix CTA")
+	}
+}
+
+func TestReportPageUsesAgentFirstCorpus(t *testing.T) {
+	source, err := os.ReadFile("web.go")
+	if err != nil {
+		t.Fatalf("read web.go: %v", err)
+	}
+	text := string(source)
+	start := strings.Index(text, "func (h *WebHandler) ReportPage")
+	if start < 0 {
+		t.Fatal("ReportPage not found")
+	}
+	end := strings.Index(text[start:], "\n}\n")
+	if end < 0 {
+		t.Fatal("ReportPage end not found")
+	}
+	reportPage := text[start : start+end]
+	if got := strings.Count(reportPage, "models.AgentFirstFilter"); got < 3 {
+		t.Fatalf("ReportPage should filter summary, category, and top-site queries with AgentFirstFilter; got %d uses", got)
+	}
+
+	h, err := NewWebHandler(nil, "../../templates")
+	if err != nil {
+		t.Fatalf("parse templates: %v", err)
+	}
+	var out bytes.Buffer
+	data := ReportData{
+		Total:      4240,
+		HighScore:  219,
+		AvgScore:   35,
+		LlmsTxt:    2000,
+		OpenAPI:    300,
+		AIPlugin:   100,
+		API:        500,
+		MCP:        120,
+		SchemaOrg:  1500,
+		RobotsAI:   600,
+		LlmsMCP:    90,
+		Categories: []CategoryStat{{Name: "developer", Count: 1300, AvgScore: 34}},
+		TopSites:   []TopSite{{Domain: "example.com", Score: 95, Category: "developer"}},
+	}
+	if err := h.tmpl.ExecuteTemplate(&out, "report.html", data); err != nil {
+		t.Fatalf("execute report template: %v", err)
+	}
+	html := out.String()
+	for _, want := range []string{"agent-first indexed domains", "Agent-First Sites", "hard signal", "excluded from this report"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected report template to contain %q", want)
+		}
+	}
+	if strings.Contains(html, "Only 219") {
+		t.Fatalf("report template should not imply the filtered agent-first corpus is the whole crawl corpus")
 	}
 }
 

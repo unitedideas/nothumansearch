@@ -629,12 +629,12 @@ func (h *WebHandler) ReportPage(w http.ResponseWriter, r *http.Request) {
 		count(*) FILTER (WHERE has_mcp_server), count(*) FILTER (WHERE has_schema_org),
 		count(*) FILTER (WHERE has_robots_ai),
 		count(*) FILTER (WHERE has_llms_txt AND has_mcp_server)
-		FROM sites`).Scan(&data.Total, &data.HighScore, &data.MediumScore, &data.AvgScore,
+		FROM sites WHERE `+models.AgentFirstFilter).Scan(&data.Total, &data.HighScore, &data.MediumScore, &data.AvgScore,
 		&data.LlmsTxt, &data.OpenAPI, &data.AIPlugin, &data.API, &data.MCP, &data.SchemaOrg, &data.RobotsAI,
 		&data.LlmsMCP)
 
 	rows, err := h.DB.Query(`SELECT category, count(*), round(avg(agentic_score)::numeric,1)
-		FROM sites GROUP BY category ORDER BY count(*) DESC LIMIT 12`)
+		FROM sites WHERE ` + models.AgentFirstFilter + ` GROUP BY category ORDER BY count(*) DESC LIMIT 12`)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -644,7 +644,7 @@ func (h *WebHandler) ReportPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows2, err := h.DB.Query(`SELECT domain, agentic_score, category FROM sites ORDER BY agentic_score DESC LIMIT 20`)
+	rows2, err := h.DB.Query(`SELECT domain, agentic_score, category FROM sites WHERE ` + models.AgentFirstFilter + ` ORDER BY agentic_score DESC LIMIT 20`)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
