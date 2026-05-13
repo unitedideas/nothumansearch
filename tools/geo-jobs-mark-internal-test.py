@@ -140,7 +140,6 @@ def find_target(payload):
         for job in payload.get("jobs", [])
         if (job.get("status") or "") == "pending"
         and host_class(job.get("host")) == "foundry_owned"
-        and not is_test_like(job)
     ]
     if len(targets) != 1:
         return None, len(targets)

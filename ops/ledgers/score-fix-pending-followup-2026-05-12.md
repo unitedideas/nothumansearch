@@ -70,6 +70,34 @@ Remaining pending action classes after private-shadow reconciliation:
 - Internal pending rows requiring cleanup/classification only: 1 `internal_test_or_cleanup`, host class `foundry_owned`
 - Customer follow-up due now: 0
 
+## QLimit aggregate closeout
+
+Date: 2026-05-13T04:10:51Z
+WorkItem: `work_machine_03341d6b1f839914`
+
+Required pre-read completed before this update:
+
+- Re-read `tools/geo-jobs-redacted-read.sh`.
+- Re-read this score-fix follow-up ledger.
+
+Fresh helper execution in this worker runtime did not fetch admin rows because the configured Keychain service was unavailable to the repo helper:
+
+- `nhs-admin-api-key`: missing
+
+No raw admin rows were fetched. No customer-visible score-fix email was sent. No public action lock was created or reused. No external customer row was mutated.
+
+Latest committed aggregate proof after the private admin cleanup remains:
+
+- Real-candidate pending rows: 2, host class `dot_com`
+- Test-like pending rows: 5, host classes 4 `dot_com`, 1 `foundry_owned`
+- Internal-test rows: 1, host class `foundry_owned`
+- Customer follow-up due now: 0
+
+Planning classification remains:
+
+- The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`. A second customer-visible score-fix email remains blocked unless a future worker proves a new touch is due through duplicate-ledger review and a fresh public-action lock.
+- The remaining test-like pending rows are private cleanup/classification work only. They must not trigger customer-visible email or public score-fix targeting.
+
 ## Admin-action surface added
 
 Date: 2026-05-12T22:48:55Z
@@ -190,6 +218,35 @@ Live admin-state mutation remains blocked in this worker runtime because both co
 - `nhs-admin-api-key`: missing
 - `nothumansearch-admin-key`: missing
 
+## QLimit no-send aggregate closeout
+
+Date: 2026-05-13T06:10:38Z
+WorkItem: `work_machine_0fdba3cc733a4426`
+
+Required pre-read completed before this update:
+
+- Re-read `tools/geo-jobs-redacted-read.sh`.
+- Re-read this score-fix follow-up ledger.
+
+Fresh helper execution in this worker runtime did not fetch admin rows because both configured Keychain service aliases were unavailable to the repo helper:
+
+- `nhs-admin-api-key`: missing
+- `nothumansearch-admin-key`: missing
+
+No raw admin rows were fetched. No customer-visible score-fix email was sent. No public action lock was created or reused. No external customer row was mutated.
+
+Latest committed aggregate proof after the private admin cleanup remains:
+
+- Real-candidate pending rows: 2, host class `dot_com`
+- Test-like pending rows: 5, host classes 4 `dot_com`, 1 `foundry_owned`
+- Internal-test rows: 1, host class `foundry_owned`
+- Customer follow-up due now: 0
+
+Planning classification remains:
+
+- The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`. A second customer-visible score-fix email remains blocked unless a future worker proves a new touch is due through duplicate-ledger review and a fresh public-action lock.
+- Remaining test-like pending rows are private cleanup/classification work only. They must not trigger customer-visible email or public score-fix targeting.
+
 No raw admin rows were fetched. No customer-visible email was sent. No public action lock was created or reused.
 
 Private-shadow classification:
@@ -287,3 +344,70 @@ Remaining pending action classes after private-shadow reconciliation:
 - External pending rows requiring no immediate customer action: 2 `follow_up_sent`, host class `dot_com`
 - Internal pending rows requiring cleanup/classification only: 1 `internal_test_or_cleanup`, host class `foundry_owned`
 - Customer follow-up due now: 0
+
+## QLimit no-send aggregate closeout
+
+Date: 2026-05-13T06:13:34Z
+WorkItem: `work_machine_df7d622005a865d1`
+
+Required pre-read completed before this update:
+
+- Re-read `tools/geo-jobs-redacted-read.sh`.
+- Re-read this score-fix follow-up ledger.
+
+Fresh helper execution in this worker runtime did not fetch admin rows because both configured Keychain service aliases were unavailable to the repo helper:
+
+- `nhs-admin-api-key`: missing
+- `nothumansearch-admin-key`: missing
+
+No raw admin rows were fetched. No customer-visible score-fix email was sent. No public action lock was created or reused. No external customer row was mutated.
+
+Latest committed aggregate proof after the private admin cleanup remains:
+
+- Real-candidate pending rows: 2, host class `dot_com`
+- Test-like pending rows: 5, host classes 4 `dot_com`, 1 `foundry_owned`
+- Internal-test rows: 1, host class `foundry_owned`
+- Customer follow-up due now: 0
+
+Planning classification remains:
+
+- The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`. A second customer-visible score-fix email remains blocked unless a future worker proves a new touch is due through duplicate-ledger review and a fresh public-action lock.
+- Remaining test-like/internal pending rows are private cleanup/classification work only. They must not trigger customer-visible email or public score-fix targeting.
+
+## Admin-backed internal-test cleanup
+
+Date: 2026-05-13T10:46:15Z
+Automation: business-agent-not-human-search
+
+Required pre-read completed before this update:
+
+- Re-read `tools/geo-jobs-redacted-read.sh`.
+- Re-read this score-fix follow-up ledger.
+
+Command:
+
+```sh
+python3 tools/geo-jobs-mark-internal-test.py
+```
+
+Action completed:
+
+- Marked exactly one pending Foundry-owned score-fix row as `internal_test` through the private bearer-auth admin workflow.
+- Did not mutate external customer rows.
+- Did not send customer-visible email.
+- Did not create or reuse a public action lock.
+
+Aggregate-only proof:
+
+- Before: real-candidate pending rows: 2, host class `dot_com`.
+- Before: test-like pending rows: 5 total, including 1 host class `foundry_owned`.
+- Before: internal-test rows: 1, host class `foundry_owned`.
+- After: real-candidate pending rows: 2, host class `dot_com`.
+- After: test-like pending rows: 4 total, all host class `dot_com`.
+- After: internal-test rows: 2, host class `foundry_owned`.
+- Customer follow-up due now: 0.
+
+Planning classification after cleanup:
+
+- The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`.
+- Remaining test-like pending rows are private cleanup/classification work only and must not trigger customer-visible email or public score-fix targeting.
