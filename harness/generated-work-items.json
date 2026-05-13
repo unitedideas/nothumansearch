@@ -1,17 +1,17 @@
 [
   {
-    "title": "Finish NHS score-fix private cleanup without another customer touch",
+    "title": "Close active NHS full-recrawl run with aggregate quality proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-13 current aggregate count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md already records sent=2 external_pending_followups",
-    "priority": 86,
+    "source_ref": "tools/full-recrawl.lock started_at=2026-05-13T06:00:11-0700; tools/recrawl.log latest 2026-05-13T16:07Z shows many passive/low-signal crawls; live stats 2026-05-13 total_sites=4181 avg_score=35 other=776 spam=1",
+    "priority": 88,
     "public": false,
     "human_gate_kind": null,
     "acceptance_criteria": [
-      "Re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, and ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md before changing score-fix state.",
-      "Do not send another customer-visible score-fix email; the two external pending rows already have follow-up proof unless a future duplicate check and fresh public-action lock prove a new touch is due.",
-      "Classify or clean up only test_like/internal pending rows through the private admin workflow; do not mutate external customer rows.",
-      "Append aggregate-only proof showing remaining pending counts by class and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
+      "Do not start another full recrawl; treat tools/full-recrawl.lock as an active or stale run boundary until wrapper-safe evidence proves otherwise.",
+      "Use launchd wrapper logs, recrawl log timestamps, and aggregate API/category reads only; do not inspect process environments or print secrets.",
+      "When the run is complete or proven stale, record an aggregate-only closeout with total_sites, avg_score, other count, spam count, and low-signal/passive cohort counts.",
+      "If the lock is stale, clear it only through the repo-local recrawl guard/runbook path and document the observed stale condition; do not kill unrelated work or trigger a replacement full recrawl."
     ]
   },
   {
@@ -30,18 +30,18 @@
     ]
   },
   {
-    "title": "Reconcile NHS monitor request-score-rerun action outcome",
+    "title": "Finish NHS monitor request-score-rerun outcome with bounded proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/monitor-status-redacted-read.sh:2026-05-13 active=1 quarantined=1 reason=first_monitor_check_returned_zero_agentic_score; tools/monitor-actions-redacted-read.sh request_score_rerun count=1; tools/monitor-check.log latest completed 2026-05-11",
+    "source_ref": "ops/ledgers/monitor-rerun-reconciliation-2026-05-13.md records request_score_rerun count=1 but status still active=1 quarantined=1; tools/monitor-check.log latest completed run remains 2026-05-11",
     "priority": 72,
     "public": false,
     "human_gate_kind": null,
     "acceptance_criteria": [
-      "Use only the private bearer-auth admin workflow and redacted helpers; keep raw emails, submitted domains, tokens, private notes, and payment identifiers out of committed artifacts.",
-      "Determine whether the recorded request_score_rerun action has produced a new monitor-check result or still needs a bounded score rerun for the quarantined row.",
-      "Record only day/action/count and status/reason aggregates in ops/ledgers/monitor-quarantine-boundary-2026-05-08.md.",
-      "Verify active monitor checks still exclude quarantined rows until an approve_monitoring action is recorded."
+      "Use only the private bearer-auth admin workflow and redacted helpers; keep raw emails, submitted domains, tokens, private notes, payment identifiers, and row IDs out of committed artifacts.",
+      "Run or verify a bounded monitor score rerun for the quarantined row only, or record why it must remain quarantined.",
+      "Record only day/action/count and status/reason aggregates in ops/ledgers/monitor-quarantine-boundary-2026-05-08.md or a dated follow-up ledger.",
+      "Verify active monitor checks still exclude quarantined rows unless an approve_monitoring action is recorded."
     ]
   }
 ]
