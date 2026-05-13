@@ -13,7 +13,15 @@ from pathlib import Path
 from typing import Any
 
 
-ALLOWED_TOP_LEVEL = {"counts", "sample_breakdown", "quality_gate"}
+ALLOWED_TOP_LEVEL = {
+    "business_local_handoff",
+    "cleanup_review_gate",
+    "counts",
+    "hard_signal_other_review",
+    "sample_breakdown",
+    "seed_refresh_report",
+    "quality_gate",
+}
 ALLOWED_QUALITY_GATE = {"status", "trigger"}
 REQUIRED_COUNTS = {
     "sample_rows",
@@ -98,12 +106,27 @@ def build_quarantine_report(artifact: dict[str, Any]) -> dict[str, Any]:
     elif low_signal_rows > hard_signal_rows or other_low_signal > other_hard_signal:
         planner_priority = "quarantine_first"
 
+    seed_refresh_report = artifact.get("seed_refresh_report", {})
+    handoff_required = (
+        seed_refresh_report.get("threshold", {}).get("handoff_required") is True
+    )
+
     return {
         "source": "harness/discovery-quality-latest.json",
         "artifact_policy": {
             "input": "sanitized aggregate planner artifact only",
             "domain_output": False,
             "crawler_log_access": False,
+        },
+        "business_local_handoff": {
+            "required": handoff_required,
+            "kind": "bounded_aggregate_review" if handoff_required else "none",
+            "reason": quality_gate.get("trigger", "none") if handoff_required else "none",
+            "scope": (
+                "review aggregate seed-refresh cohorts only; do not trigger broad crawl"
+            ),
+            "public": False,
+            "domain_output": False,
         },
         "quarantine": {
             "active": active,
@@ -113,6 +136,9 @@ def build_quarantine_report(artifact: dict[str, Any]) -> dict[str, Any]:
             "category_other_low_signal": other_low_signal,
             "category_other_hard_agent_signal": other_hard_signal,
         },
+        "cleanup_review_gate": artifact.get("cleanup_review_gate", {}),
+        "hard_signal_other_review": artifact.get("hard_signal_other_review", {}),
+        "seed_refresh_report": seed_refresh_report,
         "public_guards": {
             "public_search": "protected_by_models.AgentFirstFilter",
             "score_fix_targeting": "requires_has_hard_agent_signal",
@@ -121,6 +147,7 @@ def build_quarantine_report(artifact: dict[str, Any]) -> dict[str, Any]:
         "sample_breakdown": sample_breakdown,
         "recommended_actions": [
             "Keep rows without API, OpenAPI, MCP, or ai-plugin audit-only.",
+            "Keep llms-only, schema-only, zero-score, and category=other low-signal cohorts out of score-fix targeting.",
             "Do not promote candidate-row work items from discovery logs.",
             "Refresh only aggregate quarantine counts after weekly discovery.",
         ],
@@ -163,8 +190,15 @@ def build_history_entry(
         + int(quarantine["low_signal_rows"]),
         "hard_signal_rows": int(quarantine["hard_signal_rows"]),
         "low_signal_rows": int(quarantine["low_signal_rows"]),
+        "passive_only_share": float(
+            report.get("seed_refresh_report", {}).get("passive_only_share", 0)
+        ),
         "category_other_low_signal": int(quarantine["category_other_low_signal"]),
+        "llms_only": int(report.get("sample_breakdown", {}).get("llms_only", 0)),
+        "schema_only": int(report.get("sample_breakdown", {}).get("schema_only", 0)),
+        "zero_score": int(report.get("sample_breakdown", {}).get("zero_score", 0)),
         "quarantine": {"active": bool(quarantine["active"])},
+        "business_local_handoff": report["business_local_handoff"],
         "planner_priority": public_guards["planner_priority"],
         "planner_scope": "business-local only; never public ranking or score-fix targeting",
     }

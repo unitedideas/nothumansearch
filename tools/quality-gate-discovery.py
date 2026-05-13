@@ -15,16 +15,25 @@ from typing import Any
 
 EXPECTED_TOP_LEVEL = {
     "artifact_policy",
+    "business_local_handoff",
+    "cleanup_review_gate",
     "hard_signal_other_review",
     "public_guards",
     "quarantine",
     "recommended_actions",
     "sample_breakdown",
+    "seed_refresh_report",
     "source",
 }
 EXPECTED_PUBLIC_GUARDS = {
     "public_search": "protected_by_models.AgentFirstFilter",
     "score_fix_targeting": "requires_has_hard_agent_signal",
+}
+EXPECTED_COHORTS = {
+    "category_other_low_signal": "aggregate_review_only",
+    "llms_only": "audit_only",
+    "schema_only": "audit_only",
+    "zero_score": "audit_only",
 }
 DISALLOWED_AGGREGATE_FIELDS = {
     "candidate_domains",
@@ -101,6 +110,53 @@ def load_quarantine(path: Path) -> dict[str, Any]:
         if public_guards.get(key) != expected:
             raise DiscoveryQualityGateError(
                 f"public_guards.{key} must be {expected!r}"
+            )
+    cleanup_gate = data.get("cleanup_review_gate")
+    if not isinstance(cleanup_gate, dict):
+        raise DiscoveryQualityGateError("cleanup_review_gate must be an object")
+    cohorts = cleanup_gate.get("cohorts")
+    if not isinstance(cohorts, dict):
+        raise DiscoveryQualityGateError("cleanup_review_gate.cohorts must be an object")
+    for cohort, expected_decision in EXPECTED_COHORTS.items():
+        row = cohorts.get(cohort)
+        if not isinstance(row, dict):
+            raise DiscoveryQualityGateError(f"cleanup_review_gate missing {cohort}")
+        if row.get("decision") != expected_decision:
+            raise DiscoveryQualityGateError(
+                f"cleanup_review_gate.{cohort}.decision must be {expected_decision!r}"
+            )
+        if row.get("public_search") is not False:
+            raise DiscoveryQualityGateError(
+                f"cleanup_review_gate.{cohort}.public_search must be false"
+            )
+        if row.get("score_fix_targeting") is not False:
+            raise DiscoveryQualityGateError(
+                f"cleanup_review_gate.{cohort}.score_fix_targeting must be false"
+            )
+    seed_report = data.get("seed_refresh_report")
+    if not isinstance(seed_report, dict):
+        raise DiscoveryQualityGateError("seed_refresh_report must be an object")
+    if seed_report.get("threshold", {}).get("status") == "review":
+        if seed_report.get("bounded_action") != (
+            "write business-local aggregate handoff row; do not trigger broad crawl"
+        ):
+            raise DiscoveryQualityGateError(
+                "seed_refresh_report review threshold must require bounded handoff"
+            )
+        handoff = data.get("business_local_handoff")
+        if not isinstance(handoff, dict):
+            raise DiscoveryQualityGateError("business_local_handoff must be an object")
+        if handoff.get("required") is not True:
+            raise DiscoveryQualityGateError(
+                "review threshold must require business-local handoff"
+            )
+        if handoff.get("kind") != "bounded_aggregate_review":
+            raise DiscoveryQualityGateError(
+                "business-local handoff must stay bounded to aggregate review"
+            )
+        if handoff.get("public") is not False or handoff.get("domain_output") is not False:
+            raise DiscoveryQualityGateError(
+                "business-local handoff must not be public or domain-level"
             )
     return data
 

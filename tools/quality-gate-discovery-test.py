@@ -23,6 +23,14 @@ def quarantine_artifact(**overrides):
             "domain_output": False,
             "crawler_log_access": False,
         },
+        "business_local_handoff": {
+            "required": True,
+            "kind": "bounded_aggregate_review",
+            "reason": "low_signal_rows_exceed_hard_signal_rows",
+            "scope": "review aggregate seed-refresh cohorts only; do not trigger broad crawl",
+            "public": False,
+            "domain_output": False,
+        },
         "quarantine": {
             "active": True,
             "reason": "low_signal_rows_exceed_hard_signal_rows",
@@ -45,6 +53,62 @@ def quarantine_artifact(**overrides):
             "category_other": 9,
             "category_other_low_signal": 7,
             "category_other_hard_agent_signal": 2,
+        },
+        "cleanup_review_gate": {
+            "status": "active",
+            "cohorts": {
+                "category_other_low_signal": {
+                    "decision": "aggregate_review_only",
+                    "public_search": False,
+                    "rows": 7,
+                    "score_fix_targeting": False,
+                },
+                "llms_only": {
+                    "decision": "audit_only",
+                    "public_search": False,
+                    "rows": 2,
+                    "score_fix_targeting": False,
+                },
+                "schema_only": {
+                    "decision": "audit_only",
+                    "public_search": False,
+                    "rows": 1,
+                    "score_fix_targeting": False,
+                },
+                "zero_score": {
+                    "decision": "audit_only",
+                    "public_search": False,
+                    "rows": 4,
+                    "score_fix_targeting": False,
+                },
+            },
+            "public_search_effect": "none; AgentFirstFilter remains required",
+            "score_fix_effect": "none; HasHardAgentSignal remains required",
+        },
+        "hard_signal_other_review": {
+            "review_policy": "aggregate-only; executor samples must not enter planner artifacts",
+            "rows": 2,
+            "score_buckets": {"0_24": 0, "25_39": 1, "40_59": 1, "60_plus": 0},
+            "top_signal_sets": {"API": 2},
+        },
+        "seed_refresh_report": {
+            "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl",
+            "cohorts": {
+                "category_other_low_signal": 7,
+                "llms_only": 2,
+                "schema_only": 1,
+                "zero_score": 4,
+            },
+            "hard_signal_rows": 3,
+            "passive_only_rows": 8,
+            "passive_only_share": 0.7273,
+            "sample_rows": 11,
+            "source": "tools/seed-refresh.log",
+            "threshold": {
+                "handoff_required": True,
+                "name": "low_signal_rows_exceed_hard_signal_rows",
+                "status": "review",
+            },
         },
         "recommended_actions": [
             "Keep rows without API, OpenAPI, MCP, or ai-plugin audit-only.",
@@ -177,6 +241,49 @@ class DiscoveryQualityGateTest(unittest.TestCase):
             quarantine.write_text(json.dumps(quarantine_artifact()), encoding="utf-8")
 
             with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "score-fix CTA"):
+                gate.run_gate(quarantine, root)
+
+    def test_gate_rejects_cleanup_cohort_that_targets_score_fix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_repo(root)
+            artifact = quarantine_artifact()
+            artifact["cleanup_review_gate"]["cohorts"]["llms_only"][
+                "score_fix_targeting"
+            ] = True
+            quarantine = root / "quarantine.json"
+            quarantine.write_text(json.dumps(artifact), encoding="utf-8")
+
+            with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "score_fix_targeting"):
+                gate.run_gate(quarantine, root)
+
+    def test_gate_rejects_review_threshold_without_bounded_handoff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_repo(root)
+            artifact = quarantine_artifact()
+            artifact["seed_refresh_report"]["bounded_action"] = "run broad crawl"
+            quarantine = root / "quarantine.json"
+            quarantine.write_text(json.dumps(artifact), encoding="utf-8")
+
+            with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "bounded handoff"):
+                gate.run_gate(quarantine, root)
+
+    def test_gate_rejects_review_threshold_without_local_handoff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_repo(root)
+            artifact = quarantine_artifact()
+            artifact["business_local_handoff"] = {
+                "required": False,
+                "kind": "none",
+                "public": False,
+                "domain_output": False,
+            }
+            quarantine = root / "quarantine.json"
+            quarantine.write_text(json.dumps(artifact), encoding="utf-8")
+
+            with self.assertRaisesRegex(gate.DiscoveryQualityGateError, "business-local handoff"):
                 gate.run_gate(quarantine, root)
 
 

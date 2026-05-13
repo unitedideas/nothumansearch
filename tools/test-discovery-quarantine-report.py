@@ -29,6 +29,62 @@ def artifact(**overrides):
             "status": "review",
             "trigger": "low_signal_rows_exceed_hard_signal_rows",
         },
+        "cleanup_review_gate": {
+            "status": "active",
+            "cohorts": {
+                "category_other_low_signal": {
+                    "decision": "aggregate_review_only",
+                    "public_search": False,
+                    "rows": 7,
+                    "score_fix_targeting": False,
+                },
+                "llms_only": {
+                    "decision": "audit_only",
+                    "public_search": False,
+                    "rows": 2,
+                    "score_fix_targeting": False,
+                },
+                "schema_only": {
+                    "decision": "audit_only",
+                    "public_search": False,
+                    "rows": 1,
+                    "score_fix_targeting": False,
+                },
+                "zero_score": {
+                    "decision": "audit_only",
+                    "public_search": False,
+                    "rows": 4,
+                    "score_fix_targeting": False,
+                },
+            },
+            "public_search_effect": "none; AgentFirstFilter remains required",
+            "score_fix_effect": "none; HasHardAgentSignal remains required",
+        },
+        "hard_signal_other_review": {
+            "review_policy": "aggregate-only; executor samples must not enter planner artifacts",
+            "rows": 2,
+            "score_buckets": {"0_24": 0, "25_39": 1, "40_59": 1, "60_plus": 0},
+            "top_signal_sets": {"API": 2},
+        },
+        "seed_refresh_report": {
+            "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl",
+            "cohorts": {
+                "category_other_low_signal": 7,
+                "llms_only": 2,
+                "schema_only": 1,
+                "zero_score": 4,
+            },
+            "hard_signal_rows": 3,
+            "passive_only_rows": 8,
+            "passive_only_share": 0.7273,
+            "sample_rows": 11,
+            "source": "tools/seed-refresh.log",
+            "threshold": {
+                "handoff_required": True,
+                "name": "low_signal_rows_exceed_hard_signal_rows",
+                "status": "review",
+            },
+        },
         "sample_breakdown": {
             "category_other": 9,
             "category_other_hard_agent_signal": 2,
@@ -51,6 +107,9 @@ class DiscoveryQuarantineReportTest(unittest.TestCase):
         self.assertEqual(report["public_guards"]["public_search"], "protected_by_models.AgentFirstFilter")
         self.assertEqual(report["public_guards"]["score_fix_targeting"], "requires_has_hard_agent_signal")
         self.assertEqual(report["public_guards"]["planner_priority"], "quarantine_first")
+        self.assertEqual(report["business_local_handoff"]["kind"], "bounded_aggregate_review")
+        self.assertTrue(report["business_local_handoff"]["required"])
+        self.assertFalse(report["business_local_handoff"]["domain_output"])
         self.assertFalse(report["artifact_policy"]["domain_output"])
         self.assertNotIn("example", json.dumps(report))
 
@@ -88,8 +147,16 @@ class DiscoveryQuarantineReportTest(unittest.TestCase):
         self.assertEqual(entry["sample_rows"], 11)
         self.assertEqual(entry["hard_signal_rows"], 3)
         self.assertEqual(entry["low_signal_rows"], 8)
+        self.assertEqual(entry["passive_only_share"], 0.7273)
         self.assertEqual(entry["category_other_low_signal"], 7)
+        self.assertEqual(entry["llms_only"], 2)
+        self.assertEqual(entry["schema_only"], 1)
+        self.assertEqual(entry["zero_score"], 4)
         self.assertEqual(entry["quarantine"], {"active": True})
+        self.assertEqual(
+            entry["business_local_handoff"]["kind"],
+            "bounded_aggregate_review",
+        )
         self.assertEqual(entry["planner_priority"], "quarantine_first")
         self.assertIn("business-local only", entry["planner_scope"])
         self.assertNotIn("example", json.dumps(entry))
