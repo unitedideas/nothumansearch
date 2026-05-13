@@ -15,21 +15,6 @@
     ]
   },
   {
-    "title": "Finish NHS monitor request-score-rerun outcome with bounded proof",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/monitor-status-redacted-read.sh:2026-05-13T18:40Z active=1 quarantined=1 reason=first monitor check returned zero agentic score; tools/monitor-actions-redacted-read.sh request_score_rerun count=1; tools/monitor-check.log latest completed run remains 2026-05-11",
-    "priority": 72,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Use only the private bearer-auth admin workflow and redacted helpers; keep raw emails, submitted domains, tokens, private notes, payment identifiers, and row IDs out of committed artifacts.",
-      "Run or verify a bounded monitor score rerun for the quarantined row only, or record why it must remain quarantined.",
-      "Record only day/action/count and status/reason aggregates in ops/ledgers/monitor-quarantine-boundary-2026-05-08.md or a dated follow-up ledger.",
-      "Verify active monitor checks still exclude quarantined rows unless an approve_monitoring action is recorded."
-    ]
-  },
-  {
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
