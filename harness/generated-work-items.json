@@ -1,9 +1,9 @@
 [
   {
-    "title": "Finish NHS score-fix pending cleanup without another customer touch",
+    "title": "Finish NHS score-fix private cleanup without another customer touch",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-13 current aggregate count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com; internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md already records sent=2 external_pending_followups",
+    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-13 current aggregate count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md already records sent=2 external_pending_followups",
     "priority": 86,
     "public": false,
     "human_gate_kind": null,
