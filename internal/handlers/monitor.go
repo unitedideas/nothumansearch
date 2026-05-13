@@ -211,6 +211,22 @@ func (h *MonitorHandler) AdminActionCounts(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// GET /api/v1/admin/monitors/status — aggregate-only quarantine/workload counts.
+func (h *MonitorHandler) AdminStatusCounts(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAdmin(w, r) {
+		return
+	}
+	items, err := models.ListMonitorStatusCounts(h.DB)
+	if err != nil {
+		log.Printf("admin monitor status counts: %v", err)
+		writeJSON(w, 500, map[string]string{"error": "query failed"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"counts": items,
+	})
+}
+
 func (h *MonitorHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	adminKey := os.Getenv("ADMIN_API_KEY")
 	if adminKey == "" {

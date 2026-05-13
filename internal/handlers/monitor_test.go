@@ -53,6 +53,19 @@ func TestMonitorAdminActionCountsRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestMonitorAdminStatusCountsRequiresAuth(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "test-admin-key")
+	h := NewMonitorHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/monitors/status", nil)
+	rr := httptest.NewRecorder()
+
+	h.AdminStatusCounts(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("AdminStatusCounts status = %d, want 401; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestMonitorAdminActionRejectsMissingOperatorBeforeDB(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", "test-admin-key")
 	h := NewMonitorHandler(nil, "https://nothumansearch.ai")

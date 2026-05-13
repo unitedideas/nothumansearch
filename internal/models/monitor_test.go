@@ -128,6 +128,20 @@ func TestMonitorAdminActionCountsQueryIsAggregateOnly(t *testing.T) {
 	}
 }
 
+func TestMonitorStatusCountsQueryIsAggregateOnly(t *testing.T) {
+	query := strings.ToLower(MonitorStatusCountsQueryForTest())
+	for _, want := range []string{"status", "quarantine_reason", "count(*)", "min(created_at)", "max(created_at)", "group by"} {
+		if !strings.Contains(query, want) {
+			t.Fatalf("monitor status counts query missing %q: %s", want, query)
+		}
+	}
+	for _, forbidden := range []string{"email", "domain", "token", "notes", "private_review_notes", "payment"} {
+		if strings.Contains(query, forbidden) {
+			t.Fatalf("monitor status counts query exposes %q: %s", forbidden, query)
+		}
+	}
+}
+
 func TestRedactEmail(t *testing.T) {
 	domain, hash := RedactEmail("Owner+Monitor@Example.COM")
 	if domain != "example.com" {

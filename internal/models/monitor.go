@@ -31,6 +31,14 @@ type MonitorAdminActionCount struct {
 	Count  int       `json:"count"`
 }
 
+type MonitorStatusCount struct {
+	Status           string     `json:"status"`
+	QuarantineReason *string    `json:"quarantine_reason,omitempty"`
+	Count            int        `json:"count"`
+	OldestCreatedAt  *time.Time `json:"oldest_created_at,omitempty"`
+	NewestCreatedAt  *time.Time `json:"newest_created_at,omitempty"`
+}
+
 var (
 	ErrInvalidEmail    = errors.New("invalid email")
 	ErrInvalidDomain   = errors.New("invalid domain")
@@ -59,6 +67,15 @@ const (
 		WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
 		GROUP BY day, action
 		ORDER BY day DESC, action ASC`
+	monitorStatusCountsQuery = `
+		SELECT status,
+		       quarantine_reason,
+		       COUNT(*)::int AS count,
+		       MIN(created_at) AS oldest_created_at,
+		       MAX(created_at) AS newest_created_at
+		FROM monitors
+		GROUP BY status, quarantine_reason
+		ORDER BY status ASC, quarantine_reason ASC NULLS FIRST`
 )
 
 var sharedHostApexDomains = map[string]bool{
@@ -327,6 +344,10 @@ func MonitorAdminActionCountsQueryForTest() string {
 	return monitorAdminActionCountsQuery
 }
 
+func MonitorStatusCountsQueryForTest() string {
+	return monitorStatusCountsQuery
+}
+
 // UpdateMonitorCheck records a check result. notified=true also bumps
 // last_notified_at so we can rate-limit alerts.
 func UpdateMonitorCheck(db *sql.DB, id int64, score int, signalsHash string, notified bool) error {
@@ -523,6 +544,36 @@ func ListMonitorAdminActionCounts(db *sql.DB, days int) ([]MonitorAdminActionCou
 		var item MonitorAdminActionCount
 		if err := rows.Scan(&item.Day, &item.Action, &item.Count); err != nil {
 			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func ListMonitorStatusCounts(db *sql.DB) ([]MonitorStatusCount, error) {
+	rows, err := db.Query(monitorStatusCountsQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]MonitorStatusCount, 0)
+	for rows.Next() {
+		var item MonitorStatusCount
+		var reason sql.NullString
+		var oldest sql.NullTime
+		var newest sql.NullTime
+		if err := rows.Scan(&item.Status, &reason, &item.Count, &oldest, &newest); err != nil {
+			return nil, err
+		}
+		if reason.Valid {
+			item.QuarantineReason = &reason.String
+		}
+		if oldest.Valid {
+			item.OldestCreatedAt = &oldest.Time
+		}
+		if newest.Valid {
+			item.NewestCreatedAt = &newest.Time
 		}
 		out = append(out, item)
 	}

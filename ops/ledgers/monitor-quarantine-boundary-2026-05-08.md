@@ -218,6 +218,68 @@ No admin monitor list endpoint was called after the credential check failed. No 
 
 The active-check boundary remains code-backed and verified by `TestActiveMonitorDuePredicateExcludesQuarantinedRows`: `ListDueMonitors` uses `status = 'active'` in `activeMonitorDuePredicate`, so quarantined rows stay excluded from monitor checks until an `approve_monitoring` action records the row back to active.
 
+## Aggregate Monitor Status Evidence
+
+Date: 2026-05-13T07:20:00Z
+Automation: business-agent-not-human-search
+
+Added and deployed an aggregate-only monitor status reader for:
+
+- `GET /api/v1/admin/monitors/status`
+- status/count/quarantine_reason/oldest_created_at/newest_created_at output only
+- Keychain inline admin auth only
+- no raw monitor rows, emails, tokens, submitted domains, payment identifiers, or private review notes
+
+Commands:
+
+```sh
+tools/monitor-status-redacted-read.sh
+tools/monitor-actions-redacted-read.sh
+```
+
+Result:
+
+```json
+{"counts":[{"status":"active","count":1},{"status":"quarantined","quarantine_reason":"first monitor check returned zero agentic score","count":1}]}
+{"counts":[],"days":30}
+```
+
+Interpretation: the private monitor aggregate surface is reachable with inline Keychain auth. Current monitor workload is one active row and one quarantined first-check-zero row; no monitor admin actions have been recorded in the last 30 days. No raw monitor row, email, submitted domain, token, private note, payment identifier, or support text was read or committed.
+
+Verification:
+
+- `GOCACHE=/tmp/nhs-go-cache-business-agent go test ./...`
+- `curl -fsS https://nothumansearch.ai/health`
+- `tools/monitor-status-redacted-read.sh`
+- signed `POST https://nothumansearch.ai/webhook/stripe` smoke returned HTTP 200
+
+## Quarantined Monitor Review Blocked
+
+Date: 2026-05-13T04:15:26Z
+WorkItem: work_machine_eab29f4aad70b055
+Source: private monitor-admin action workflow
+
+Attempted the required private bearer-auth monitor admin workflow through the repo-local aggregate reader before fetching any row-level monitor data. The reader failed closed because both expected NHS admin Keychain services were unavailable in this execution context:
+
+- `nhs-admin-api-key`
+- `nothumansearch-admin-key`
+
+Command:
+
+```sh
+tools/monitor-actions-redacted-read.sh
+```
+
+Observed result:
+
+```text
+missing Keychain service: nhs-admin-api-key or nothumansearch-admin-key
+```
+
+No admin monitor list endpoint was called after the credential check failed. No quarantined row was reviewed, no monitor admin action was applied, and no raw email, submitted domain, token, private note, or payment identifier was read or committed.
+
+The active-check boundary remains code-backed and verified by `TestActiveMonitorDuePredicateExcludesQuarantinedRows`: `ListDueMonitors` uses `status = 'active'` in `activeMonitorDuePredicate`, so quarantined rows stay excluded from monitor checks until an `approve_monitoring` action records the row back to active.
+
 ## Quarantined Monitor Review Blocked
 
 Date: 2026-05-12T15:24:38Z

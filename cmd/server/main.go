@@ -302,6 +302,7 @@ func main() {
 	mux.HandleFunc("/api/v1/admin/monitors", monitorHandler.AdminList)
 	mux.HandleFunc("/api/v1/admin/monitors/action", monitorHandler.AdminAction)
 	mux.HandleFunc("/api/v1/admin/monitors/actions", monitorHandler.AdminActionCounts)
+	mux.HandleFunc("/api/v1/admin/monitors/status", monitorHandler.AdminStatusCounts)
 
 	// Monitor (free feature — email alerts when a site's agentic readiness drops)
 	mux.HandleFunc("/monitor", monitorHandler.LandingPage)
