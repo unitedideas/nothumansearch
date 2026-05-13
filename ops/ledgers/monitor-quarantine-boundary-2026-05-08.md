@@ -218,6 +218,33 @@ No admin monitor list endpoint was called after the credential check failed. No 
 
 The active-check boundary remains code-backed and verified by `TestActiveMonitorDuePredicateExcludesQuarantinedRows`: `ListDueMonitors` uses `status = 'active'` in `activeMonitorDuePredicate`, so quarantined rows stay excluded from monitor checks until an `approve_monitoring` action records the row back to active.
 
+## Aggregate Action Evidence
+
+Date: 2026-05-13T07:10:00Z
+Automation: business-agent-not-human-search
+
+Verified both expected NHS admin Keychain aliases with non-secret SET evidence, then used the private bearer-auth monitor admin workflow to record one aggregate-safe action for the single quarantined monitor row whose quarantine class is `first monitor check returned zero agentic score`.
+
+Action recorded:
+
+```json
+{"ok":true,"action":"request_score_rerun","source":"launchd_business_agent"}
+```
+
+Aggregate action counts after the action:
+
+```json
+{"counts":[{"day":"2026-05-13T00:00:00Z","action":"request_score_rerun","count":1}],"days":30}
+```
+
+Aggregate monitor status after the action:
+
+```json
+{"counts":[{"status":"active","count":1},{"status":"quarantined","quarantine_reason":"first monitor check returned zero agentic score","count":1}]}
+```
+
+No raw monitor row, email address, submitted domain, unsubscribe token, payment identifier, private note, or row id was written to this artifact. The action requests a score rerun before any activation decision; the monitor remains quarantined and excluded from active weekly monitor checks.
+
 ## Aggregate Monitor Status Evidence
 
 Date: 2026-05-13T07:20:00Z
