@@ -1,17 +1,32 @@
 [
   {
-    "title": "Close active NHS full-recrawl run with aggregate quality proof",
+    "title": "Confirm NHS full-recrawl completion after log stops",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/full-recrawl.lock started_at=2026-05-13T06:00:11-0700; tools/recrawl.log latest 2026-05-13T16:07Z shows many passive/low-signal crawls; live stats 2026-05-13 total_sites=4181 avg_score=35 other=776 spam=1",
-    "priority": 88,
+    "source_ref": "ops/ledgers/work_machine_63a49451b392f228.md: 2026-05-13 full-recrawl had remote_start at 06:00:11 -0700, no wrapper completion line, no full-recrawl.lock present, and recrawl.log kept advancing through at least 16:41:19Z; lockless-active guard added to tools/recrawl-common.sh",
+    "priority": 82,
     "public": false,
     "human_gate_kind": null,
     "acceptance_criteria": [
-      "Do not start another full recrawl; treat tools/full-recrawl.lock as an active or stale run boundary until wrapper-safe evidence proves otherwise.",
-      "Use launchd wrapper logs, recrawl log timestamps, and aggregate API/category reads only; do not inspect process environments or print secrets.",
-      "When the run is complete or proven stale, record an aggregate-only closeout with total_sites, avg_score, other count, spam count, and low-signal/passive cohort counts.",
-      "If the lock is stale, clear it only through the repo-local recrawl guard/runbook path and document the observed stale condition; do not kill unrelated work or trigger a replacement full recrawl."
+      "Wait until tools/recrawl.log stops advancing before classifying the 2026-05-13 full-recrawl as complete or stale; do not start another full recrawl.",
+      "Use only wrapper logs, recrawl log timestamps, and aggregate API/category reads; do not inspect process environments or print secrets.",
+      "If the run completed without a wrapper completion line, document the missing completion signal and verify the lockless-active guard skipped any overlapping wrapper start during the fresh-log window.",
+      "If a stale lock appears later, clear it only through the repo-local recrawl guard/runbook path and record the observed stale condition; do not kill unrelated work."
+    ]
+  },
+  {
+    "title": "Keep NHS score-fix follow-up blocked until a new duplicate-lock window proves it is due",
+    "source_family": "ops",
+    "source_agent": "business-agent-not-human-search",
+    "source_ref": "ops/ledgers/recrawl-scorefix-boundary-2026-05-13.md: both NHS admin Keychain aliases are SET; tools/geo-jobs-redacted-read.sh shows 2 real_candidate pending dot_com rows already covered by score-fix-pending-followup-2026-05-12 and 0 real paid/lead rows",
+    "priority": 70,
+    "public": true,
+    "human_gate_kind": "public_action_lock",
+    "acceptance_criteria": [
+      "Before any future customer-visible score-fix email, re-read tools/geo-jobs-redacted-read.sh and the score-fix pending follow-up ledger.",
+      "Prove a new touch is due through duplicate-ledger review and take a fresh sync-state public-action lock.",
+      "Commit only aggregate counts plus final message IDs or proof URLs; do not write raw emails, hostnames, row IDs, Stripe IDs, or notes.",
+      "If the cohort remains the same 2 dot_com pending rows with no new paid/lead status, take no customer-visible action."
     ]
   },
   {
@@ -27,21 +42,6 @@
       "Use the aggregate-only sampler to review category=other hard-signal rows without emitting domains, URLs, row IDs, names, or descriptions into planner artifacts.",
       "Convert only high-confidence reusable taxonomy patterns into narrow category-rule work; keep low-signal and passive rows quarantine/audit-only.",
       "Verify with sampler tests and a bounded aggregate refresh; do not run a full manual recrawl."
-    ]
-  },
-  {
-    "title": "Finish NHS monitor request-score-rerun outcome with bounded proof",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "ops/ledgers/monitor-rerun-reconciliation-2026-05-13.md records request_score_rerun count=1 but status still active=1 quarantined=1; tools/monitor-check.log latest completed run remains 2026-05-11",
-    "priority": 72,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Use only the private bearer-auth admin workflow and redacted helpers; keep raw emails, submitted domains, tokens, private notes, payment identifiers, and row IDs out of committed artifacts.",
-      "Run or verify a bounded monitor score rerun for the quarantined row only, or record why it must remain quarantined.",
-      "Record only day/action/count and status/reason aggregates in ops/ledgers/monitor-quarantine-boundary-2026-05-08.md or a dated follow-up ledger.",
-      "Verify active monitor checks still exclude quarantined rows unless an approve_monitoring action is recorded."
     ]
   }
 ]
