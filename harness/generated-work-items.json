@@ -1,32 +1,17 @@
 [
   {
-    "title": "Close NHS full-recrawl with aggregate quality proof",
+    "title": "Restore NHS score-fix Keychain aliases for private admin reads",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/recrawl.log:2026-05-13 full_recrawl complete success=9801 failed=405 total=10206; live stats total_sites=4169 avg_score=35 categories other=767 spam=1; tools/seed-refresh.log success=475 failed=8 total=483",
-    "priority": 88,
+    "source_ref": "ops/ledgers/score-fix-keychain-boundary-2026-05-13.md; helper now tries nhs-admin-api-key then nothumansearch-admin-key, but both aliases are missing in this worker runtime",
+    "priority": 78,
     "public": false,
-    "human_gate_kind": null,
+    "human_gate_kind": "credential_required",
     "acceptance_criteria": [
-      "Do not start another full recrawl; the 2026-05-13 recrawl already completed and the next work is closeout/quality proof.",
-      "Use only wrapper logs, recrawl log timestamps, seed-refresh log summaries, and aggregate API/category reads; do not inspect process environments or print secrets.",
-      "Record an aggregate-only closeout with total_sites, avg_score, category=other count, spam count, recrawl success/failure totals, and seed-refresh success/failure totals.",
-      "If future evidence shows a stale lock or missing completion signal, clear it only through the repo-local recrawl guard/runbook path and document the observed stale condition; do not trigger a replacement full recrawl."
-    ]
-  },
-  {
-    "title": "Finish NHS score-fix private cleanup without another customer touch",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-13T18:08:06Z aggregate count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md already records sent=2 external_pending_followups",
-    "priority": 86,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, and ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md before changing score-fix state.",
+      "Restore at least one repo-supported Keychain alias, nhs-admin-api-key or nothumansearch-admin-key, without printing or copying the credential into logs or markdown.",
+      "Re-run ./tools/geo-jobs-redacted-read.sh through the existing helper and commit only aggregate-only proof.",
       "Do not send another customer-visible score-fix email; the two external pending rows already have follow-up proof unless a future duplicate check and fresh public-action lock prove a new touch is due.",
-      "Classify or clean up only test_like/internal pending rows through the private admin workflow; do not mutate external customer rows.",
-      "Append aggregate-only proof showing remaining pending counts by class and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
+      "Only classify or clean up test_like/internal rows through the private admin workflow; do not mutate external customer rows."
     ]
   },
   {
