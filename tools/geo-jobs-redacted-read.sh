@@ -6,10 +6,22 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 BASE_URL="${NHS_BASE_URL:-https://nothumansearch.ai}"
 LIMIT="${NHS_GEO_JOBS_LIMIT:-500}"
-SERVICE="${NHS_ADMIN_KEYCHAIN_SERVICE:-nhs-admin-api-key}"
+if [ "${NHS_ADMIN_KEYCHAIN_SERVICE:-}" ]; then
+  SERVICES="$NHS_ADMIN_KEYCHAIN_SERVICE"
+else
+  SERVICES="nhs-admin-api-key nothumansearch-admin-key"
+fi
 
-if ! /usr/bin/security find-generic-password -a foundry -s "$SERVICE" -w >/dev/null 2>&1; then
-  printf 'missing Keychain service: %s\n' "$SERVICE" >&2
+SERVICE=""
+for candidate in $SERVICES; do
+  if /usr/bin/security find-generic-password -a foundry -s "$candidate" -w >/dev/null 2>&1; then
+    SERVICE="$candidate"
+    break
+  fi
+done
+
+if [ -z "$SERVICE" ]; then
+  printf 'missing Keychain service: %s\n' "$SERVICES" >&2
   exit 2
 fi
 

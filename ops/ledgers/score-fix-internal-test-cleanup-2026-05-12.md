@@ -57,3 +57,40 @@ python3 tools/geo-jobs-mark-internal-test.py
 ```
 
 Remaining actionable score-fix queue: two real-candidate external `dot_com` pending rows. Customer follow-up, if sent later, must use the email-outreach public-action lock path and commit only aggregate counts plus message ids.
+
+## Aggregate closeout retry - 2026-05-13
+
+Automation: `business-agent-not-human-search`
+
+Required pre-read completed before this update:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Credential path in this worker runtime:
+
+- `nhs-admin-api-key`: `SET`
+- `nothumansearch-admin-key`: `SET`
+
+Command:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Fresh aggregate-only result:
+
+- Total score-fix rows: 11
+- Real-candidate pending rows: 2, host class `dot_com`
+- Test-like internal-test rows: 2, host class `foundry_owned`
+- Test-like pending rows: 4, host class `dot_com`
+- Test-like lead rows: 1, host class `dot_com`
+- Test-like paid rows: 2, host class `dot_com`
+
+Decision:
+
+- The Foundry-owned pending cleanup lane is closed; no Foundry-owned pending row remains.
+- The two external pending rows already have follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md`.
+- Customer-visible score-fix follow-up due now: 0.
+- No customer-visible email was sent, no public-action lock was created or reused, and no external customer row was mutated.
