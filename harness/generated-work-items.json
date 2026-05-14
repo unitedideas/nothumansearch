@@ -1,10 +1,26 @@
 [
   {
+    "title": "Make NHS API-key checkout reachable from quota-exceeded handoffs",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "last_verified_at": "2026-05-14T12:08:23Z",
+    "source_ref": "marketing/marketer-scout-2026-05-08T2111Z: quota_exceeded handoff points subscribe_url to POST-only /api/v1/api-keys/subscribe; GET returns 405; POST starter checkout works but URL is redacted; current live stats 2026-05-14 total_sites=4170 avg_score=35",
+    "priority": 90,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Add a human- and agent-readable GET route or documented handoff page for /api/v1/api-keys/subscribe so quota-exceeded users do not land on a 405.",
+      "Expose starter, pro, and scale API-key plans in /api/v1/catalog, /api/v1/quote, commerce.json, and agent.json without recording raw checkout URLs in committed artifacts.",
+      "Verify anonymous quota-exceeded responses, GET subscribe handoff, POST subscribe checkout contract, catalog, quote, commerce, and agent surfaces with live-safe tests.",
+      "Do not print API keys, checkout URLs, customer identifiers, payment identifiers, or private query logs."
+    ]
+  },
+  {
     "title": "Finish NHS score-fix private cleanup for test-like pending rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-14T07:56:00Z",
-    "source_ref": "tools/geo-jobs-redacted-read.sh:2026-05-14 current aggregate count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups; ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md closes foundry-owned pending cleanup",
+    "last_verified_at": "2026-05-14T12:08:23Z",
+    "source_ref": "tools/geo-jobs-redacted-read.sh: count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups; ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md closes foundry-owned pending cleanup",
     "priority": 86,
     "public": false,
     "human_gate_kind": null,
@@ -19,8 +35,8 @@
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-14T07:56:00Z",
-    "source_ref": "harness/discovery-quarantine-latest.json and harness/discovery-quality-latest.json:2026-05-13 hard_signal_other_review.rows=12 score_buckets 0_24=12 top_signal_sets API=8 API,schema.org=4; discovery-quality counts hard_signal_rows=1363 low_signal_rows=518; live categories other=768 avg_score=27; tools/taxonomy-other-redacted-sample.py prior sample_status=failed reason=HTTPError",
+    "last_verified_at": "2026-05-14T12:08:23Z",
+    "source_ref": "harness/discovery-quarantine-latest.json and harness/discovery-quality-latest.json: hard_signal_other_review.rows=12 score_buckets 0_24=12 top_signal_sets API=8 API,schema.org=4; discovery-quality counts hard_signal_rows=1363 low_signal_rows=518; live categories other=768 avg_score=27; tools/taxonomy-other-redacted-sample.py requires a proper NHS REST API key or quota-safe access path",
     "priority": 76,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -29,22 +45,6 @@
       "Use the aggregate-only sampler to review category=other hard-signal rows without emitting domains, URLs, row IDs, names, or descriptions into planner artifacts.",
       "Convert only high-confidence reusable taxonomy patterns into narrow category-rule work; keep low-signal and passive rows quarantine/audit-only.",
       "Verify with sampler tests and a bounded aggregate refresh; do not run a full manual recrawl."
-    ]
-  },
-  {
-    "title": "Refresh NHS public count metadata after post-recrawl aggregate drift",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-14T07:56:00Z",
-    "source_ref": "live public aggregates 2026-05-14 /api/v1/stats total_sites=4170 avg_score=35; /api/v1/categories other=768 spam=1; tools/mcp-registry/server.json still says 4,100+ sites; ops/ledgers/full-recrawl-closeout-2026-05-13.md closes recrawl lane and says no replacement recrawl",
-    "priority": 64,
-    "public": true,
-    "human_gate_kind": "public_action_lock",
-    "acceptance_criteria": [
-      "Do not start another recrawl or seed refresh; use only live public aggregate API reads and existing wrapper logs.",
-      "Update only stale public count metadata and registry/discovery copy that can be verified against /api/v1/stats and /api/v1/categories.",
-      "If publishing to an external registry is required, take the sync-state public-action lock first and verify the published description after the push.",
-      "Keep exact aggregate evidence in the commit or ledger; do not include raw domains, row IDs, emails, tokens, private notes, or process environments."
     ]
   }
 ]
