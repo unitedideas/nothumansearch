@@ -1,25 +1,25 @@
 [
   {
-    "title": "Make NHS API-key checkout reachable from quota-exceeded handoffs",
+    "title": "Run production-safe NHS API-key commerce smoke after deploy",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-14T12:08:23Z",
-    "source_ref": "marketing/marketer-scout-2026-05-08T2111Z: quota_exceeded handoff points subscribe_url to POST-only /api/v1/api-keys/subscribe; GET returns 405; POST starter checkout works but URL is redacted; current live stats 2026-05-14 total_sites=4170 avg_score=35",
+    "last_verified_at": "2026-05-14T12:23:00Z",
+    "source_ref": "harness/work_machine_fc80806fb7b71e5b.md: local patch adds GET subscribe handoff, agent.json API plans, quota handoff metadata, and live-safe unit coverage; deploy remains outside planner scope; live stats total_sites=4171 avg_score=35",
     "priority": 90,
-    "public": false,
-    "human_gate_kind": null,
+    "public": true,
+    "human_gate_kind": "deploy_required",
     "acceptance_criteria": [
-      "Add a human- and agent-readable GET route or documented handoff page for /api/v1/api-keys/subscribe so quota-exceeded users do not land on a 405.",
-      "Expose starter, pro, and scale API-key plans in /api/v1/catalog, /api/v1/quote, commerce.json, and agent.json without recording raw checkout URLs in committed artifacts.",
-      "Verify anonymous quota-exceeded responses, GET subscribe handoff, POST subscribe checkout contract, catalog, quote, commerce, and agent surfaces with live-safe tests.",
-      "Do not print API keys, checkout URLs, customer identifiers, payment identifiers, or private query logs."
+      "After the next NHS deploy, verify GET /api/v1/api-keys/subscribe, /.well-known/commerce.json, /.well-known/agent.json, /api/v1/catalog, and /api/v1/quote?product_id=nhs_api_starter with live-safe curls.",
+      "Verify starter, pro, and scale API-key plans are present without logging checkout URLs.",
+      "Run one POST /api/v1/api-keys/subscribe with a safe internal test recipient only if Stripe is configured; redact any returned checkout_url before storing evidence and do not complete payment.",
+      "Record aggregate pass/fail evidence only; do not commit API keys, raw checkout URLs, customer IDs, payment IDs, or private query logs."
     ]
   },
   {
     "title": "Finish NHS score-fix private cleanup for test-like pending rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-14T12:08:23Z",
+    "last_verified_at": "2026-05-14T12:23:00Z",
     "source_ref": "tools/geo-jobs-redacted-read.sh: count=11 real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups; ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md closes foundry-owned pending cleanup",
     "priority": 86,
     "public": false,
@@ -35,7 +35,7 @@
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-14T12:08:23Z",
+    "last_verified_at": "2026-05-14T12:23:00Z",
     "source_ref": "harness/discovery-quarantine-latest.json and harness/discovery-quality-latest.json: hard_signal_other_review.rows=12 score_buckets 0_24=12 top_signal_sets API=8 API,schema.org=4; discovery-quality counts hard_signal_rows=1363 low_signal_rows=518; live categories other=768 avg_score=27; tools/taxonomy-other-redacted-sample.py requires a proper NHS REST API key or quota-safe access path",
     "priority": 76,
     "public": false,
