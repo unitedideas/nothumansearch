@@ -1,5 +1,20 @@
 [
   {
+    "title": "Close NHS full-recrawl with aggregate quality proof",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "tools/recrawl.log:2026-05-13 full_recrawl complete success=9801 failed=405 total=10206; tools/seed-refresh.log:2026-05-13 seed_refresh complete success=475 failed=8 total=483; tools/recrawl-health.log post_full_recrawl api_status=200 api_ok=1; live stats total_sites=4169 avg_score=35 categories other=767 spam=1",
+    "priority": 88,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Do not start another full recrawl; the 2026-05-13 full recrawl already completed and the next work is closeout/quality proof.",
+      "Use only wrapper logs, recrawl log timestamps, seed-refresh log summaries, and aggregate API/category reads; do not inspect process environments or print secrets.",
+      "Record an aggregate-only closeout with total_sites=4169, avg_score=35, category=other count=767, spam count=1, recrawl success/failure totals, seed-refresh success/failure totals, and post-recrawl API health.",
+      "If future evidence shows a stale lock or missing completion signal, clear it only through the repo-local recrawl guard/runbook path and document the observed stale condition; do not trigger a replacement full recrawl."
+    ]
+  },
+  {
     "title": "Finish NHS score-fix private cleanup for test-like pending rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
@@ -18,7 +33,7 @@
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "harness/discovery-quarantine-latest.json:2026-05-13 hard_signal_other_review.rows=12 score_buckets 0_24=12 top_signal_sets API=8 API,schema.org=4; harness/discovery-quality-latest.json hard_signal_rows=1363 low_signal_rows=518; live categories other=767 avg_score=27; tools/taxonomy-other-redacted-sample.py prior sample_status=failed reason=HTTPError",
+    "source_ref": "harness/discovery-quarantine-latest.json and harness/discovery-quality-latest.json:2026-05-13 hard_signal_other_review.rows=12 score_buckets 0_24=12 top_signal_sets API=8 API,schema.org=4; discovery-quality counts hard_signal_rows=1363 low_signal_rows=518; live categories other=767 avg_score=27; tools/taxonomy-other-redacted-sample.py prior sample_status=failed reason=HTTPError",
     "priority": 76,
     "public": false,
     "human_gate_kind": "credential_required",
