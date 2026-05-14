@@ -247,6 +247,44 @@ Planning classification remains:
 - The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`. A second customer-visible score-fix email remains blocked unless a future worker proves a new touch is due through duplicate-ledger review and a fresh public-action lock.
 - Remaining test-like pending rows are private cleanup/classification work only. They must not trigger customer-visible email or public score-fix targeting.
 
+## Restored aggregate helper access closeout
+
+Date: 2026-05-13T18:55:00-07:00
+Automation: `business-agent-not-human-search`
+
+Required pre-read completed before this update:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Credential path in this worker runtime:
+
+- `nhs-admin-api-key`: `SET`
+- `nothumansearch-admin-key`: `SET`
+
+Command:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Fresh aggregate-only result:
+
+- Total score-fix rows: 11
+- Real-candidate pending rows: 2, host class `dot_com`
+- Test-like internal-test rows: 2, host class `foundry_owned`
+- Test-like pending rows: 4, host class `dot_com`
+- Test-like lead rows: 1, host class `dot_com`
+- Test-like paid rows: 2, host class `dot_com`
+- Customer-visible score-fix follow-up due now: 0
+
+Decision:
+
+- The previous credential-required blocker is closed for this worker runtime.
+- The two external pending rows already have follow-up proof in this ledger.
+- No customer-visible email was sent, no public-action lock was created or reused, and no external customer row was mutated.
+
 No raw admin rows were fetched. No customer-visible email was sent. No public action lock was created or reused.
 
 Private-shadow classification:
@@ -411,3 +449,35 @@ Planning classification after cleanup:
 
 - The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`.
 - Remaining test-like pending rows are private cleanup/classification work only and must not trigger customer-visible email or public score-fix targeting.
+
+## QLimit credential-required no-send closeout
+
+Date: 2026-05-14T01:10:59Z
+WorkItem: `work_machine_42f614f8e83d2e39`
+
+Required pre-read completed before this update:
+
+- Re-read `tools/geo-jobs-redacted-read.sh`.
+- Re-read this score-fix follow-up ledger.
+- Re-read `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`.
+
+Fresh helper execution failed closed before fetching admin rows because the permitted Keychain services were unavailable in this worker runtime:
+
+- `nhs-admin-api-key`: missing
+- `nothumansearch-admin-key`: missing
+
+No raw admin rows were fetched. No customer-visible score-fix email was sent. No public-action lock was created or reused. No external customer row was mutated.
+
+Latest committed aggregate proof after the private admin cleanup remains:
+
+- Real-candidate pending rows: 2, host class `dot_com`.
+- Test-like pending rows: 4, host class `dot_com`.
+- Test-like lead rows: 1, host class `dot_com`.
+- Test-like paid rows: 2, host class `dot_com`.
+- Test-like internal-test rows: 2, host class `foundry_owned`.
+- Customer follow-up due now: 0.
+
+Planning classification remains:
+
+- The two external pending rows already have follow-up proof and remain classified as `follow_up_sent`. A second customer-visible score-fix email remains blocked unless a future worker proves a new touch is due through duplicate-ledger review and a fresh public-action lock.
+- Remaining test-like rows are private cleanup/classification work only and must not trigger customer-visible email or public score-fix targeting.
