@@ -1,20 +1,5 @@
 [
   {
-    "title": "Close NHS full-recrawl with aggregate quality proof",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "tools/recrawl.log:2026-05-13 full_recrawl complete success=9801 failed=405 total=10206; tools/seed-refresh.log:2026-05-13 seed_refresh complete success=475 failed=8 total=483; live stats total_sites=4169 avg_score=35 categories other=767 spam=1",
-    "priority": 88,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Do not start another full recrawl; the 2026-05-13 full recrawl already completed and the next work is closeout/quality proof.",
-      "Use only wrapper logs, recrawl log timestamps, seed-refresh log summaries, and aggregate API/category reads; do not inspect process environments or print secrets.",
-      "Record an aggregate-only closeout with total_sites=4169, avg_score=35, category=other count=767, spam count=1, recrawl success/failure totals, and seed-refresh success/failure totals.",
-      "If future evidence shows a stale lock or missing completion signal, clear it only through the repo-local recrawl guard/runbook path and document the observed stale condition; do not trigger a replacement full recrawl."
-    ]
-  },
-  {
     "title": "Finish NHS score-fix private cleanup for test-like pending rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
