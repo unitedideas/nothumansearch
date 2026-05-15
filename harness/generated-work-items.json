@@ -1,10 +1,10 @@
 [
   {
-    "title": "Deploy and smoke NHS API-key commerce handoff",
+    "title": "Deploy and smoke NHS API-key commerce handoff plus traffic route buckets",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-15T06:08:19Z",
-    "source_ref": "harness/work_machine_bfc3d1f16844e08a.md: local patch adds text/html subscribe handoff and tests but was not committed/deployed by that runner; live GET /api/v1/api-keys/subscribe with Accept: text/html still returns 200 application/json; live catalog exposes nhs_geo_fix_my_score plus nhs_api_starter/pro/scale; live GET quote for nhs_api_starter returns product_id and currency with no checkout_url; live /api/v1/stats total_sites=4174 avg_score=35.",
+    "last_verified_at": "2026-05-15T08:08:10Z",
+    "source_ref": "harness/work_machine_bfc3d1f16844e08a.md: local patch adds text/html subscribe handoff and tests but was not committed/deployed by that runner; harness/work_machine_86c399ff59582a4b.md adds aggregate route_buckets and scanner_pages to admin traffic so scanner probes stay separate from commerce/catalog/badge/profile/MCP/API/monitor demand reports; live GET /api/v1/api-keys/subscribe with Accept: text/html still returns 200 application/json with server date Fri, 15 May 2026 08:08:10 GMT; live catalog exposes nhs_geo_fix_my_score plus nhs_api_starter/pro/scale; live GET quote for nhs_api_starter returns product_id=nhs_api_starter and currency=USD with no checkout_url; live /api/v1/stats total_sites=4174 avg_score=35.",
     "priority": 90,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -13,15 +13,16 @@
       "After deploy, verify GET /api/v1/api-keys/subscribe with Accept: application/json and Accept: text/html, /.well-known/commerce.json, /.well-known/agent.json, /api/v1/catalog, and /api/v1/quote?product_id=nhs_api_starter with live-safe curls.",
       "Verify starter, pro, and scale API-key plans are present without logging checkout URLs.",
       "Run one POST /api/v1/api-keys/subscribe with a safe internal test recipient only if Stripe is configured; redact any returned checkout_url before storing evidence and do not complete payment.",
-      "Record aggregate pass/fail evidence only; do not commit API keys, raw checkout URLs, customer IDs, payment IDs, or private query logs."
+      "Verify /api/v1/admin/traffic returns aggregate route_buckets and scanner_pages, with scanner-like paths classified separately from commerce, catalog, badge, profile, MCP, API, and monitor routes.",
+      "Record aggregate pass/fail evidence only; do not commit API keys, raw checkout URLs, customer IDs, payment IDs, private query logs, private demand claims, completed-payment claims, customer endorsement claims, secret exposure claims, paid ranking placement claims, preferred inclusion claims, ACP/x402 support claims, or score-methodology bypass claims."
     ]
   },
   {
     "title": "Finish NHS score-fix private cleanup for test-like pending rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-15T06:08:19Z",
-    "source_ref": "tools/geo-jobs-redacted-read.sh succeeded in this planner runtime and returned aggregate count=11; real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; harness/work_machine_16006b846bcbf0d6.md recorded a different worker credential miss, so that blocker is worker-context-specific; ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups.",
+    "last_verified_at": "2026-05-15T08:08:10Z",
+    "source_ref": "tools/geo-jobs-redacted-read.sh succeeded in this planner runtime and returned aggregate count=11; real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned; ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups; prior credential_required notes are worker-context-specific and not current evidence.",
     "priority": 86,
     "public": false,
     "human_gate_kind": null,
@@ -36,8 +37,8 @@
     "title": "Unblock aggregate-safe taxonomy review for hard-signal category=other rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-15T06:08:19Z",
-    "source_ref": "harness/discovery-quarantine-latest.json and harness/discovery-quality-latest.json: hard_signal_other_review.rows=12, score_buckets 0_24=12, top_signal_sets API=8 and API,schema.org=4; discovery-quality hard_signal_rows=1363 low_signal_rows=518 category_other_low_signal=36; live /api/v1/categories other=769 avg_score=27 spam=1; 2026-05-14 seed_refresh completed success=476 failed=7 total=483; tools/taxonomy-other-redacted-sample.py requires a proper NHS REST API key or quota-safe access path.",
+    "last_verified_at": "2026-05-15T08:08:10Z",
+    "source_ref": "harness/discovery-quarantine-latest.json and harness/discovery-quality-latest.json: hard_signal_other_review.rows=12, score_buckets 0_24=12, top_signal_sets API=8 and API,schema.org=4; discovery-quality hard_signal_rows=1363 low_signal_rows=518 category_other_low_signal=36; live /api/v1/categories other=769 avg_score=27 spam=1; 2026-05-14 seed_refresh completed success=476 failed=7 total=483; tools/taxonomy-other-redacted-sample.py still requires a proper NHS REST API key or quota-safe access path.",
     "priority": 76,
     "public": false,
     "human_gate_kind": "credential_required",
