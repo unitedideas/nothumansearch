@@ -3,8 +3,8 @@
     "title": "Finish NHS API-key commerce handoff browser surface and quote metadata",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-18T02:07:51Z",
-    "source_ref": "The 2026-05-17 full recrawl completed at 10:23:48 PT with Success=9839 Failed=379 Total=10218, tools/recrawl-health.log records completion api_status=200 workers=10 dry_run=0, and no tools/full-recrawl.lock remains. Live GET /api/v1/api-keys/subscribe with Accept: application/json returns starter/pro/scale plan ids nhs_api_starter, nhs_api_pro, nhs_api_scale, but response_fields is absent and no top-level checkout_url field was returned. Accept: text/html still returns content-type application/json and begins with activate_after_checkout, so the remaining handoff gap is browser-readable HTML. Live /.well-known/commerce.json and /api/v1/catalog each return 4 products: nhs_geo_fix_my_score, nhs_api_starter, nhs_api_pro, nhs_api_scale. Live /.well-known/agent.json exposes commerce catalog, quote, and checkout URLs under top-level commerce. Live /api/v1/quote?product_id=nhs_api_starter returns product_id and currency=USD but checkout_mode and amount_cents are null. Live /api/v1/admin/traffic?hours=24 returns daily/errors/top_pages/top_referrers but no aggregate route_buckets or scanner_pages keys. ops/ledgers/work_machine_86c399ff59582a4b.md records aggregate route_buckets and scanner_pages work.",
+    "last_verified_at": "2026-05-18T04:08:16Z",
+    "source_ref": "The 2026-05-17 full recrawl completed at 10:23:48 PT with Success=9839 Failed=379 Total=10218, tools/recrawl-health.log records completion api_status=200 workers=10 dry_run=0, and no tools/full-recrawl.lock or tools/recrawl.lock remains. Live /api/v1/stats reports total_sites=4174 avg_score=35 top_category=developer. Live GET /api/v1/api-keys/subscribe with Accept: application/json returns starter/pro/scale plan ids nhs_api_starter, nhs_api_pro, nhs_api_scale, but response_fields is absent and no top-level checkout_url field was returned. Accept: text/html still returns content-type application/json and begins with activate_after_checkout, so the remaining handoff gap is browser-readable HTML. Live /.well-known/commerce.json and /api/v1/catalog each return 4 products: nhs_geo_fix_my_score, nhs_api_starter, nhs_api_pro, nhs_api_scale. Live /.well-known/agent.json exposes commerce catalog, quote, and checkout URLs under top-level commerce. Live /api/v1/quote?product_id=nhs_api_starter returns product_id and currency=USD but checkout_mode and amount_cents are null. Live /api/v1/admin/traffic?hours=24 returns daily/errors/top_pages/top_referrers but no aggregate route_buckets or scanner_pages keys. ops/ledgers/work_machine_86c399ff59582a4b.md records aggregate route_buckets and scanner_pages work.",
     "priority": 90,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -14,15 +14,15 @@
       "Repair or deploy aggregate traffic route buckets so /api/v1/admin/traffic returns route_buckets and scanner_pages without raw IPs, user agents, buyer emails, Stripe ids, payment intents, referers, or private query logs.",
       "After deploy, verify GET /api/v1/api-keys/subscribe with Accept: application/json and Accept: text/html, /.well-known/commerce.json, /.well-known/agent.json, /api/v1/catalog, and /api/v1/quote?product_id=nhs_api_starter with live-safe curls.",
       "Verify starter, pro, and scale API-key plans are present, and verify quote amount/checkout metadata without logging checkout URLs.",
-      "Record aggregate pass/fail evidence only; do not commit API keys, raw checkout URLs, customer IDs, payment IDs, private query logs, private demand claims, completed-payment claims, customer endorsement claims, secret exposure claims, paid ranking placement claims, preferred inclusion claims, ACP/x402 support claims, or score-methodology bypass claims."
+      "Record aggregate pass/fail evidence only; do not commit API keys, raw checkout URLs, customer IDs, payment IDs, private query logs, private demand claims, completed-payment claims, customer endorsement claims, paid ranking placement claims, preferred inclusion claims, ACP/x402 support claims, or score-methodology bypass claims."
     ]
   },
   {
     "title": "Finish NHS score-fix private cleanup for test-like pending rows",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-18T02:07:51Z",
-    "source_ref": "tools/geo-jobs-redacted-read.sh succeeded in this planner runtime and returned aggregate count=11; real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned. ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups; ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md exists for cleanup context; older credential_required notes are worker-context-specific and not current planner evidence.",
+    "last_verified_at": "2026-05-18T04:08:16Z",
+    "source_ref": "tools/geo-jobs-redacted-read.sh succeeded in this planner runtime and returned aggregate count=11; real_candidate pending=2 dot_com; test_like pending=4 dot_com, lead=1 dot_com, paid=2 dot_com, internal_test=2 foundry_owned. All visible age buckets are 7_29d. ops/ledgers/score-fix-pending-followup-2026-05-12.md records sent=2 external pending followups; ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md exists for cleanup context; older credential_required notes are worker-context-specific and not current planner evidence.",
     "priority": 86,
     "public": false,
     "human_gate_kind": null,
@@ -30,15 +30,15 @@
       "Re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, and ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md before changing score-fix state.",
       "Do not send another customer-visible score-fix email; the two external pending rows already have follow-up proof unless a future duplicate check and fresh public-action lock prove a new touch is due.",
       "Classify or clean up only test_like pending rows through the private admin workflow; do not mutate external customer rows.",
-      "Append aggregate-only proof showing remaining pending counts by class and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
+      "Append aggregate-only proof showing remaining pending counts by class, age bucket, and host class without raw emails, hostnames, row IDs, Stripe IDs, or notes."
     ]
   },
   {
     "title": "Refresh NHS discovery-quality aggregate after completed full recrawl",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-18T02:07:51Z",
-    "source_ref": "The 2026-05-17 full recrawl completed with Success=9839 Failed=379 Total=10218. Live /api/v1/stats now reports total_sites=4174 avg_score=35. Live /api/v1/categories top buckets include developer=1237 avg_score=34, ai-tools=900 avg_score=40, other=765 avg_score=27, data=399 avg_score=32, finance=199 avg_score=41, productivity=173 avg_score=38, ecommerce=149 avg_score=41, communication=119 avg_score=38. harness/discovery-quarantine-latest.json still records hard_signal_other_review.rows=12 with top_signal_sets API=8 and API,schema.org=4, while generated_at and discovery_quality aggregate fields are null and aggregate_decision.category_other_low_signal remains an older no_op_fixed_point. The next useful index-quality work is a fresh aggregate-only discovery-quality refresh, not another full recrawl.",
+    "last_verified_at": "2026-05-18T04:08:16Z",
+    "source_ref": "The 2026-05-17 full recrawl completed with Success=9839 Failed=379 Total=10218, and no full-recrawl lock remains. Live /api/v1/stats now reports total_sites=4174 avg_score=35 top_category=developer. Live /api/v1/categories top buckets include developer=1237 avg_score=34, ai-tools=900 avg_score=40, other=765 avg_score=27, data=399 avg_score=32, finance=199 avg_score=41, productivity=173 avg_score=38, ecommerce=149 avg_score=41, communication=119 avg_score=38. harness/discovery-quarantine-latest.json still records hard_signal_other_review.rows=12 with top_signal_sets API=8 and API,schema.org=4, while aggregate_decision.category_other_low_signal remains an older no_op_fixed_point. The next useful index-quality work is a fresh aggregate-only discovery-quality refresh, not another full recrawl.",
     "priority": 84,
     "public": false,
     "human_gate_kind": null,
