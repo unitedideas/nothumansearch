@@ -3,8 +3,8 @@
     "title": "Close out the active NHS full-recrawl boundary before deploy-gated work",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-27T14:09:21Z",
-    "source_ref": "tools/full-recrawl.lock exists with pid=99664 and started_at=1779886812. tools/recrawl-health.log records 2026-05-27T06:00:12 wrapper=full-recrawl start, preflight api_status=200 api_ok=1, full_pressure workers=10, and remote_start /app/crawler -recrawl -workers 10. tools/recrawl.log has fresh 2026-05-27 crawl output after that start and no same-run wrapper completion line yet. Live public aggregates at this planner run: /api/v1/stats total_sites=4174 avg_score=35 top_category=developer; /api/v1/categories top counts developer=1231, ai-tools=905, other=773, data=402, health=60, spam=1. Do not deploy or start replacement crawl while this boundary is active.",
+    "last_verified_at": "2026-05-27T16:09:15Z",
+    "source_ref": "tools/full-recrawl.lock exists with pid=99664 and started_at=1779886812. tools/recrawl-health.log records 2026-05-27T06:00:12 wrapper=full-recrawl start, preflight api_status=200 api_ok=1, full_pressure workers=10, and remote_start /app/crawler -recrawl -workers 10. tools/recrawl.log has fresh 2026-05-27 crawl output through 16:07 UTC after that start and no same-run wrapper completion line yet. Live public aggregates at this planner run: /api/v1/stats total_sites=4179 avg_score=35 top_category=developer; /api/v1/categories top counts developer=1232, ai-tools=904, other=780, data=401, health=60, spam=1. Do not deploy or start replacement crawl while this boundary is active.",
     "priority": 96,
     "public": false,
     "human_gate_kind": "active_recrawl_boundary",
@@ -19,8 +19,8 @@
     "title": "Finish NHS API-key commerce browser handoff and traffic buckets after recrawl boundary clears",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-27T14:09:21Z",
-    "source_ref": "Live planner probes: /api/v1/stats total_sites=4174 avg_score=35 top_category=developer. Categories: developer=1231 avg=34; ai-tools=905 avg=41; other=773 avg=27; data=402 avg=32; finance=192 avg=40; productivity=171 avg=39; ecommerce=149 avg=41; communication=118 avg=38; security=113 avg=39; health=60 avg=41; jobs=26 avg=41; education=21 avg=49; news=12 avg=50; spam=1 avg=0. GET /api/v1/api-keys/subscribe returns plan ids nhs_api_starter, nhs_api_pro, nhs_api_scale; top-level response_fields is null; subscribe.response_fields lists checkout_url, plan, monthly_limit, amount_cents, activation_url; no live checkout URL was copied. Accept:text/html returns HTTP 200 with content-type application/json. Quote for nhs_api_starter returns amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. /.well-known/agent.json exposes commerce keys agentic_payments_ready, api_subscribe, catalog, checkout, manifest, payment_modes, private_preview_required, quote, unsupported_payment_modes. Admin traffic live keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent. ops/ledgers/work_machine_86c399ff59582a4b.md records local aggregate route-bucket implementation work. Deploy is blocked until the active 2026-05-27 full-recrawl boundary closes.",
+    "last_verified_at": "2026-05-27T16:09:15Z",
+    "source_ref": "Live planner probes: /api/v1/stats total_sites=4179 avg_score=35 top_category=developer. Categories: developer=1232 avg=34; ai-tools=904 avg=41; other=780 avg=27; data=401 avg=32; finance=192 avg=40; productivity=172 avg=39; ecommerce=149 avg=41; communication=117 avg=38; security=112 avg=39; health=60 avg=41; jobs=26 avg=41; education=21 avg=49; news=12 avg=50; spam=1 avg=0. GET /api/v1/api-keys/subscribe returns plan ids nhs_api_starter, nhs_api_pro, nhs_api_scale; top-level response_fields is null; subscribe.response_fields lists checkout_url, plan, monthly_limit, amount_cents, activation_url; no live checkout URL was copied. Accept:text/html returns HTTP 200 with content-type application/json. Quote for nhs_api_starter returns amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. Admin traffic live keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent. ops/ledgers/work_machine_86c399ff59582a4b.md records local aggregate route-bucket implementation work. Deploy is blocked until the active 2026-05-27 full-recrawl boundary closes.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "active_recrawl_boundary_then_deploy_required",
@@ -34,20 +34,19 @@
     ]
   },
   {
-    "title": "Finish NHS score-fix private cleanup for test-like pending rows",
+    "title": "Reconcile newly quarantined NHS monitor rows from the latest weekly check",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-05-27T14:09:21Z",
-    "source_ref": "Current planner runtime re-ran tools/geo-jobs-redacted-read.sh successfully with aggregate count=12: real_candidate pending=3; test_like pending=4, lead=1, paid=2, internal_test=2. Real_candidate pending has 1 row in 1_6d and 2 rows in 7_29d; test_like internal_test and test_like pending are 7_29d; test_like lead/paid are 30d_plus. By host class: real_candidate pending=3 dot_com; test_like pending=4 dot_com; test_like lead=1 dot_com; test_like paid=2 dot_com; test_like internal_test=2 foundry_owned. Executor proof harness/work_machine_b55f9deceff08ced.md records executor-context credential failure: missing Keychain service nhs-admin-api-key nothumansearch-admin-key, no raw rows fetched, no mutation, no email, no public-action lock. Customer follow-up due now=0.",
-    "priority": 88,
+    "last_verified_at": "2026-05-27T16:09:15Z",
+    "source_ref": "tools/monitor-check.log records the 2026-05-25 weekly monitor run completing with 5 due monitors, 2 new first-check zero-score quarantines, 1 first-check score=50 monitor, 1 first-check score=10 monitor, and 1 existing score=100 monitor unchanged. tools/monitor-status-redacted-read.sh returns aggregate status counts: active=3; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. tools/monitor-actions-redacted-read.sh returns only prior 2026-05-13 action aggregates: keep_quarantined=1 and request_score_rerun=1. No raw monitor domains, row ids, emails, or notes are committed.",
+    "priority": 86,
     "public": false,
-    "human_gate_kind": "credential_required",
+    "human_gate_kind": null,
     "acceptance_criteria": [
-      "Run only from an executor where tools/geo-jobs-redacted-read.sh can read nhs-admin-api-key or nothumansearch-admin-key from Keychain without printing the secret.",
-      "Before any private score-fix mutation, re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md, and harness/work_machine_b55f9deceff08ced.md.",
-      "Run the redacted helper successfully in the executor runtime and keep committed proof aggregate-only by class, status, age bucket, and host class.",
-      "Classify or clean up only test_like pending rows through the private admin workflow; do not mutate external real_candidate customer rows.",
-      "Do not send another customer-visible score-fix email for the already-contacted external pending cohort unless a future duplicate check and fresh public-action lock prove it is due."
+      "Use private admin monitor workflow only; committed proof must remain aggregate-safe at status/reason and day/action/count level.",
+      "Review the two first-check zero-score quarantines from the latest monitor run and record keep_quarantined, request_score_rerun, or another supported action as appropriate.",
+      "Do not include raw monitor domains, URLs, row ids, emails, or review notes in committed ledgers or planner artifacts.",
+      "After action, refresh tools/monitor-status-redacted-read.sh and tools/monitor-actions-redacted-read.sh and write an aggregate ledger showing status/reason counts plus day/action/count aggregates."
     ]
   }
 ]
