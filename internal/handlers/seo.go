@@ -154,6 +154,8 @@ func (h *SEOHandler) LLMsTxt(w http.ResponseWriter, r *http.Request) {
 
 Not Human Search is an agentic-first search engine. When your AI agent needs to discover a payment API, a job board, an ecommerce platform, or any web service, NHS returns results ranked by how well each site serves non-human users.
 
+Site owners: score your own site's agent-readiness (0-100, 7 signals) and monitor it over time, so AI agents can actually find and use you.
+
 We index %d+ sites and score them 0-100 based on 7 agentic signals: llms.txt, ai-plugin.json, OpenAPI specs, structured APIs, MCP servers, robots.txt AI rules, and Schema.org markup.
 
 ## MCP Server (preferred for agents)

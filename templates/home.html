@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Google for AI Agents{{end}}</title>
-    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}The agentic-first search engine. AI agents search NHS to find services, APIs, and tools — ranked by how well they serve non-human users.{{end}}">
-    <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Google for AI Agents{{end}}">
-    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}The agentic-first search engine. Your agent searches NHS to find services, APIs, and tools that actually work for non-human users.{{end}}">
+    <title>{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents? Agent-Readiness Search & Score{{end}}</title>
+    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Not Human Search scores any site 0–100 on 7 agentic signals — llms.txt, OpenAPI, MCP, Schema.org & more — and indexes 8,000+ agent-ready sites. Free instant score.{{end}}">
+    <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents? Agent-Readiness Search & Score{{end}}">
+    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Score any site 0–100 on 7 agentic signals (llms.txt, OpenAPI, MCP & more), and search 8,000+ agent-ready sites. Free instant score.{{end}}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <meta property="og:site_name" content="Not Human Search">
@@ -15,8 +15,8 @@
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="Not Human Search — Google for AI Agents.">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Google for AI Agents{{end}}">
-    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}The agentic-first search engine. Find services, APIs, and tools ranked by how well they serve AI agents.{{end}}">
+    <meta name="twitter:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents?{{end}}">
+    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Free agent-readiness score (0–100, 7 signals), plus search across 8,000+ agent-ready sites.{{end}}">
     <meta name="twitter:image" content="https://nothumansearch.ai/static/img/{{if .OGImage}}{{.OGImage}}{{else}}og-default.png{{end}}">
     <link rel="canonical" href="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <link rel="alternate" type="application/rss+xml" title="NHS — New Agent-Ready Sites" href="https://nothumansearch.ai/feed.xml">
@@ -276,7 +276,8 @@
             <p class="tagline">{{.Subheading}}</p>
             {{if eq .Mode "mcp-servers"}}<p class="tagline" style="font-size:13px;">Wire any of these into your agent with <code style="color:var(--green);">claude mcp add --transport http &lt;name&gt; &lt;url&gt;/mcp</code>.</p>{{end}}
             {{else}}
-            <p class="tagline">The Google for AI agents. Find any service, API, or tool — ranked by agentic readiness.</p>
+            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Can AI agents find your site?</h1>
+            <p class="tagline">Not Human Search ranks the agentic web — and scores any site for agent-readiness in seconds. The Google for AI agents: find any service, API, or tool by how well it serves non-human users.</p>
             {{end}}
         </header>
 
