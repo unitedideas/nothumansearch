@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rerun one quarantined monitor and apply an aggregate-safe admin outcome."""
+"""Rerun quarantined monitors and apply aggregate-safe admin outcomes."""
 
 import json
 import os
@@ -19,6 +19,19 @@ def keychain_value(service):
         text=True,
         stderr=subprocess.DEVNULL,
     ).strip()
+
+
+def admin_token():
+    service = os.environ.get("NHS_ADMIN_KEYCHAIN_SERVICE")
+    candidates = [service] if service else ["nhs-admin-api-key", "nothumansearch-admin-key"]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return keychain_value(candidate)
+        except subprocess.CalledProcessError:
+            continue
+    raise RuntimeError("missing Keychain service: nhs-admin-api-key or nothumansearch-admin-key")
 
 
 def fetch_json(url, token=None, data=None):
@@ -54,77 +67,92 @@ def score_bucket(score):
     return "70_plus"
 
 
-def find_target(monitors):
-    targets = [
+def find_targets(monitors):
+    return [
         monitor
         for monitor in monitors
         if monitor.get("status") == "quarantined"
         and (monitor.get("quarantine_reason") or "") == ZERO_SCORE_REASON
     ]
-    if len(targets) != 1:
-        return None, len(targets)
-    return targets[0], 1
+
+
+def rerun_and_apply(base_url, token, target):
+    rerun_score = None
+    rerun_error = None
+    try:
+        _, check_payload = fetch_json(
+            f"{base_url}/api/v1/check",
+            data=json.dumps({"url": target.get("domain")}).encode("utf-8"),
+        )
+        rerun_score = int(check_payload.get("agentic_score", 0))
+    except (urllib.error.URLError, ValueError, TypeError, json.JSONDecodeError) as err:
+        rerun_error = err.__class__.__name__
+
+    action = "keep_quarantined" if not rerun_score else "approve_monitoring"
+    notes = "bounded rerun still zero score" if action == "keep_quarantined" else "bounded rerun returned agentic score"
+    if rerun_error:
+        notes = f"bounded rerun failed: {rerun_error}"
+
+    action_body = json.dumps(
+        {
+            "id": target.get("id"),
+            "action": action,
+            "operator": "business-agent-not-human-search",
+            "source": "launchd_business_agent",
+            "notes": notes,
+        }
+    ).encode("utf-8")
+    action_status, _ = fetch_json(f"{base_url}/api/v1/admin/monitors/action", token=token, data=action_body)
+    return {
+        "ok": action_status == 200,
+        "action": action,
+        "rerun_score_bucket": score_bucket(rerun_score),
+        "rerun_error_class": rerun_error,
+    }
 
 
 def main():
     base_url = os.environ.get("NHS_BASE_URL", "https://nothumansearch.ai").rstrip("/")
-    service = os.environ.get("NHS_ADMIN_KEYCHAIN_SERVICE", "nhs-admin-api-key")
     try:
-        token = keychain_value(service)
+        token = admin_token()
         _, before_payload = fetch_json(f"{base_url}/api/v1/admin/monitors?limit=100", token=token)
         monitors = before_payload.get("monitors", [])
-        target, target_count = find_target(monitors)
-        if target is None:
+        targets = find_targets(monitors)
+        if not targets:
             print(
                 json.dumps(
                     {
-                        "ok": False,
-                        "reason": "expected exactly one quarantined zero-score monitor",
-                        "eligible_quarantined_count": target_count,
+                        "ok": True,
+                        "reason": "no first-check zero-score quarantines require review",
+                        "eligible_quarantined_count": 0,
                         "before_status_counts": status_counts(monitors),
                     },
                     indent=2,
                     sort_keys=True,
                 )
             )
-            return 1
+            return 0
 
-        rerun_score = None
-        rerun_error = None
-        try:
-            _, check_payload = fetch_json(
-                f"{base_url}/api/v1/check",
-                data=json.dumps({"url": target.get("domain")}).encode("utf-8"),
-            )
-            rerun_score = int(check_payload.get("agentic_score", 0))
-        except (urllib.error.URLError, ValueError, TypeError, json.JSONDecodeError) as err:
-            rerun_error = err.__class__.__name__
-
-        action = "keep_quarantined" if not rerun_score else "approve_monitoring"
-        notes = "bounded rerun still zero score" if action == "keep_quarantined" else "bounded rerun returned agentic score"
-        if rerun_error:
-            notes = f"bounded rerun failed: {rerun_error}"
-
-        action_body = json.dumps(
-            {
-                "id": target.get("id"),
-                "action": action,
-                "operator": "business-agent-not-human-search",
-                "source": "launchd_business_agent",
-                "notes": notes,
-            }
-        ).encode("utf-8")
-        action_status, _ = fetch_json(f"{base_url}/api/v1/admin/monitors/action", token=token, data=action_body)
+        outcomes = [rerun_and_apply(base_url, token, target) for target in targets]
         _, after_payload = fetch_json(f"{base_url}/api/v1/admin/monitors?limit=100", token=token)
         _, action_counts = fetch_json(f"{base_url}/api/v1/admin/monitors/actions?days=30", token=token)
+        action_summary = Counter(outcome["action"] for outcome in outcomes)
+        score_bucket_summary = Counter(outcome["rerun_score_bucket"] for outcome in outcomes)
 
         print(
             json.dumps(
                 {
-                    "ok": action_status == 200,
-                    "action": action,
-                    "rerun_score_bucket": score_bucket(rerun_score),
-                    "rerun_error_class": rerun_error,
+                    "ok": all(outcome["ok"] for outcome in outcomes),
+                    "reviewed_quarantined_count": len(outcomes),
+                    "action_summary": dict(sorted(action_summary.items())),
+                    "rerun_score_bucket_summary": dict(sorted(score_bucket_summary.items())),
+                    "rerun_error_classes": sorted(
+                        {
+                            outcome["rerun_error_class"]
+                            for outcome in outcomes
+                            if outcome["rerun_error_class"]
+                        }
+                    ),
                     "before_status_counts": status_counts(monitors),
                     "after_status_counts": status_counts(after_payload.get("monitors", [])),
                     "action_counts": action_counts.get("counts", []),
@@ -133,9 +161,12 @@ def main():
                 sort_keys=True,
             )
         )
-        return 0 if action_status == 200 else 1
-    except (subprocess.CalledProcessError, urllib.error.URLError, json.JSONDecodeError) as err:
-        print(json.dumps({"ok": False, "error": err.__class__.__name__}, indent=2, sort_keys=True))
+        return 0 if all(outcome["ok"] for outcome in outcomes) else 1
+    except (RuntimeError, urllib.error.URLError, json.JSONDecodeError) as err:
+        payload = {"ok": False, "error": err.__class__.__name__}
+        if isinstance(err, RuntimeError):
+            payload["message"] = str(err)
+        print(json.dumps(payload, indent=2, sort_keys=True))
         return 1
 
 
