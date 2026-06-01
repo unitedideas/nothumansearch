@@ -141,6 +141,41 @@ func ListGeoFixJobs(db *sql.DB, limit int) ([]GeoFixJob, error) {
 	return out, nil
 }
 
+// GetGeoFixJob loads a single intake row by id. Used by the success page to
+// resolve a paid report job → host → site for inline report rendering.
+func GetGeoFixJob(db *sql.DB, id int64) (*GeoFixJob, error) {
+	var j GeoFixJob
+	var repoURL, notes, sessionID string
+	var paidAt, completedAt sql.NullTime
+	err := db.QueryRow(`
+		SELECT id, host, COALESCE(repo_url, ''), email, COALESCE(notes, ''),
+		       COALESCE(stripe_session_id, ''), price_cents, currency,
+		       status, paid_at, completed_at, created_at, updated_at
+		FROM geo_fix_jobs WHERE id = $1`, id).Scan(
+		&j.ID, &j.Host, &repoURL, &j.Email, &notes,
+		&sessionID, &j.PriceCents, &j.Currency, &j.Status,
+		&paidAt, &completedAt, &j.CreatedAt, &j.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if repoURL != "" {
+		j.RepoURL = &repoURL
+	}
+	if notes != "" {
+		j.Notes = &notes
+	}
+	if sessionID != "" {
+		j.StripeSessionID = &sessionID
+	}
+	if paidAt.Valid {
+		j.PaidAt = &paidAt.Time
+	}
+	if completedAt.Valid {
+		j.CompletedAt = &completedAt.Time
+	}
+	return &j, nil
+}
+
 // ApplyGeoFixJobAdminAction performs private admin-only cleanup actions.
 // It intentionally supports only internal Foundry-owned pending-row cleanup;
 // customer-facing rows still require the public-action lock/email ledger flow.

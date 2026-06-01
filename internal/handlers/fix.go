@@ -38,6 +38,13 @@ import (
 )
 
 const fixPriceCents = 19900
+
+// reportPriceCents is the self-serve "full report" tier (cheaper, no manual
+// fulfillment — delivers the already-auto-generated per-site report on success).
+// PRE-STAGED, NOT LIVE: the number is the owner's 4pm 2026-06-02 decision.
+// $29 is the OWNER-BRIEF recommendation; owner sets the final value before deploy.
+const reportPriceCents = 2900
+
 const fixTargetScore = 95
 
 type FixHandler struct {
@@ -471,16 +478,21 @@ textarea { min-height: 80px; resize: vertical; }
 
       <div class="price-row">
         <span class="price">$199</span>
-        <span class="price-label">flat · one-time · 72hr turnaround</span>
+        <span class="price-label">done-for-you · one-time · 72hr turnaround</span>
       </div>
-      <button type="submit" class="btn">Pay $199 &rarr;</button>
+      <button type="submit" name="tier" value="managed" class="btn">Pay $199 — done for you &rarr;</button>
+      <div class="price-row" style="margin-top:1.25rem;">
+        <span class="price">$%d</span>
+        <span class="price-label">self-serve report · instant · the exact files &amp; fixes to apply yourself</span>
+      </div>
+      <button type="submit" name="tier" value="report" class="btn" style="background:transparent;border:1px solid var(--accent);color:var(--accent);">Get the $%d report &rarr;</button>
     </form>
     <a href="/site/%s" class="back">&larr; Back to score report</a>
   </div>
 </div>
 </body></html>`,
 		site.Domain, site.Domain, site.AgenticScore, deliverables,
-		site.Domain, site.Domain, site.Domain)
+		site.Domain, site.Domain, reportPriceCents/100, reportPriceCents/100, site.Domain)
 }
 
 func (h *FixHandler) scoreFixCompletePage(w http.ResponseWriter, site *models.Site) {
@@ -528,6 +540,16 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 	email := strings.TrimSpace(r.FormValue("email"))
 	repoURL := strings.TrimSpace(r.FormValue("repo_url"))
 	notes := strings.TrimSpace(r.FormValue("notes"))
+	// tier selects the product: "managed" = $199 done-for-you (default, the
+	// anchor), "report" = self-serve auto-generated report (cheaper tier).
+	tier := strings.TrimSpace(r.FormValue("tier"))
+	if tier != "report" {
+		tier = "managed"
+	}
+	priceCents := fixPriceCents
+	if tier == "report" {
+		priceCents = reportPriceCents
+	}
 	if email == "" || !strings.Contains(email, "@") {
 		http.Error(w, "valid email required", http.StatusBadRequest)
 		return
@@ -549,7 +571,7 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 	j := &models.GeoFixJob{
 		Host:       host,
 		Email:      email,
-		PriceCents: fixPriceCents,
+		PriceCents: priceCents,
 		Currency:   "usd",
 		Status:     "pending",
 	}
@@ -578,10 +600,21 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 		if _, err := h.DB.Exec(`UPDATE geo_fix_jobs SET status='lead', updated_at=NOW() WHERE id=$1`, j.ID); err != nil {
 			log.Printf("fix: mark lead: %v", err)
 		}
-		notify.DiscordAsync(fmt.Sprintf("📥 **NHS fix-my-score lead** — %s · %s · $%d (Stripe not configured — follow up manually)",
-			host, email, fixPriceCents/100))
+		notify.DiscordAsync(fmt.Sprintf("📥 **NHS fix-my-score lead** — %s · %s · $%d · %s (Stripe not configured — follow up manually)",
+			host, email, priceCents/100, tier))
 		http.Redirect(w, r, "/fix/success?id="+strconv.FormatInt(j.ID, 10)+"&lead=1", http.StatusSeeOther)
 		return
+	}
+
+	// Tier-specific product framing. "managed" = the $199 done-for-you anchor;
+	// "report" = the cheaper self-serve auto-generated report (no manual step).
+	productName := "NHS Agent-Readiness Uplift"
+	productDesc := fmt.Sprintf("Done-for-you GEO uplift PR for %s — target score %d+", host, fixTargetScore)
+	successURL := h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"
+	if tier == "report" {
+		productName = "NHS GEO Fix Report (self-serve)"
+		productDesc = fmt.Sprintf("Instant agent-readiness report for %s — the exact files + fixes to reach score %d+", host, fixTargetScore)
+		successURL = h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&tier=report&session_id={CHECKOUT_SESSION_ID}"
 	}
 
 	params := &gostripe.CheckoutSessionParams{
@@ -589,19 +622,20 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: gostripe.String("usd"),
 				ProductData: &gostripe.CheckoutSessionLineItemPriceDataProductDataParams{
-					Name:        gostripe.String("NHS Agent-Readiness Uplift"),
-					Description: gostripe.String(fmt.Sprintf("Done-for-you GEO uplift PR for %s — target score 95+", host)),
+					Name:        gostripe.String(productName),
+					Description: gostripe.String(productDesc),
 				},
-				UnitAmount: gostripe.Int64(int64(fixPriceCents)),
+				UnitAmount: gostripe.Int64(int64(priceCents)),
 			},
 			Quantity: gostripe.Int64(1),
 		}},
 		Mode:          gostripe.String(string(gostripe.CheckoutSessionModePayment)),
-		SuccessURL:    gostripe.String(h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"),
+		SuccessURL:    gostripe.String(successURL),
 		CancelURL:     gostripe.String(h.BaseURL + "/fix/" + host),
 		CustomerEmail: gostripe.String(email),
 		Metadata: map[string]string{
 			"product":  "nhs_fix_my_score",
+			"tier":     tier,
 			"host":     host,
 			"email":    email,
 			"job_id":   strconv.FormatInt(j.ID, 10),
@@ -946,6 +980,21 @@ func confirmSharedPaymentToken(amount int, currency, spt, description string, me
 func (h *FixHandler) SuccessPage(w http.ResponseWriter, r *http.Request) {
 	lead := r.URL.Query().Get("lead") == "1"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	// Self-serve "report" tier: deliver the already-auto-generated per-site
+	// report inline on success (no 72hr manual step). Falls through to the
+	// standard message if the job/site can't be resolved.
+	if !lead && r.URL.Query().Get("tier") == "report" {
+		if id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64); err == nil {
+			if job, err := models.GetGeoFixJob(h.DB, id); err == nil {
+				if site, err := models.GetSiteByDomain(h.DB, job.Host); err == nil {
+					h.reportSuccessPage(w, site)
+					return
+				}
+			}
+		}
+	}
+
 	title := "Payment received"
 	body := "We'll email you the pull request link within 72 hours. Usually within 24."
 	if lead {
@@ -967,6 +1016,34 @@ a { color:#d97757; text-decoration:none; }
 <p>%s</p>
 <a href="/" class="btn">Back to NHS</a>
 </div></body></html>`, title, title, body)
+}
+
+// reportSuccessPage renders the paid self-serve report inline using the same
+// auto-generated per-site block the preview uses (fixPreviewBlock). No manual
+// fulfillment — the buyer gets the exact files + fixes immediately.
+func (h *FixHandler) reportSuccessPage(w http.ResponseWriter, site *models.Site) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><title>Your GEO fix report for %s — NHS</title>
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#0d0d0e; --surface:#1a1a1b; --border:#2a2a2b; --text:#e0e0e0; --text-muted:#888; --accent:#d97757; }
+body { font-family:'Inter',-apple-system,sans-serif; background:var(--bg); color:var(--text); margin:0; padding:2rem 1rem; }
+.wrap { max-width:760px; margin:0 auto; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem; }
+h1 { color:var(--accent); font-size:1.5rem; }
+a { color:var(--accent); text-decoration:none; }
+.btn { display:inline-block; background:var(--accent); color:#0d0d0e; padding:12px 24px; border-radius:8px; font-weight:700; margin-top:1.5rem; font-family:'IBM Plex Mono',monospace; }
+pre { background:#0d0d0e; border:1px solid var(--border); border-radius:8px; padding:1rem; overflow:auto; }
+</style></head>
+<body><div class="wrap"><div class="card">
+<h1>Payment received — your GEO fix report for %s</h1>
+<p style="color:var(--text-muted);">Apply the fixes below to raise %s toward score %d+. Want it done for you instead? The $199 done-for-you tier ships these as a PR.</p>
+%s
+<a href="/" class="btn">Back to NHS</a>
+</div></div></body></html>`,
+		site.Domain, site.Domain, site.Domain, fixTargetScore, fixPreviewBlock(site))
 }
 
 // POST /webhook/stripe — Stripe events. Handles checkout.session.completed and
