@@ -225,13 +225,51 @@
                 ? 'This site has at least one hard agent surface, but it is missing public signals agents use before calling or buying.'
                 : 'Keep this score under watch. NHS can alert you if an agent-facing signal disappears on a future crawl.';
             const actions = [
-                '<a class="primary" href="' + monitorURL + '">Monitor this score</a>',
+                '<a href="' + monitorURL + '">Monitor this score</a>',
                 '<a href="' + guideURL + '">Improve public signals</a>'
             ];
             if (needsRemediation) {
                 actions.splice(1, 0, '<a href="' + fixURL + '">Get implementation help</a>');
             }
-            return '<div class="owner-next"><h3>Site owner next step</h3><p>' + lead + '</p><div class="owner-actions">' + actions.join('') + '</div></div>';
+            // Inline email capture (posts to the existing /api/v1/monitor/register endpoint).
+            // Banks the free-scorer's intent here instead of leaking it behind a /monitor click-through.
+            const capture =
+                '<form class="score-capture" onsubmit="return registerMonitor(event)" data-domain="' + domain + '" style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+                '<input type="email" name="email" required placeholder="you@company.com" aria-label="Email for free score alerts" style="flex:1;min-width:200px;background:var(--bg,#0d0d0e);color:inherit;border:1px solid var(--border,#2a2a2b);border-radius:6px;padding:10px 12px;font-size:0.95rem;">' +
+                '<button type="submit" class="primary" style="white-space:nowrap;">Email me if this score drops</button>' +
+                '</form>' +
+                '<div class="score-capture-msg" style="font-size:0.8rem;color:#888;margin-top:6px;">Free. We re-crawl ' + domain + ' and alert you if an agent-facing signal disappears. Unsubscribe anytime.</div>';
+            return '<div class="owner-next"><h3>Site owner next step</h3><p>' + lead + '</p>' + capture + '<div class="owner-actions" style="margin-top:12px;">' + actions.join('') + '</div></div>';
+        }
+
+        async function registerMonitor(e) {
+            e.preventDefault();
+            const form = e.target;
+            const email = form.email.value.trim();
+            const domain = form.getAttribute('data-domain');
+            const msg = form.parentElement.querySelector('.score-capture-msg');
+            if (!email) return false;
+            const btn = form.querySelector('button');
+            btn.disabled = true; btn.textContent = 'Saving…';
+            try {
+                const resp = await fetch('/api/v1/monitor/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({email: email, domain: domain})
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    form.style.display = 'none';
+                    if (msg) { msg.style.color = '#4caf72'; msg.textContent = '✓ Watching ' + domain + '. We’ll email ' + email + ' if its agent-readiness score drops.'; }
+                } else {
+                    btn.disabled = false; btn.textContent = 'Email me if this score drops';
+                    if (msg) { msg.style.color = '#f87171'; msg.textContent = data.error || 'Could not register — try again.'; }
+                }
+            } catch (err) {
+                btn.disabled = false; btn.textContent = 'Email me if this score drops';
+                if (msg) { msg.style.color = '#f87171'; msg.textContent = 'Network error — try again.'; }
+            }
+            return false;
         }
 
         async function runCheck(e) {
