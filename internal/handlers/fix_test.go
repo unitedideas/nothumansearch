@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -151,5 +152,42 @@ func TestGeoFixAdminActionRequiresConfiguredAdminKey(t *testing.T) {
 
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("AdminAction status = %d, want 503; body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestFixPreviewBlock(t *testing.T) {
+	// A site missing llms.txt + robots.txt but having OpenAPI: the missing ones must
+	// show their point values + a domain-templated snippet; the present one must show
+	// a green "already present" row and NOT a snippet.
+	site := &models.Site{
+		Domain:       "example.com",
+		AgenticScore: 20,
+		HasOpenAPI:   true, // present
+		// HasLLMsTxt, HasRobotsAI, etc. false → missing
+	}
+	out := fixPreviewBlock(site)
+
+	if !strings.Contains(out, "+25") {
+		t.Errorf("expected llms.txt point value +25 for a missing signal; got:\n%s", out)
+	}
+	if !strings.Contains(out, "/llms.txt for example.com") {
+		t.Errorf("expected a domain-templated llms.txt snippet for example.com")
+	}
+	if !strings.Contains(out, "already present") {
+		t.Errorf("expected a green 'already present' row for the present OpenAPI signal")
+	}
+	// Projected score = 20 + (all missing weights). Must mention the current score anchor.
+	if !strings.Contains(out, "20") {
+		t.Errorf("expected current score 20 anchored in the projection")
+	}
+	// A fully-loaded site gains nothing and projects to its current score.
+	full := &models.Site{
+		Domain: "done.com", AgenticScore: 100,
+		HasLLMsTxt: true, HasAIPlugin: true, HasOpenAPI: true, HasStructuredAPI: true,
+		HasMCPServer: true, HasRobotsAI: true, HasSchemaOrg: true,
+	}
+	full_out := fixPreviewBlock(full)
+	if strings.Contains(full_out, "+25") || strings.Contains(full_out, "+20") {
+		t.Errorf("a fully-loaded site should show no point gains; got:\n%s", full_out)
 	}
 }

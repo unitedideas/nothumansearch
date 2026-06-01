@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -43,6 +44,10 @@ type FixHandler struct {
 	DB            *sql.DB
 	BaseURL       string
 	WebhookSecret string
+	// PreviewEnabled gates the per-site "here's exactly what we'd ship for YOUR
+	// domain" block on the intake form (env NHS_FIX_PREVIEW=1). Reversible kill:
+	// unset the env var + redeploy → reverts to the generic deliverables list.
+	PreviewEnabled bool
 }
 
 func NewFixHandler(db *sql.DB, baseURL string) *FixHandler {
@@ -55,10 +60,59 @@ func NewFixHandler(db *sql.DB, baseURL string) *FixHandler {
 		log.Println("WARNING: fix: STRIPE_SECRET_KEY is set but STRIPE_WEBHOOK_SECRET is missing. Webhook signature verification will fail.")
 	}
 	return &FixHandler{
-		DB:            db,
-		BaseURL:       baseURL,
-		WebhookSecret: webhookSecret,
+		DB:             db,
+		BaseURL:        baseURL,
+		WebhookSecret:  webhookSecret,
+		PreviewEnabled: os.Getenv("NHS_FIX_PREVIEW") == "1",
 	}
+}
+
+// fixPreviewBlock renders a per-site breakdown: for each agent signal the site is
+// MISSING, a row showing the points it would gain + a copy-paste snippet templated
+// with the real domain; for each signal already PRESENT, a green "done" row (proof
+// we actually inspected the site). Returns HTML for insertion above the $199 CTA.
+// Returns "" when the preview flag is off so the caller falls back to the static list.
+func fixPreviewBlock(site *models.Site) string {
+	type sig struct {
+		have    bool
+		pts     int
+		label   string
+		snippet string // copy-paste fix, templated with the domain; "" = no snippet
+	}
+	d := site.Domain
+	sigs := []sig{
+		{site.HasLLMsTxt, models.ScoreLLMsTxt, "llms.txt — agent-facing site summary",
+			"# /llms.txt for " + d + "\n> One-line description of " + d + " for AI agents.\n\n## Key pages\n- /: homepage\n- /api: API docs (if any)"},
+		{site.HasAIPlugin, models.ScoreAIPlugin, ".well-known/ai-plugin.json — ChatGPT/Claude manifest",
+			"{\n  \"schema_version\": \"v1\",\n  \"name_for_model\": \"" + d + "\",\n  \"description_for_model\": \"What " + d + " does, for an AI agent.\",\n  \"api\": { \"type\": \"openapi\", \"url\": \"https://" + d + "/openapi.yaml\" }\n}"},
+		{site.HasOpenAPI, models.ScoreOpenAPI, "openapi.yaml — public endpoints in OpenAPI 3", ""},
+		{site.HasStructuredAPI, models.ScoreStructuredAPI, "/api/v1 — literal JSON index for agents", ""},
+		{site.HasMCPServer, models.ScoreMCPServer, "MCP server — first-class agent tool access", ""},
+		{site.HasRobotsAI, models.ScoreRobotsAI, "robots.txt — explicit AI-crawler allow rules",
+			"# robots.txt for " + d + " — allow AI agents\nUser-agent: GPTBot\nAllow: /\nUser-agent: ClaudeBot\nAllow: /\nUser-agent: PerplexityBot\nAllow: /\nSitemap: https://" + d + "/sitemap.xml"},
+		{site.HasSchemaOrg, models.ScoreSchemaOrg, "Schema.org JSON-LD — Organization/FAQ markup", ""},
+	}
+	var b strings.Builder
+	gained := 0
+	b.WriteString(`<div style="margin:1rem 0;"><p style="color:#ccc;line-height:1.6;margin:0 0 .75rem;">Here's exactly what we'd ship for <strong style="color:#fff;">` + html.EscapeString(d) + `</strong>:</p>`)
+	for _, s := range sigs {
+		if s.have {
+			b.WriteString(`<div style="display:flex;gap:.6rem;align-items:baseline;padding:.4rem .6rem;border-left:2px solid #2e7d4f;background:rgba(46,125,79,.08);border-radius:0 4px 4px 0;margin-bottom:.4rem;"><span style="color:#4caf72;font-weight:700;">✓</span><span style="color:#bbb;font-size:.9rem;">` + html.EscapeString(s.label) + ` — <span style="color:#4caf72;">already present</span></span></div>`)
+			continue
+		}
+		gained += s.pts
+		b.WriteString(`<div style="padding:.5rem .6rem;border-left:2px solid var(--accent);background:rgba(217,119,87,.08);border-radius:0 4px 4px 0;margin-bottom:.5rem;"><div style="display:flex;gap:.6rem;align-items:baseline;"><span style="color:var(--accent);font-weight:700;font-family:'IBM Plex Mono',monospace;">+` + strconv.Itoa(s.pts) + `</span><span style="color:#fff;font-size:.9rem;font-weight:600;">` + html.EscapeString(s.label) + `</span></div>`)
+		if s.snippet != "" {
+			b.WriteString(`<pre style="margin:.5rem 0 0;padding:.6rem;background:#0d0d0e;border:1px solid #2a2a2b;border-radius:4px;overflow-x:auto;font-size:.72rem;line-height:1.4;color:#cbd5b5;white-space:pre;">` + html.EscapeString(s.snippet) + `</pre>`)
+		}
+		b.WriteString(`</div>`)
+	}
+	projected := site.AgenticScore + gained
+	if projected > 100 {
+		projected = 100
+	}
+	b.WriteString(`<div style="margin:.8rem 0 0;padding:.7rem .8rem;background:#0d0d0e;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:.9rem;color:#ccc;">Projected: <span style="color:#888;">` + strconv.Itoa(site.AgenticScore) + `</span> &rarr; <span style="color:var(--accent);font-weight:700;font-size:1.1rem;">` + strconv.Itoa(projected) + `</span> <span style="color:#888;font-size:.78rem;">after the ` + strconv.Itoa(len(sigs)) + `-signal uplift</span></div></div>`)
+	return b.String()
 }
 
 func writeFixJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -353,6 +407,20 @@ func (h *FixHandler) intakeForm(w http.ResponseWriter, r *http.Request, host str
 		"category": site.Category,
 	})
 
+	// Deliverables block: per-site preview when enabled, else the original static list.
+	deliverables := `<p style="color:#ccc;line-height:1.6;">We ship the 6-file GEO uplift as a pull request against your repo:</p>
+    <ul>
+      <li><strong>llms.txt</strong> — agent-facing site summary with key routes</li>
+      <li><strong>openapi.yaml</strong> — public endpoints described in OpenAPI 3</li>
+      <li><strong>.well-known/ai-plugin.json</strong> — ChatGPT/Claude plugin manifest</li>
+      <li><strong>/api/v1</strong> literal JSON index file for static sites</li>
+      <li><strong>robots.txt + sitemap.xml</strong> — agent-friendly rules</li>
+      <li><strong>FAQ + schema.org JobPosting/Organization JSON-LD</strong></li>
+    </ul>`
+	if h.PreviewEnabled {
+		deliverables = fixPreviewBlock(site)
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head>
@@ -387,16 +455,8 @@ textarea { min-height: 80px; resize: vertical; }
   <div class="card">
     <h1>Fix the score for %s</h1>
     <div class="host">Currently: <span class="score">%d</span> <span style="color:#888;font-size:0.85rem;">&middot; target: 95+</span></div>
-    <p style="color:#ccc;line-height:1.6;">We ship the 6-file GEO uplift as a pull request against your repo:</p>
-    <ul>
-      <li><strong>llms.txt</strong> — agent-facing site summary with key routes</li>
-      <li><strong>openapi.yaml</strong> — public endpoints described in OpenAPI 3</li>
-      <li><strong>.well-known/ai-plugin.json</strong> — ChatGPT/Claude plugin manifest</li>
-      <li><strong>/api/v1</strong> literal JSON index file for static sites</li>
-      <li><strong>robots.txt + sitemap.xml</strong> — agent-friendly rules</li>
-      <li><strong>FAQ + schema.org JobPosting/Organization JSON-LD</strong></li>
-    </ul>
-    <p style="color:#ccc;line-height:1.6;">Turnaround: under 72 hours. If your score doesn't hit 90+ after merge, full refund.</p>
+    %s
+    <p style="color:#ccc;line-height:1.6;margin-top:1rem;"><strong style="color:#fff;">Turnaround: under 72 hours.</strong> Delivered as a pull request against your repo. <strong style="color:var(--accent);">If your score doesn't hit 90+ after merge, full refund.</strong></p>
     <form method="POST" action="/fix/%s">
       <label for="email">Your email</label>
       <input id="email" name="email" type="email" required placeholder="you@%s">
@@ -419,7 +479,7 @@ textarea { min-height: 80px; resize: vertical; }
   </div>
 </div>
 </body></html>`,
-		site.Domain, site.Domain, site.AgenticScore,
+		site.Domain, site.Domain, site.AgenticScore, deliverables,
 		site.Domain, site.Domain, site.Domain)
 }
 
