@@ -147,8 +147,12 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Persist the result so this check also improves the index. Fire-and-forget;
-	// failures here don't affect the caller's response.
+	// failures here don't affect the caller's response. Skip when DB is unset
+	// (test mode / lead-capture-only) — a nil handle would panic the process.
 	go func() {
+		if h.DB == nil {
+			return
+		}
 		if err := models.UpsertSite(h.DB, site); err != nil {
 			// Log via package-level logger to avoid logging in the hot path.
 			// (import "log" kept out of this file intentionally; UpsertSite errors
