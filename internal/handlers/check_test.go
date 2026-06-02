@@ -12,7 +12,11 @@ import (
 func TestCheckRateLimitResponseAdvertisesPaidAPIHandoff(t *testing.T) {
 	h := NewCheckHandler(nil)
 	h.counts[hashIP(httptest.NewRequest(http.MethodPost, "/api/v1/check", strings.NewReader(`{}`)))] = checkFreeLimit
-	h.resetAt = time.Unix(1780272000, 0)
+	// resetAt must be in the future relative to the test's wall-clock, or
+	// allow() (check.go: now.After(h.resetAt)) wipes the pre-loaded count and
+	// returns 200. A hardcoded epoch is a time-bomb; derive it from now.
+	resetAt := time.Now().Add(time.Hour).Truncate(time.Second)
+	h.resetAt = resetAt
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/check", strings.NewReader(`{"url":"stripe.com"}`))
 	rr := httptest.NewRecorder()
@@ -49,7 +53,7 @@ func TestCheckRateLimitResponseAdvertisesPaidAPIHandoff(t *testing.T) {
 	if len(payload.SubscribeFields) != 2 || payload.SubscribeFields[0] != "email" || payload.SubscribeFields[1] != "plan" {
 		t.Fatalf("subscribe_fields = %#v", payload.SubscribeFields)
 	}
-	if payload.ResetAtUnix != 1780272000 {
+	if payload.ResetAtUnix != resetAt.Unix() {
 		t.Fatalf("reset_at_unix = %d", payload.ResetAtUnix)
 	}
 }
