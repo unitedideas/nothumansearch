@@ -477,15 +477,15 @@ textarea { min-height: 80px; resize: vertical; }
       <textarea id="notes" name="notes" placeholder="CMS in use, odd build pipeline, deadlines, etc."></textarea>
 
       <div class="price-row">
-        <span class="price">$199</span>
-        <span class="price-label">done-for-you · one-time · 72hr turnaround</span>
-      </div>
-      <button type="submit" name="tier" value="managed" class="btn">Pay $199 — done for you &rarr;</button>
-      <div class="price-row" style="margin-top:1.25rem;">
         <span class="price">$%d</span>
-        <span class="price-label">self-serve report · instant · the exact files &amp; fixes to apply yourself</span>
+        <span class="price-label">self-serve report · instant download · the exact files &amp; fixes to apply yourself</span>
       </div>
-      <button type="submit" name="tier" value="report" class="btn" style="background:transparent;border:1px solid var(--accent);color:var(--accent);">Get the $%d report &rarr;</button>
+      <button type="submit" name="tier" value="report" class="btn">Get the $%d report instantly &rarr;</button>
+      <div class="price-row" style="margin-top:1.25rem;">
+        <span class="price">$199</span>
+        <span class="price-label">prefer it done for you? · one-time · 72hr turnaround · delivered as a PR</span>
+      </div>
+      <button type="submit" name="tier" value="managed" class="btn" style="background:transparent;border:1px solid var(--accent);color:var(--accent);">Have us do it — $199 &rarr;</button>
     </form>
     <a href="/site/%s" class="back">&larr; Back to score report</a>
   </div>
