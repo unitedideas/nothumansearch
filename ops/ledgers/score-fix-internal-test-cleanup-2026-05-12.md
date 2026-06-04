@@ -219,6 +219,48 @@ Decision:
 - External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check and fresh public-action lock prove it is due.
 - The next executor must run `tools/geo-jobs-redacted-read.sh` successfully before any private score-fix mutation and may classify or clean up only `test_like pending` rows through the private admin workflow.
 
+## Credential-blocked executor retry - 2026-06-04T10:10:22Z
+
+Automation: `business-agent-not-human-search`
+WorkItem: `work_machine_910f84697d4a31b7`
+
+Required pre-read completed before any private score-fix mutation:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Latest aggregate-only proof remains the planner-provided aggregate from `2026-06-04T10:10:22Z`:
+
+- Total score-fix rows: 11.
+- `real_candidate pending`: 2 `dot_com`; visible age bucket `7_29d`.
+- `test_like pending`: 4 `dot_com`; visible age bucket `7_29d`.
+- `test_like lead`: 1 `dot_com`; visible age bucket `7_29d`.
+- `test_like paid`: 2 `dot_com`; visible age bucket `7_29d`.
+- `test_like internal_test`: 2 `foundry_owned`; visible age bucket `7_29d`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision:
+
+- Keep external `real_candidate` pending rows untouched; prior follow-up proof still blocks another customer-visible score-fix email unless a future duplicate check and fresh public-action lock prove a new touch is due.
+- Keep the private cleanup lane open as `credential_required`.
+- A future credential-capable executor must run `tools/geo-jobs-redacted-read.sh` successfully before any private score-fix mutation and may classify or clean up only `test_like pending` rows through the private admin workflow.
+
 ## Credential-blocked executor retry - 2026-06-04T08:11:31Z
 
 Automation: `business-agent-not-human-search`
