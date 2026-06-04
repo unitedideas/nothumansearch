@@ -1,6 +1,9 @@
 # NHS Full Recrawl Closeout - 2026-06-04
 
-Work item: `work_machine_0a14c78e4b4fd592`
+Work items:
+
+- `work_machine_0a14c78e4b4fd592`
+- `work_machine_d46d65f68472ea47`
 
 ## Boundary
 
@@ -28,7 +31,7 @@ Closeout only. No full recrawl, deploy, browser/desktop automation, secret reads
 
 ## Public Aggregate Snapshot
 
-The current runner could not resolve `nothumansearch.ai`, so `/api/v1/stats` and `/api/v1/categories` were not live-refreshed here. The planner-captured public aggregate snapshot for this same closeout item was:
+The 2026-06-04T22:08:22Z planner run live-refreshed `/api/v1/stats` and `/api/v1/categories` after the closeout executor had earlier hit a DNS failure. Current public aggregate snapshot:
 
 - total_sites: 4269
 - avg_score: 36
@@ -46,4 +49,6 @@ The current runner could not resolve `nothumansearch.ai`, so `/api/v1/stats` and
 
 This is closed as an aggregate-only recrawl closeout. The wrapper shows a completed full recrawl with healthy post-checks and stable aggregate totals. No stale-lock cleanup, replacement recrawl, deploy, or quality crawl is warranted from this evidence.
 
-The only remaining follow-ups are separate lanes already retained in `harness/generated-work-items.json`: API-key commerce browser handoff/traffic buckets and credential-gated monitor quarantine review.
+Quality follow-up is not needed for this recrawl boundary. If a future aggregate probe shows category drift, the allowed next action remains bounded to recategorize-only or a small targeted file crawl with aggregate-only proof.
+
+`harness/generated-work-items.json` was left unchanged because the recrawl closeout lane is at a fixed point. The only remaining follow-ups are separate lanes already retained there: API-key commerce browser handoff/traffic buckets, credential-gated monitor quarantine review, and credential-gated score-fix private cleanup.
