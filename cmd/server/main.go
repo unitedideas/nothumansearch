@@ -193,6 +193,7 @@ func main() {
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)
 	mux.HandleFunc("/about", webHandler.AboutPage)
+	mux.HandleFunc("/stats", webHandler.StatsPage)
 	mux.HandleFunc("/score", webHandler.ScorePage)
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		// Live status dashboard — polls /health on the main three Foundry

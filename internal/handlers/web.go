@@ -194,6 +194,32 @@ func (h *WebHandler) AboutPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// StatsPage renders /stats — a public, human-facing view of the live index
+// aggregates (total agent-ready sites, average score, category breakdown).
+// It mirrors the JSON at /api/v1/stats so the figures are a single citable
+// source of truth (used both by humans and by our own marketing claims).
+// Every number is computed from the index on each request; cached 5 minutes.
+func (h *WebHandler) StatsPage(w http.ResponseWriter, r *http.Request) {
+	total, avg, topCat := models.GetStats(h.DB)
+	cats, err := models.GetCategories(h.DB)
+	if err != nil {
+		log.Printf("stats: categories query failed: %v", err)
+		cats = nil
+	}
+	data := struct {
+		TotalSites  int
+		AvgScore    int
+		TopCategory string
+		Categories  []models.CategoryCount
+	}{total, avg, topCat, cats}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if err := h.tmpl.ExecuteTemplate(w, "stats.html", data); err != nil {
+		log.Printf("template error: %v", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+
 // GuidePage renders /guide — evergreen long-form content covering the 7 signals.
 // Primary SEO surface for "how to add llms.txt" / "make site agent-ready" queries
 // NotFoundPage renders a branded 404 that surfaces the core navigation instead

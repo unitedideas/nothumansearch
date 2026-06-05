@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Index stats — Not Human Search</title>
+    <meta name="description" content="Live agentic-readiness statistics from the Not Human Search index: how many sites are agent-ready, the average score, and the breakdown by category and signal.">
+    <meta property="og:title" content="Index stats — Not Human Search">
+    <meta property="og:description" content="Live agentic-readiness statistics from the NHS index — sites scored, average score, and the breakdown by category.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nothumansearch.ai/stats">
+    <meta property="og:site_name" content="Not Human Search">
+    <meta property="og:image" content="https://nothumansearch.ai/static/img/og-about.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Index stats — Not Human Search">
+    <meta name="twitter:description" content="Live agentic-readiness statistics from the NHS index.">
+    <meta name="twitter:image" content="https://nothumansearch.ai/static/img/og-about.png">
+    <link rel="canonical" href="https://nothumansearch.ai/stats">
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0d0d0e; --surface: #141416; --border: #1f1f23;
+            --text: #e0e0e0; --text-muted: #888; --accent: #d97757;
+            --green: #4ade80; --yellow: #facc15; --red: #f87171;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+        .container { max-width:700px; margin:0 auto; padding:0 20px; }
+        header { padding:48px 0 32px; }
+        .logo { font-size:24px; font-weight:700; color:var(--text); letter-spacing:-1px; text-decoration:none; }
+        .logo span { color:var(--accent); }
+        h1 { font-size:28px; margin:24px 0 12px; }
+        h2 { font-size:20px; margin:32px 0 12px; color:var(--accent); }
+        p { color:var(--text-muted); line-height:1.7; margin-bottom:16px; font-size:15px; }
+        .stat-cards { display:flex; gap:12px; margin:20px 0 8px; flex-wrap:wrap; }
+        .stat-card {
+            background:var(--surface); border:1px solid var(--border); border-radius:8px;
+            padding:20px 18px; flex:1; min-width:150px; text-align:center;
+        }
+        .stat-card .num { font-size:36px; font-weight:700; font-family:'IBM Plex Mono',monospace; color:var(--text); letter-spacing:-1px; }
+        .stat-card .num.accent { color:var(--accent); }
+        .stat-card .cap { font-size:12px; color:var(--text-muted); margin-top:6px; text-transform:uppercase; letter-spacing:1px; }
+        .updated { font-size:12px; color:var(--text-muted); font-family:'IBM Plex Mono',monospace; margin:4px 0 8px; }
+        .data-table { width:100%; border-collapse:collapse; margin:16px 0 32px; }
+        .data-table th, .data-table td {
+            padding:11px 16px; text-align:left; border-bottom:1px solid var(--border); font-size:14px;
+        }
+        .data-table th { color:var(--text-muted); font-weight:500; font-size:12px; text-transform:uppercase; letter-spacing:1px; }
+        .data-table td.cat { text-transform:capitalize; }
+        .data-table td.num { font-family:'IBM Plex Mono',monospace; color:var(--accent); text-align:right; }
+        code { background:var(--surface); padding:2px 6px; border-radius:4px; font-family:'IBM Plex Mono',monospace; font-size:13px; }
+        .cta { display:inline-block; background:var(--accent); color:#fff; padding:12px 22px; border-radius:6px; font-weight:600; font-size:15px; text-decoration:none; margin:8px 8px 8px 0; }
+        .cta.ghost { background:transparent; color:var(--accent); border:1px solid rgba(217,119,87,0.35); }
+        footer { padding:40px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
+        footer a { color:var(--accent); text-decoration:none; }
+        .footer-text { color:var(--text-muted); font-size:13px; }
+    </style>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Dataset",
+      "name": "Not Human Search agentic-readiness index statistics",
+      "description": "Aggregate statistics on how well websites serve AI agents, scored 0-100 across 7 signals.",
+      "url": "https://nothumansearch.ai/stats",
+      "creator": { "@type": "Organization", "name": "Not Human Search", "url": "https://nothumansearch.ai" },
+      "distribution": { "@type": "DataDownload", "encodingFormat": "application/json", "contentUrl": "https://nothumansearch.ai/api/v1/stats" }
+    }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="logo"><img src="/static/img/logo.svg" width="34" height="34" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:8px">Not Human Search</a>
+        </header>
+
+        <h1>Index stats</h1>
+        <p>Live numbers from the Not Human Search index — a search engine for AI agents. Every figure on this page is computed from the index on each request. The machine-readable version is at <a href="/api/v1/stats" style="color:var(--accent);">/api/v1/stats</a>.</p>
+
+        <div class="stat-cards">
+            <div class="stat-card"><div class="num">{{.TotalSites}}</div><div class="cap">Agent-ready sites</div></div>
+            <div class="stat-card"><div class="num accent">{{.AvgScore}}<span style="font-size:18px;color:var(--text-muted);">/100</span></div><div class="cap">Average score</div></div>
+            <div class="stat-card"><div class="num" style="text-transform:capitalize;font-size:26px;">{{.TopCategory}}</div><div class="cap">Top category</div></div>
+        </div>
+
+        <h2>What "agent-ready" means here</h2>
+        <p>A site only enters the index if it exposes at least one <strong style="color:var(--text);">hard agent signal</strong> — a structured API, an OpenAPI spec, an MCP server, or an ai-plugin manifest. Passive markup alone (an <code>llms.txt</code> with nothing behind it, Schema.org, robots rules) does not qualify a site. So the average above is the average <em>among sites that already do something for agents</em> — the broader web scores far lower.</p>
+
+        <h2>How the score works</h2>
+        <p>Each indexed site is scored 0&ndash;100 across 7 signals. Each signal is a distinct way a site supports programmatic access by an AI agent.</p>
+        <table class="data-table">
+            <thead><tr><th>Signal</th><th>What we check</th><th>Points</th></tr></thead>
+            <tbody>
+                <tr><td><code>llms.txt</code></td><td>Machine-readable site description at <code>/llms.txt</code></td><td class="num">25</td></tr>
+                <tr><td><code>ai-plugin.json</code></td><td>AI plugin manifest at <code>/.well-known/ai-plugin.json</code></td><td class="num">20</td></tr>
+                <tr><td>OpenAPI spec</td><td>API spec at <code>/openapi.yaml</code>, <code>/openapi.json</code>, or <code>/swagger.json</code></td><td class="num">20</td></tr>
+                <tr><td>Structured API</td><td>Accessible API endpoints (verified, not just a <code>/docs</code> path)</td><td class="num">15</td></tr>
+                <tr><td>MCP server</td><td>A reachable Model Context Protocol endpoint</td><td class="num">10</td></tr>
+                <tr><td>Robots AI rules</td><td>Explicit rules for AI crawlers (GPTBot, ClaudeBot&hellip;) in <code>/robots.txt</code></td><td class="num">5</td></tr>
+                <tr><td>Schema.org</td><td>Structured-data markup on the homepage</td><td class="num">5</td></tr>
+            </tbody>
+        </table>
+
+        {{if .Categories}}
+        <h2>By category</h2>
+        <table class="data-table">
+            <thead><tr><th>Category</th><th>Sites</th><th>Avg score</th></tr></thead>
+            <tbody>
+                {{range .Categories}}<tr><td class="cat">{{.Name}}</td><td class="num">{{.Count}}</td><td class="num">{{.AvgScore}}</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{end}}
+
+        <h2>Check your own site</h2>
+        <p>Run any domain through the same 7-signal scan, free.</p>
+        <a href="/" class="cta">Scan a site</a>
+        <a href="/about" class="cta ghost">Full methodology</a>
+    </div>
+
+    <footer>
+        <p class="footer-text">
+            <a href="/">Search</a> &middot;
+            <a href="/about">Methodology</a> &middot;
+            <a href="/api/v1/stats">Stats JSON</a> &middot;
+            <a href="/llms.txt">llms.txt</a>
+        </p>
+        <p class="footer-text" style="margin-top:8px;">&copy; 2026 Not Human Search</p>
+    </footer>
+</body>
+</html>
