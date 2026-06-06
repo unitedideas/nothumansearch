@@ -218,6 +218,49 @@ Decision:
 
 - Keep the score-fix cleanup lane open as `credential_required`.
 - External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due.
+
+## Credential-blocked executor retry - 2026-06-06T00:10:56Z
+
+Automation: `business-agent-not-human-search`
+WorkItem: `work_machine_b4d131351e27451b`
+
+Required pre-read completed before any private score-fix mutation:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+- attempted `harness/work_machine_0288ea9945bc8692.md`; it is not present in this worktree, and prior score-fix ledgers already record the same missing-file condition.
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Latest aggregate proof remains the WorkItem-provided aggregate from `2026-05-24T13:08:26Z`:
+
+- Total score-fix rows: 12.
+- `real_candidate pending`: 3 `dot_com`; age buckets: 1 in `1_6d`, 2 in `7_29d`.
+- `test_like pending`: 4 `dot_com`; age bucket `7_29d`.
+- `test_like lead`: 1 `dot_com`; age bucket `30d_plus`.
+- `test_like paid`: 2 `dot_com`; age bucket `30d_plus`.
+- `test_like internal_test`: 2 `foundry_owned`; age bucket `7_29d`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision:
+
+- Keep the score-fix cleanup lane open as `credential_required`.
+- External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due.
+- A future credential-capable executor must run `tools/geo-jobs-redacted-read.sh` successfully before any private score-fix mutation and may classify or clean up only `test_like pending` rows through the private admin workflow.
 - The next executor must run `tools/geo-jobs-redacted-read.sh` successfully before any private score-fix mutation and may classify or clean up only `test_like pending` rows through the private admin workflow.
 
 ## Credential-blocked executor retry - 2026-06-03T05:09:52Z
@@ -2055,6 +2098,80 @@ Aggregate-only proof available to this executor from the WorkItem:
 - `test_like pending`: 4 `dot_com`; age bucket `7_29d`.
 - `test_like lead`: 1 `dot_com`; age bucket `30d_plus`.
 - `test_like paid`: 2 `dot_com`; age bucket `30d_plus`.
+- `test_like internal_test`: 2 `foundry_owned`; age bucket `7_29d`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision remains `credential_required`: external `real_candidate` pending rows stay untouched; the already-contacted external pending cohort must not receive another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due. The next executor may classify or clean up only `test_like pending` rows through the private admin workflow after `tools/geo-jobs-redacted-read.sh` succeeds.
+
+## QLimit credential-blocked closeout - 2026-06-06T02:10:05Z
+
+WorkItem: `work_machine_b60d65bc618dc7e8`
+
+Required pre-read completed before any score-fix state change:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Aggregate-only proof available to this executor from the WorkItem:
+
+- Total score-fix rows: 11.
+- `real_candidate pending`: 2 `dot_com`; age bucket `7_29d`.
+- `test_like pending`: 4 `dot_com`; age bucket `7_29d`.
+- `test_like lead`: 1 `dot_com`; age bucket `30d_plus`.
+- `test_like paid`: 2 `dot_com`; age bucket `30d_plus`.
+- `test_like internal_test`: 2 `foundry_owned`; age bucket `7_29d`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision remains `credential_required`: external `real_candidate` pending rows stay untouched; the already-contacted external pending cohort must not receive another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due. The next executor may classify or clean up only `test_like pending` rows through the private admin workflow after `tools/geo-jobs-redacted-read.sh` succeeds.
+
+## QLimit credential-blocked closeout - 2026-06-05T20:11:13Z
+
+WorkItem: `work_machine_b494fbdc6e638f99`
+
+Required pre-read completed before any score-fix state change:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Aggregate-only proof available to this executor from the WorkItem:
+
+- Total score-fix rows: 11.
+- `real_candidate pending`: 2 `dot_com`; age bucket `7_29d`.
+- `test_like pending`: 4 `dot_com`; age bucket `7_29d`.
+- `test_like lead`: 1 `dot_com`; age bucket `7_29d`.
+- `test_like paid`: 2 `dot_com`; age bucket `7_29d`.
 - `test_like internal_test`: 2 `foundry_owned`; age bucket `7_29d`.
 - Customer-visible score-fix follow-up due now: 0.
 
