@@ -463,11 +463,11 @@ textarea { min-height: 80px; resize: vertical; }
     <h1>Fix the score for %s</h1>
     <div class="host">Currently: <span class="score">%d</span> <span style="color:#888;font-size:0.85rem;">&middot; target: 95+</span></div>
     %s
-    <p style="color:#ccc;line-height:1.6;margin-top:1rem;"><strong style="color:#fff;">Turnaround: under 72 hours.</strong> Delivered as a pull request against your repo. <strong style="color:var(--accent);">If your score doesn't hit 90+ after merge, full refund.</strong></p>
+    <p style="color:#ccc;line-height:1.6;margin-top:1rem;"><strong style="color:#fff;">Two ways to fix it:</strong> get the <strong style="color:var(--accent);">$29 report instantly on-screen</strong> — the exact files &amp; fixes to apply yourself, no email or repo needed — or have us do it for $199, delivered as a pull request within 72 hours. <strong style="color:var(--accent);">$199 tier: full refund if your score doesn't hit 90+.</strong></p>
     <form method="POST" action="/fix/%s">
-      <label for="email">Your email</label>
-      <input id="email" name="email" type="email" required placeholder="you@%s">
-      <div class="hint">Where we send the PR link and follow-up.</div>
+      <label for="email">Your email <span style="color:#888;font-weight:400;">— optional for the instant report</span></label>
+      <input id="email" name="email" type="email" placeholder="you@%s">
+      <div class="hint">Instant $29 report: optional (you get it on-screen right after checkout; Stripe emails your receipt). $199 done-for-you: required — it's where we send your PR link.</div>
 
       <label for="repo_url">Repo URL (optional)</label>
       <input id="repo_url" name="repo_url" type="url" placeholder="https://github.com/yourco/site">
@@ -550,8 +550,16 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 	if tier == "report" {
 		priceCents = reportPriceCents
 	}
-	if email == "" || !strings.Contains(email, "@") {
+	// Email is mandatory only for the managed (done-for-you) tier, where we
+	// email the PR link. The self-serve report is delivered on-screen
+	// (reportSuccessPage) and Stripe sends the receipt, so the cheap tier is
+	// not gated on email — that upfront field was pure friction (D-1220).
+	if tier == "managed" && (email == "" || !strings.Contains(email, "@")) {
 		http.Error(w, "valid email required", http.StatusBadRequest)
+		return
+	}
+	if email != "" && !strings.Contains(email, "@") {
+		http.Error(w, "invalid email", http.StatusBadRequest)
 		return
 	}
 	site, err := models.GetSiteByDomain(h.DB, host)
@@ -629,10 +637,9 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 			},
 			Quantity: gostripe.Int64(1),
 		}},
-		Mode:          gostripe.String(string(gostripe.CheckoutSessionModePayment)),
-		SuccessURL:    gostripe.String(successURL),
-		CancelURL:     gostripe.String(h.BaseURL + "/fix/" + host),
-		CustomerEmail: gostripe.String(email),
+		Mode:       gostripe.String(string(gostripe.CheckoutSessionModePayment)),
+		SuccessURL: gostripe.String(successURL),
+		CancelURL:  gostripe.String(h.BaseURL + "/fix/" + host),
 		Metadata: map[string]string{
 			"product":  "nhs_fix_my_score",
 			"tier":     tier,
@@ -641,6 +648,11 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 			"job_id":   strconv.FormatInt(j.ID, 10),
 			"repo_url": repoURL,
 		},
+	}
+	// Only prefill the customer email when we actually have one — passing an
+	// empty string would 400 the Stripe API. Stripe collects it otherwise.
+	if email != "" {
+		params.CustomerEmail = gostripe.String(email)
 	}
 	s, err := session.New(params)
 	if err != nil {
