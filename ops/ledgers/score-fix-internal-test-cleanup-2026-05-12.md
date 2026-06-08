@@ -219,6 +219,132 @@ Decision:
 - Keep the score-fix cleanup lane open as `credential_required`.
 - External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due.
 
+## Credential-blocked executor retry - 2026-06-08T09:10:29Z
+
+Automation: `business-agent-not-human-search`
+WorkItem: `work_machine_faabd59a68e58ed1`
+
+Required pre-read completed before any private score-fix mutation:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Latest aggregate proof remains the WorkItem-provided planner aggregate from `2026-06-08T09:09:22Z`:
+
+- Total score-fix rows: 11.
+- `real_candidate pending`: 2 `dot_com`.
+- `test_like pending`: 4 `dot_com`.
+- `test_like lead`: 1 `dot_com`.
+- `test_like paid`: 2 `dot_com`.
+- `test_like internal_test`: 2 `foundry_owned`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision:
+
+- Keep the score-fix cleanup lane open as `credential_required` because this executor cannot read either NHS admin Keychain alias.
+- The two external pending rows already have follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md`; another customer-visible touch remains blocked unless a future duplicate check and fresh public-action lock prove it is due.
+- The current private admin action model only supports `mark_internal_test` for Foundry-owned pending rows, so non-Foundry `test_like pending` cleanup still needs a repo-supported private admin workflow before any dot-com test-like rows can be classified.
+
+## Credential-blocked executor retry - 2026-06-08T03:11:21Z
+
+Automation: `business-agent-not-human-search`
+WorkItem: `work_machine_f567e54b7d8ca887`
+
+Required pre-read completed before any private score-fix mutation:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Latest aggregate proof remains the WorkItem-provided planner aggregate from `2026-06-08T03:10:27Z`:
+
+- Total score-fix rows: 11.
+- `real_candidate pending`: 2 `dot_com`.
+- `test_like pending`: 4 `dot_com`.
+- `test_like lead`: 1 `dot_com`.
+- `test_like paid`: 2 `dot_com`.
+- `test_like internal_test`: 2 `foundry_owned`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision:
+
+- Keep the score-fix cleanup lane open as `credential_required`.
+- External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due.
+- Test-like pending rows require a credential-capable executor and a repo-supported private admin workflow that can classify test-like rows without committing raw row data.
+
+## Credential-blocked executor retry - 2026-06-07T23:10:45Z
+
+Automation: `qlimit-business-worker`
+WorkItem: `work_machine_f7b7ba45cba48a38`
+
+Required pre-read completed before any private score-fix mutation:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Latest aggregate proof remains the WorkItem-provided planner aggregate from 2026-06-07T23:10:45Z:
+
+- Total score-fix rows: 11.
+- `real_candidate pending`: 2 `dot_com`.
+- `test_like pending`: 4 `dot_com`.
+- `test_like lead`: 1 `dot_com`.
+- `test_like paid`: 2 `dot_com`.
+- `test_like internal_test`: 2 `foundry_owned`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision:
+
+- Keep the score-fix cleanup lane open as `credential_required`.
+- External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due.
+- Test-like pending rows remain private cleanup/classification work only and require an executor where `tools/geo-jobs-redacted-read.sh` can read an NHS admin Keychain alias.
+
 ## Credential-blocked executor retry - 2026-06-07T20:08:57Z
 
 Automation: `business-agent-not-human-search`
@@ -434,6 +560,55 @@ Latest aggregate proof remains the WorkItem-provided planner aggregate from `202
 Decision:
 
 - Keep the private score-fix cleanup lane open as `credential_required` for an executor where `tools/geo-jobs-redacted-read.sh` can read one of the NHS admin Keychain aliases.
+
+## Credential-blocked QLimit retry - 2026-06-08T05:10:53Z
+
+Automation: `qlimit-business-worker`
+WorkItem: `work_machine_f67d14c4db36b42e`
+
+Required pre-read completed before any private score-fix mutation:
+
+- `tools/geo-jobs-redacted-read.sh`
+- `ops/ledgers/score-fix-pending-followup-2026-05-12.md`
+- `ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md`
+
+Fresh helper execution:
+
+```sh
+./tools/geo-jobs-redacted-read.sh
+```
+
+Result:
+
+- The helper failed closed before fetching admin rows: `missing Keychain service: nhs-admin-api-key nothumansearch-admin-key`.
+- No raw admin rows were fetched.
+- No private score-fix mutation was attempted.
+- No customer-visible score-fix email was sent.
+- No public-action lock was created or reused.
+- No external customer row was mutated.
+
+Latest aggregate proof remains the WorkItem-provided helper result from `2026-05-20T09:08Z`:
+
+- Total score-fix rows: 11.
+- By class and host class:
+  - `real_candidate pending`: 2 `dot_com`.
+  - `test_like pending`: 4 `dot_com`.
+  - `test_like lead`: 1 `dot_com`.
+  - `test_like paid`: 2 `dot_com`.
+  - `test_like internal_test`: 2 `foundry_owned`.
+- By class and age bucket:
+  - `real_candidate pending`: `7_29d`.
+  - `test_like pending`: `7_29d`.
+  - `test_like lead`: `30d_plus`.
+  - `test_like paid`: `30d_plus`.
+  - `test_like internal_test`: `7_29d`.
+- Customer-visible score-fix follow-up due now: 0.
+
+Decision:
+
+- Keep external `real_candidate pending` rows untouched.
+- Keep customer-visible score-fix follow-up blocked unless a future duplicate check plus fresh public-action lock prove a new touch is due.
+- Keep the private score-fix cleanup lane open as `credential_required` for a credential-capable executor that can classify or clean up only `test_like pending` rows through a repo-supported private admin workflow.
 - External `real_candidate` pending rows stay untouched; prior follow-up proof in `ops/ledgers/score-fix-pending-followup-2026-05-12.md` still blocks another customer-visible score-fix email unless a future duplicate check plus fresh public-action lock prove it is due.
 - The next credential-capable executor may classify or clean up only `test_like pending` rows through the private admin workflow.
 
