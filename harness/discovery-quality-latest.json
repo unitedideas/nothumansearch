@@ -1,0 +1,88 @@
+{
+  "cleanup_review_gate": {
+    "cohorts": {
+      "category_other_low_signal": {
+        "decision": "aggregate_review_only",
+        "public_search": false,
+        "rows": 9,
+        "score_fix_targeting": false
+      },
+      "llms_only": {
+        "decision": "audit_only",
+        "public_search": false,
+        "rows": 23,
+        "score_fix_targeting": false
+      },
+      "schema_only": {
+        "decision": "audit_only",
+        "public_search": false,
+        "rows": 23,
+        "score_fix_targeting": false
+      },
+      "zero_score": {
+        "decision": "audit_only",
+        "public_search": false,
+        "rows": 52,
+        "score_fix_targeting": false
+      }
+    },
+    "public_search_effect": "none; AgentFirstFilter remains required",
+    "score_fix_effect": "none; HasHardAgentSignal remains required",
+    "status": "active"
+  },
+  "counts": {
+    "category_other_hard_agent_signal": 3,
+    "category_other_low_signal": 9,
+    "hard_signal_rate": 0.7252,
+    "hard_signal_rows": 343,
+    "low_signal_rows": 130,
+    "sample_rows": 473
+  },
+  "hard_signal_other_review": {
+    "review_policy": "aggregate-only; executor samples must not enter planner artifacts",
+    "rows": 3,
+    "score_buckets": {
+      "0_24": 3,
+      "25_39": 0,
+      "40_59": 0,
+      "60_plus": 0
+    },
+    "top_signal_sets": {
+      "API": 2,
+      "API,schema.org": 1
+    }
+  },
+  "quality_gate": {
+    "status": "review",
+    "trigger": "category_other_low_signal_exceeds_hard_signal"
+  },
+  "sample_breakdown": {
+    "category_other": 12,
+    "category_other_hard_agent_signal": 3,
+    "category_other_low_signal": 9,
+    "hard_agent_signal": 343,
+    "llms_only": 23,
+    "passive_or_soft_signal": 32,
+    "schema_only": 23,
+    "zero_score": 52
+  },
+  "seed_refresh_report": {
+    "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl",
+    "cohorts": {
+      "category_other_low_signal": 9,
+      "llms_only": 23,
+      "schema_only": 23,
+      "zero_score": 52
+    },
+    "hard_signal_rows": 343,
+    "passive_only_rows": 130,
+    "passive_only_share": 0.2748,
+    "sample_rows": 473,
+    "source": "aggregate crawler summary log",
+    "threshold": {
+      "handoff_required": true,
+      "name": "category_other_low_signal_exceeds_hard_signal",
+      "status": "review"
+    }
+  }
+}
