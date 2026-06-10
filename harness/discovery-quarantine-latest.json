@@ -20,7 +20,7 @@
     "domain_output": false,
     "kind": "bounded_aggregate_review",
     "public": false,
-    "reason": "category_other_low_signal_exceeds_hard_signal",
+    "reason": "low_signal_rows_exceed_hard_signal_rows",
     "required": true,
     "scope": "review aggregate seed-refresh cohorts only; do not trigger broad crawl"
   },
@@ -29,25 +29,25 @@
       "category_other_low_signal": {
         "decision": "aggregate_review_only",
         "public_search": false,
-        "rows": 234,
+        "rows": 411,
         "score_fix_targeting": false
       },
       "llms_only": {
         "decision": "audit_only",
         "public_search": false,
-        "rows": 601,
+        "rows": 84,
         "score_fix_targeting": false
       },
       "schema_only": {
         "decision": "audit_only",
         "public_search": false,
-        "rows": 621,
+        "rows": 46,
         "score_fix_targeting": false
       },
       "zero_score": {
         "decision": "audit_only",
         "public_search": false,
-        "rows": 1342,
+        "rows": 122,
         "score_fix_targeting": false
       }
     },
@@ -57,16 +57,22 @@
   },
   "hard_signal_other_review": {
     "review_policy": "aggregate-only; executor samples must not enter planner artifacts",
-    "rows": 77,
+    "rows": 132,
     "score_buckets": {
-      "0_24": 77,
-      "25_39": 0,
-      "40_59": 0,
-      "60_plus": 0
+      "0_24": 53,
+      "25_39": 9,
+      "40_59": 65,
+      "60_plus": 5
     },
     "top_signal_sets": {
-      "API": 52,
-      "API,schema.org": 25
+      "AI-bots,API,llms.txt,schema.org": 7,
+      "AI-bots,API,schema.org": 3,
+      "AI-bots,MCP,llms.txt,schema.org": 3,
+      "API": 30,
+      "API,llms.txt": 24,
+      "API,llms.txt,schema.org": 23,
+      "API,schema.org": 19,
+      "MCP,llms.txt,schema.org": 3
     }
   },
   "public_guards": {
@@ -76,11 +82,11 @@
   },
   "quarantine": {
     "active": true,
-    "category_other_hard_agent_signal": 77,
-    "category_other_low_signal": 234,
-    "hard_signal_rows": 8866,
-    "low_signal_rows": 3405,
-    "reason": "category_other_low_signal_exceeds_hard_signal"
+    "category_other_hard_agent_signal": 132,
+    "category_other_low_signal": 411,
+    "hard_signal_rows": 308,
+    "low_signal_rows": 571,
+    "reason": "low_signal_rows_exceed_hard_signal_rows"
   },
   "recommended_actions": [
     "Keep rows without API, OpenAPI, MCP, or ai-plugin audit-only.",
@@ -89,31 +95,31 @@
     "Refresh only aggregate quarantine counts after weekly discovery."
   ],
   "sample_breakdown": {
-    "category_other": 311,
-    "category_other_hard_agent_signal": 77,
-    "category_other_low_signal": 234,
-    "hard_agent_signal": 8866,
-    "llms_only": 601,
-    "passive_or_soft_signal": 841,
-    "schema_only": 621,
-    "zero_score": 1342
+    "category_other": 543,
+    "category_other_hard_agent_signal": 132,
+    "category_other_low_signal": 411,
+    "hard_agent_signal": 308,
+    "llms_only": 84,
+    "passive_or_soft_signal": 319,
+    "schema_only": 46,
+    "zero_score": 122
   },
   "seed_refresh_report": {
     "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl",
     "cohorts": {
-      "category_other_low_signal": 234,
-      "llms_only": 601,
-      "schema_only": 621,
-      "zero_score": 1342
+      "category_other_low_signal": 411,
+      "llms_only": 84,
+      "schema_only": 46,
+      "zero_score": 122
     },
-    "hard_signal_rows": 8866,
-    "passive_only_rows": 3405,
-    "passive_only_share": 0.2775,
-    "sample_rows": 12271,
+    "hard_signal_rows": 308,
+    "passive_only_rows": 571,
+    "passive_only_share": 0.6496,
+    "sample_rows": 879,
     "source": "aggregate crawler summary log",
     "threshold": {
       "handoff_required": true,
-      "name": "category_other_low_signal_exceeds_hard_signal",
+      "name": "low_signal_rows_exceed_hard_signal_rows",
       "status": "review"
     }
   },
