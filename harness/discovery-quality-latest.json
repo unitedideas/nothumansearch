@@ -4,25 +4,25 @@
       "category_other_low_signal": {
         "decision": "aggregate_review_only",
         "public_search": false,
-        "rows": 2585,
+        "rows": 234,
         "score_fix_targeting": false
       },
       "llms_only": {
         "decision": "audit_only",
         "public_search": false,
-        "rows": 1003,
+        "rows": 601,
         "score_fix_targeting": false
       },
       "schema_only": {
         "decision": "audit_only",
         "public_search": false,
-        "rows": 528,
+        "rows": 621,
         "score_fix_targeting": false
       },
       "zero_score": {
         "decision": "audit_only",
         "public_search": false,
-        "rows": 2337,
+        "rows": 1342,
         "score_fix_targeting": false
       }
     },
@@ -31,63 +31,57 @@
     "status": "active"
   },
   "counts": {
-    "category_other_hard_agent_signal": 784,
-    "category_other_low_signal": 2585,
-    "hard_signal_rate": 0.4178,
-    "hard_signal_rows": 4211,
-    "low_signal_rows": 5867,
-    "sample_rows": 10078
+    "category_other_hard_agent_signal": 77,
+    "category_other_low_signal": 234,
+    "hard_signal_rate": 0.7225,
+    "hard_signal_rows": 8866,
+    "low_signal_rows": 3405,
+    "sample_rows": 12271
   },
   "hard_signal_other_review": {
     "review_policy": "aggregate-only; executor samples must not enter planner artifacts",
-    "rows": 784,
+    "rows": 77,
     "score_buckets": {
-      "0_24": 438,
-      "25_39": 29,
-      "40_59": 305,
-      "60_plus": 12
+      "0_24": 77,
+      "25_39": 0,
+      "40_59": 0,
+      "60_plus": 0
     },
     "top_signal_sets": {
-      "AI-bots,API": 43,
-      "AI-bots,API,llms.txt": 17,
-      "AI-bots,API,llms.txt,schema.org": 13,
-      "API": 305,
-      "API,llms.txt": 143,
-      "API,llms.txt,schema.org": 86,
-      "API,schema.org": 76,
-      "MCP,llms.txt,schema.org": 27
+      "API": 52,
+      "API,schema.org": 25
     }
   },
   "quality_gate": {
     "status": "review",
-    "trigger": "low_signal_rows_exceed_hard_signal_rows"
+    "trigger": "category_other_low_signal_exceeds_hard_signal"
   },
   "sample_breakdown": {
-    "category_other": 3369,
-    "category_other_hard_agent_signal": 784,
-    "category_other_low_signal": 2585,
-    "hard_agent_signal": 4211,
-    "llms_only": 1003,
-    "passive_or_soft_signal": 1999,
-    "schema_only": 528,
-    "zero_score": 2337
+    "category_other": 311,
+    "category_other_hard_agent_signal": 77,
+    "category_other_low_signal": 234,
+    "hard_agent_signal": 8866,
+    "llms_only": 601,
+    "passive_or_soft_signal": 841,
+    "schema_only": 621,
+    "zero_score": 1342
   },
   "seed_refresh_report": {
     "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl",
     "cohorts": {
-      "category_other_low_signal": 2585,
-      "llms_only": 1003,
-      "schema_only": 528,
-      "zero_score": 2337
+      "category_other_low_signal": 234,
+      "llms_only": 601,
+      "schema_only": 621,
+      "zero_score": 1342
     },
-    "hard_signal_rows": 4211,
-    "passive_only_rows": 5867,
-    "passive_only_share": 0.5822,
-    "sample_rows": 10078,
+    "hard_signal_rows": 8866,
+    "passive_only_rows": 3405,
+    "passive_only_share": 0.2775,
+    "sample_rows": 12271,
     "source": "aggregate crawler summary log",
     "threshold": {
       "handoff_required": true,
-      "name": "low_signal_rows_exceed_hard_signal_rows",
+      "name": "category_other_low_signal_exceeds_hard_signal",
       "status": "review"
     }
   }
