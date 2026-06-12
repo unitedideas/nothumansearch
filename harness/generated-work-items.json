@@ -1,26 +1,9 @@
 [
   {
-    "title": "Run bounded aggregate review for category=other hard-signal zero-score cohort",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "harness/work_machine_adf9b50adc289aa8.md plus 2026-06-12 planner probes: discovery quarantine refresh is current and aggregate-only; category_other_hard_agent_signal=80 remains score bucket 0_24 with signal sets API=54 and API,schema.org=26; live categories show other=806 avg_score=28 and spam=1.",
-    "priority": 86,
-    "public": false,
-    "human_gate_kind": null,
-    "acceptance_criteria": [
-      "Use only a targeted private sampler or aggregate helper designed for category=other hard-signal review; do not start a full recrawl or broad crawl.",
-      "Decide whether the zero-score hard-signal category=other cohort reflects a scoring bug, taxonomy gap, stale stored signal, or audit-only fixed point.",
-      "Commit only aggregate-safe proof; do not commit raw domains, URLs, row IDs, descriptions, emails, tokens, or private notes.",
-      "Do not change public_search or score_fix_targeting behavior unless the hard agent signal is proven current and legitimate."
-    ],
-    "created_at": "2026-06-12T08:10:00Z",
-    "last_verified_at": "2026-06-12T08:10:00Z"
-  },
-  {
     "title": "Finish NHS API-key subscribe browser handoff without regressing working JSON commerce",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-12 planner probes: /api/v1/api-keys/subscribe GET returns JSON with plans nhs_api_starter, nhs_api_pro, nhs_api_scale; nested subscribe.response_fields is list; top-level response_fields is null. Accept:text/html still returns application/json and not HTML. Starter quote is green with amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000.",
+    "source_ref": "2026-06-12T11:08:23Z planner probes: no tools/full-recrawl.lock exists; 2026-06-11 full_recrawl closed in tools/recrawl-health.log with api_status=200 api_ok=1. Live public stats total_sites=4280 avg_score=37 top_category=developer; top categories developer=1307, ai-tools=914, other=806, data=392. /api/v1/api-keys/subscribe GET returns JSON with plans nhs_api_starter, nhs_api_pro, nhs_api_scale; nested subscribe.response_fields is list; top-level response_fields is null. Accept:text/html returns HTTP 200 application/json with has_html=false and body_bytes=1103. Starter quote is green with amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000.",
     "priority": 84,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -31,13 +14,13 @@
       "After deploy, verify explicit GET JSON, Accept:text/html HTML/content type, catalog, commerce.json, agent.json, and starter quote."
     ],
     "created_at": "2026-06-12T08:10:00Z",
-    "last_verified_at": "2026-06-12T08:10:00Z"
+    "last_verified_at": "2026-06-12T11:08:23Z"
   },
   {
     "title": "Deploy or repair NHS admin traffic route buckets and scanner aggregates",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-12 planner admin probe: /api/v1/admin/traffic?hours=24 returns keys daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are still absent; daily_len=15 and top_pages_len=25. This is aggregate-only proof; no raw IPs, user agents, referers, private queries, emails, or tokens were fetched.",
+    "source_ref": "2026-06-12T11:08:23Z planner admin probe: /api/v1/admin/traffic?hours=24 returns keys daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are still absent; daily_len=15, top_pages_len=25, errors_last_hour=1. This is aggregate-only proof; no raw IPs, user agents, referers, private queries, emails, payment IDs, or tokens were fetched.",
     "priority": 82,
     "public": false,
     "human_gate_kind": "deploy_required",
@@ -48,6 +31,23 @@
       "After deploy, verify /api/v1/admin/traffic?hours=24 includes route_buckets and scanner_pages with aggregate counts."
     ],
     "created_at": "2026-06-12T08:10:00Z",
-    "last_verified_at": "2026-06-12T08:10:00Z"
+    "last_verified_at": "2026-06-12T11:08:23Z"
+  },
+  {
+    "title": "Run NHS score-fix private cleanup from credential-capable executor",
+    "source_family": "ops",
+    "source_agent": "business-planner-not-human-search",
+    "source_ref": "2026-06-12T11:08:23Z planner redacted helper succeeded in planner runtime with aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2, 7_29d=2, 1_6d=3; test_like pending=5 dot_com with age buckets 30d_plus=4 and 1_6d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed.",
+    "priority": 88,
+    "public": false,
+    "human_gate_kind": "credential_required",
+    "acceptance_criteria": [
+      "Run only where tools/geo-jobs-redacted-read.sh can read NHS admin Keychain aliases without printing secrets in the executor runtime.",
+      "Before any private score-fix mutation, re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md, and harness/work_machine_fe20d709d4c45469.md.",
+      "Classify or clean up only test_like pending rows through a repo-supported private admin workflow; do not mutate external customer rows, and do not rely on the existing Foundry-owned-only mark_internal_test helper for non-Foundry rows.",
+      "Keep committed proof aggregate-only and do not send customer-visible follow-up without duplicate check plus fresh public-action lock."
+    ],
+    "created_at": "2026-06-12T11:08:23Z",
+    "last_verified_at": "2026-06-12T11:08:23Z"
   }
 ]
