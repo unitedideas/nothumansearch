@@ -3,7 +3,7 @@
     "title": "Finish NHS API-key commerce browser handoff and traffic buckets after recrawl closeout",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "Planner probes on 2026-06-12T00:35:00Z: no tools/full-recrawl.lock exists; 2026-06-11 full_recrawl remains closed by tools/recrawl-health.log completion at 10:58:31 with api_status=200 api_ok=1 workers=10 dry_run=0, and tools/recrawl.log closeout success=10065 failed=440 total=10505. Latest seed-refresh closeout is 2026-06-11 success=477 failed=6 total=483. Live public stats total_sites=4279 avg_score=37 top_category=developer; categories include developer=1307 avg_score=37, ai-tools=914 avg_score=41, other=805 avg_score=28, data=392 avg_score=32, finance=190 avg_score=42, productivity=173 avg_score=39, ecommerce=153 avg_score=42, communication=122 avg_score=39. /api/v1/api-keys/subscribe GET with Accept:text/html returns HTTP 200 application/json, body_bytes=1103, has_html=false, plan ids nhs_api_starter, nhs_api_pro, nhs_api_scale, top-level response_fields null, nested subscribe.response_fields shape=list, and no top-level checkout_url. Starter quote returns product_id=nhs_api_starter amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. Commerce.json, agent.json, and catalog all return HTTP 200 JSON. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages remain absent; errors_last_hour=0. Untracked closeout harness/work_machine_a76be9097ef3018.md proves the stale recrawl-boundary lane is closed and is being committed as cleanup, not queued as active work.",
+    "source_ref": "Planner probes on 2026-06-12T05:08:12Z: no tools/full-recrawl.lock exists; 2026-06-11 full_recrawl remains closed by tools/recrawl-health.log completion at 10:58:31 with api_status=200 api_ok=1. Live public stats total_sites=4280 avg_score=37 top_category=developer; top categories developer=1307, ai-tools=914, other=806, data=392. /api/v1/api-keys/subscribe GET with Accept:text/html returns HTTP 200 application/json, has_html=false, plan ids nhs_api_starter/nhs_api_pro/nhs_api_scale, top-level response_fields null, nested subscribe.response_fields shape=list, and no top-level checkout_url. Starter quote returns amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. Commerce.json, agent.json, and catalog all return HTTP 200 JSON. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages remain absent; errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -12,15 +12,13 @@
       "Repair or deploy aggregate admin traffic route_buckets and scanner_pages without raw identifiers, private query logs, buyer emails, payment ids, IPs, user agents, or referers.",
       "Before deploy, re-check tools/recrawl-health.log and tools/full-recrawl.lock so a newer recrawl boundary is not active.",
       "After deploy, verify subscribe JSON and HTML, commerce.json, agent.json, catalog, starter quote, and admin traffic keys."
-    ],
-    "created_at": "2026-06-09T19:08:07Z",
-    "last_verified_at": "2026-06-12T00:35:00Z"
+    ]
   },
   {
     "title": "Review NHS first-check zero-score monitor quarantines from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "Current planner redacted helper probes on 2026-06-12T00:35:00Z succeeded with aggregate-safe monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Monitor action aggregates over 30 days remain 2026-05-13 keep_quarantined=1 and request_score_rerun=1. Prior executor work_machine_fcedfb84df6bfca3 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers were fetched or committed by this planner.",
+    "source_ref": "Current planner redacted helper probes on 2026-06-12T05:08:12Z succeeded with aggregate-safe monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Monitor action aggregates over 30 days remain 2026-05-13 keep_quarantined=1 and request_score_rerun=1. Prior executor work_machine_fcedfb84df6bfca3 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers were fetched or committed by this planner.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -29,15 +27,13 @@
       "Use the private monitor-admin workflow to review the two first-check zero-score quarantines and record keep_quarantined, request_score_rerun, approve_monitoring, or another supported action as appropriate.",
       "Do not commit raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers.",
       "After action, refresh aggregate status/reason/count and day/action/count proof only."
-    ],
-    "created_at": "2026-06-09T19:08:07Z",
-    "last_verified_at": "2026-06-12T00:35:00Z"
+    ]
   },
   {
     "title": "Run NHS score-fix private cleanup from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "Current planner redacted helper on 2026-06-12T00:35:00Z returned aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2, 7_29d=2, 1_6d=3; test_like pending=5 dot_com with age buckets 30d_plus=4 and 1_6d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed. The current private admin action model only supports mark_internal_test on Foundry-owned pending rows, so non-Foundry test_like pending cleanup needs a repo-supported private admin workflow that proves test-like eligibility without committing raw row data. Customer-visible score-fix follow-up due now remains 0 unless a future duplicate check and fresh public-action lock prove otherwise.",
+    "source_ref": "Current planner redacted helper on 2026-06-12T05:08:12Z returned aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2, 7_29d=2, 1_6d=3; test_like pending=5 dot_com with age buckets 30d_plus=4 and 1_6d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed. The current private admin action model only supports mark_internal_test on Foundry-owned pending rows, so non-Foundry test_like pending cleanup needs a repo-supported private admin workflow that proves test-like eligibility without committing raw row data. Customer-visible score-fix follow-up due now remains 0 unless a future duplicate check and fresh public-action lock prove otherwise.",
     "priority": 88,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -46,8 +42,6 @@
       "Before any private score-fix mutation, re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md, and harness/work_machine_fe20d709d4c45469.md.",
       "Classify or clean up only test_like pending rows through a repo-supported private admin workflow; do not mutate external customer rows, and do not rely on the existing Foundry-owned-only mark_internal_test helper for non-Foundry rows.",
       "Keep committed proof aggregate-only and do not send customer-visible follow-up without duplicate check plus fresh public-action lock."
-    ],
-    "created_at": "2026-06-09T19:08:07Z",
-    "last_verified_at": "2026-06-12T00:35:00Z"
+    ]
   }
 ]
