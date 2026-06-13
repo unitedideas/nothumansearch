@@ -1,28 +1,27 @@
 [
   {
-    "title": "Finish NHS API-key commerce handoff, commerce manifest compatibility, and admin traffic aggregates",
+    "title": "Close out active NHS full recrawl with aggregate quality proof before deploy-gated work",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-13T11:08:16Z planner probes: no local tools/full-recrawl.lock, tools/recrawl.lock, or tools/seed-refresh.lock exists. Latest seed refresh completed 2026-06-12 with api_ok=1 and success=476 failed=7 total=483; latest full recrawl remains 2026-06-11 success=10065 failed=440 total=10505. Live stats total_sites=4279 avg_score=37 top_category=developer; top categories developer=1306 avg_score=38, ai-tools=915 avg_score=41, other=806 avg_score=28, data=392 avg_score=32, finance=189 avg_score=42, productivity=173 avg_score=39, ecommerce=153 avg_score=42, communication=122 avg_score=39. /api/v1/api-keys/subscribe GET returns plans nhs_api_starter, nhs_api_pro, nhs_api_scale; top-level response_fields is null, nested subscribe.response_fields is list, no top-level checkout_url. Accept:text/html returns HTTP 200 application/json, has_html=false, body_bytes=1103. Starter quote returns amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. /api/v1/catalog returns 4 products. /.well-known/agent.json exposes commerce.catalog/quote/checkout, but /.well-known/commerce.json uses agentic_payments.endpoints rather than top-level catalog/quote/checkout compatibility fields. Admin traffic keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; daily_len=15, top_pages_len=25, errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, or secrets were fetched or committed.",
-    "priority": 95,
-    "public": true,
-    "human_gate_kind": "deploy_required",
+    "source_ref": "2026-06-13T13:08:38Z planner probes: tools/full-recrawl.lock exists with pid=95058 and started_at=1781355605; tools/recrawl-health.log records 2026-06-13 06:00:05 full_recrawl start/preflight api_status=200 api_ok=1 and remote_start /app/crawler_-recrawl_-workers_10, with no wrapper completion line yet. tools/recrawl.log has fresh 2026-06-13 full-recrawl output from 13:00-13:07Z, including Re-crawling 10507 sites with 10 workers and mixed crawl successes/timeouts, so the recrawl boundary is active. Latest seed refresh completed 2026-06-13 with api_ok=1 success=474 failed=9 total=483. Live public stats during the boundary: total_sites=4280 avg_score=37 top_category=developer; top categories developer=1306 avg_score=38, ai-tools=915 avg_score=41, other=806 avg_score=28, data=392 avg_score=32, finance=190 avg_score=42, productivity=173 avg_score=39, ecommerce=153 avg_score=42, communication=122 avg_score=39. No process environments, raw private rows, tokens, secrets, IPs, user agents, referers, buyer emails, payment ids, or raw crawler row exports were fetched or committed.",
+    "priority": 96,
+    "public": false,
+    "human_gate_kind": "active_recrawl_boundary",
     "acceptance_criteria": [
-      "Preserve working JSON subscribe, catalog, agent.json, and starter quote surfaces.",
-      "Add or repair a browser-readable HTML GET handoff for /api/v1/api-keys/subscribe when Accept:text/html is requested.",
-      "Add commerce.json compatibility fields or document and align the manifest schema so agentic seller probes can find catalog, quote, and checkout endpoints without custom parsing.",
-      "Repair or deploy aggregate admin traffic route_buckets and scanner_pages without raw identifiers, private query logs, buyer emails, payment ids, IPs, user agents, or referers.",
-      "Before deploy, re-check tools/full-recrawl.lock and tools/recrawl-health.log so a newer crawl boundary is not active.",
-      "After deploy, verify explicit GET JSON, Accept:text/html HTML/content type, commerce.json, agent.json, catalog, starter quote, and admin traffic keys."
+      "Do not deploy product code or run another broad crawl while tools/full-recrawl.lock exists and tools/recrawl-health.log lacks a same-day full_recrawl completion or stale-lock replacement outcome.",
+      "Observe wrapper completion or stale-lock/runbook outcome using tools/recrawl-health.log, tools/full-recrawl.lock, and aggregate public stats/categories only; never inspect process environments.",
+      "After completion, record aggregate proof: seed-refresh totals, full-recrawl success/failed/total, public stats total_sites/avg_score/top_category, category counts, and any aggregate quality drift such as other/spam counts.",
+      "If the lock is stale, use the repo-local recrawl guard/runbook path and commit only aggregate closeout proof; do not manually trigger a full recrawl from planner runtime.",
+      "Once closed, unblock deploy-gated commerce/admin traffic rows with a fresh pre-deploy lock check."
     ],
-    "created_at": "2026-06-13T11:08:16Z",
-    "last_verified_at": "2026-06-13T11:08:16Z"
+    "created_at": "2026-06-13T13:08:38Z",
+    "last_verified_at": "2026-06-13T13:08:38Z"
   },
   {
     "title": "Review NHS first-check zero-score monitor quarantines from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-13T11:08:16Z planner redacted helpers: monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Monitor action aggregates over 30 days returned counts=[] in current helper output. Prior executor work_machine_fcedfb84df6bfca3 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while the planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers were fetched or committed by this planner.",
+    "source_ref": "2026-06-13T13:08:38Z planner redacted helpers: monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Monitor action aggregates over 30 days returned counts=[] in current helper output. Prior executor work_machine_fcedfb84df6bfca3 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while the planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers were fetched or committed by this planner.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -32,14 +31,14 @@
       "Do not commit raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers.",
       "After action, refresh aggregate status/reason/count and day/action/count proof only."
     ],
-    "created_at": "2026-06-13T11:08:16Z",
-    "last_verified_at": "2026-06-13T11:08:16Z"
+    "created_at": "2026-06-13T13:08:38Z",
+    "last_verified_at": "2026-06-13T13:08:38Z"
   },
   {
     "title": "Run NHS score-fix private cleanup from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-13T11:08:16Z planner redacted helper succeeded in planner runtime with aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2, 7_29d=2, 1_6d=3; test_like pending=5 dot_com with age buckets 30d_plus=4 and 7_29d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while the planner runtime can read aggregate helpers. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed.",
+    "source_ref": "2026-06-13T13:08:38Z planner redacted helper succeeded in planner runtime with aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2, 7_29d=2, 1_6d=3; test_like pending=5 dot_com with age buckets 30d_plus=4 and 7_29d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while the planner runtime can read aggregate helpers. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed.",
     "priority": 88,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -49,7 +48,7 @@
       "Classify or clean up only test_like pending rows through a repo-supported private admin workflow; do not mutate external customer rows, and do not rely on the existing Foundry-owned-only mark_internal_test helper for non-Foundry rows.",
       "Keep committed proof aggregate-only and do not send customer-visible follow-up without duplicate check plus fresh public-action lock."
     ],
-    "created_at": "2026-06-13T11:08:16Z",
-    "last_verified_at": "2026-06-13T11:08:16Z"
+    "created_at": "2026-06-13T13:08:38Z",
+    "last_verified_at": "2026-06-13T13:08:38Z"
   }
 ]
