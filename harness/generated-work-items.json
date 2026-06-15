@@ -3,7 +3,7 @@
     "title": "Finish NHS API-key commerce handoff and admin traffic aggregates",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-15T02:08:20Z planner probes: no local tools/*recrawl.lock files exist; tools/recrawl-health.log records latest full_recrawl completion on 2026-06-13 10:50:08 with api_status=200 api_ok=1 workers=10; tools/recrawl.log summary success=10105 failed=402 total=10507; seed refresh completed 2026-06-14 success=476 failed=7 total=483. Live stats total_sites=4290 avg_score=37 top_category=developer; categories developer=1307 avg_score=37, ai-tools=919 avg_score=41, other=813 avg_score=28, data=393 avg_score=32, finance=192 avg_score=42, productivity=171 avg_score=39, ecommerce=149 avg_score=41, communication=122 avg_score=39, security=111 avg_score=39, health=58 avg_score=42. /api/v1/api-keys/subscribe GET returns plans nhs_api_starter, nhs_api_pro, nhs_api_scale; top-level response_fields=null, nested subscribe.response_fields is list, no top-level checkout_url. Accept:text/html returns HTTP 200 content-type application/json, has_html=false, body_bytes=1103. Starter quote returns product_id=nhs_api_starter amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. /api/v1/catalog returns 4 products; /.well-known/agent.json exposes commerce.catalog/quote/checkout; /.well-known/commerce.json uses agentic_payments.endpoints with api_activation, api_subscribe, catalog, checkout, quote but lacks top-level catalog/quote/checkout compatibility fields. Admin traffic keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; daily_len=15, top_pages_len=25, errors_last_hour=0. Weekly discovery has returned no new domains for six consecutive Monday runs through 2026-06-08, so this row should focus on conversion/admin surface repair rather than crawl volume. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, or secrets were fetched or committed.",
+    "source_ref": "2026-06-15T04:08:19Z planner probes: no local tools/*recrawl.lock files exist; tools/recrawl-health.log records latest full_recrawl completion on 2026-06-13 10:50:08 with api_status=200 api_ok=1 workers=10; tools/recrawl.log summary success=10105 failed=402 total=10507; seed refresh completed 2026-06-14 success=476 failed=7 total=483. Live stats total_sites=4290 avg_score=37 top_category=developer; categories developer=1307 avg_score=37, ai-tools=919 avg_score=41, other=813 avg_score=28, data=393 avg_score=32, finance=192 avg_score=42, productivity=171 avg_score=39, ecommerce=149 avg_score=41, communication=122 avg_score=39, security=111 avg_score=39, health=58 avg_score=42. /api/v1/api-keys/subscribe GET returns plans nhs_api_starter, nhs_api_pro, nhs_api_scale; top-level response_fields=null, nested subscribe.response_fields is list, no top-level checkout_url. Accept:text/html returns HTTP 200 content-type application/json, has_html=false, body_bytes=1103. Starter quote returns product_id=nhs_api_starter amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. /api/v1/catalog returns 4 products; /.well-known/agent.json exposes commerce.catalog/quote/checkout; /.well-known/commerce.json uses agentic_payments.endpoints with api_activation, api_subscribe, catalog, checkout, quote but lacks top-level catalog/quote/checkout compatibility fields. Admin traffic keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; daily_len=15, top_pages_len=25, errors_last_hour=0. Weekly discovery has returned no new domains for six consecutive Monday runs through 2026-06-08, so this row should focus on conversion/admin surface repair rather than crawl volume. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, or secrets were fetched or committed.",
     "priority": 95,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -15,14 +15,14 @@
       "Before deploy, re-check tools/full-recrawl.lock and tools/recrawl-health.log so a newer crawl boundary is not active.",
       "After deploy, verify explicit GET JSON, Accept:text/html HTML/content type, commerce.json, agent.json, catalog, starter quote, and admin traffic keys."
     ],
-    "created_at": "2026-06-15T02:08:20Z",
-    "last_verified_at": "2026-06-15T02:08:20Z"
+    "created_at": "2026-06-15T04:08:19Z",
+    "last_verified_at": "2026-06-15T04:08:19Z"
   },
   {
     "title": "Review NHS first-check zero-score monitor quarantines from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-15T02:08:20Z planner redacted helpers: monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Monitor action aggregates over 30 days returned counts=[] in current helper output. Prior executor work_machine_fcedfb84df6bfca3 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers were fetched or committed by this planner.",
+    "source_ref": "2026-06-15T04:08:19Z planner redacted helpers: monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Monitor action aggregates over 30 days returned counts=[] in current helper output. Prior executor work_machine_fcedfb84df6bfca3 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers were fetched or committed by this planner.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -32,14 +32,14 @@
       "Do not commit raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers.",
       "After action, refresh aggregate status/reason/count and day/action/count proof only."
     ],
-    "created_at": "2026-06-15T02:08:20Z",
-    "last_verified_at": "2026-06-15T02:08:20Z"
+    "created_at": "2026-06-15T04:08:19Z",
+    "last_verified_at": "2026-06-15T04:08:19Z"
   },
   {
     "title": "Run NHS score-fix private cleanup from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-15T02:08:20Z planner redacted helper succeeded in planner runtime with aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2 and 7_29d=5; test_like pending=5 dot_com with age buckets 30d_plus=4 and 7_29d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed.",
+    "source_ref": "2026-06-15T04:08:19Z planner redacted helper succeeded in planner runtime with aggregate count=17: real_candidate pending=7 with host classes dot_com=5 and other_tld=2 plus age buckets 30d_plus=2 and 7_29d=5; test_like pending=5 dot_com with age buckets 30d_plus=4 and 7_29d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned age 30d_plus. Prior executor work_machine_fe20d709d4c45469 failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw rows fetched by this planner, no mutation, no customer-visible email, no public-action lock, and no external customer row changed.",
     "priority": 88,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -49,7 +49,7 @@
       "Classify or clean up only test_like pending rows through a repo-supported private admin workflow; do not mutate external customer rows, and do not rely on the existing Foundry-owned-only mark_internal_test helper for non-Foundry rows.",
       "Keep committed proof aggregate-only and do not send customer-visible follow-up without duplicate check plus fresh public-action lock."
     ],
-    "created_at": "2026-06-15T02:08:20Z",
-    "last_verified_at": "2026-06-15T02:08:20Z"
+    "created_at": "2026-06-15T04:08:19Z",
+    "last_verified_at": "2026-06-15T04:08:19Z"
   }
 ]
