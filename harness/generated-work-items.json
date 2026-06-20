@@ -3,7 +3,7 @@
     "title": "Finish NHS API-key commerce handoff and admin traffic aggregates after recrawl closeout",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-20T00:08:26Z planner probes: no tools/*.lock paths are present; tools/recrawl-health.log records 2026-06-18 10:26:59 full_recrawl completion with api_status=200 api_ok=1 workers=10; tools/recrawl.log final aggregate success=10141 failed=378 total=10519 and completion line. 2026-06-19 seed-refresh completed with api_status=200 api_ok=1 workers=10, success=475 failed=8 total=483. Public stats total_sites=4289 avg_score=37 top_category=developer; selected categories include developer=1303 avg_score=38, ai-tools=925 avg_score=42, other=801 avg_score=28, data=396 avg_score=32, finance=191 avg_score=42, productivity=171 avg_score=39, ecommerce=153 avg_score=42, communication=124 avg_score=39. /api/v1/api-keys/subscribe with Accept:text/html returns HTTP 200 content-type application/json, has_html=false, has_form=false, body_bytes=1103. Starter quote returns product_id=nhs_api_starter amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. agent.json exposes top-level commerce URLs. commerce.json exposes agentic_payments.endpoints catalog, quote, checkout, api_subscribe, api_activation but lacks top-level catalog/quote/checkout compatibility fields. Admin traffic keys are daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, or secrets were fetched or committed.",
+    "source_ref": "2026-06-20T02:08:29Z planner probes: no tools/full-recrawl.lock path exists; tools/recrawl-health.log records 2026-06-18 10:26:59 full_recrawl completion with api_status=200 api_ok=1 workers=10; tools/recrawl.log final aggregate success=10141 failed=378 total=10519 and completion line. 2026-06-19 seed-refresh completed with api_status=200 api_ok=1 workers=10, success=475 failed=8 total=483. Public stats total_sites=4289 avg_score=37 top_category=developer; selected categories include developer=1303 avg_score=38, ai-tools=925 avg_score=42, other=801 avg_score=28, data=396 avg_score=32, finance=191 avg_score=42, productivity=171 avg_score=39, ecommerce=153 avg_score=42, communication=124 avg_score=39. /api/v1/api-keys/subscribe with Accept:text/html returns HTTP 200 content-type application/json, has_html=false, has_form=false, body_bytes=1103. Starter quote returns product_id=nhs_api_starter amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. agent.json exposes top-level commerce URLs. commerce.json exposes agentic_payments.endpoints catalog, quote, checkout, api_subscribe, api_activation but lacks top-level catalog/quote/checkout compatibility fields. Admin traffic keys are daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, or secrets were fetched or committed.",
     "priority": 96,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -16,13 +16,13 @@
       "After deploy, verify explicit GET JSON, Accept:text/html HTML/content type, commerce.json, agent.json, catalog, starter quote, and admin traffic keys."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-06-20T00:08:26Z"
+    "last_verified_at": "2026-06-20T02:08:29Z"
   },
   {
     "title": "Review NHS first-check zero-score monitor quarantines from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-20T00:08:26Z planner probes: tools/monitor-status-redacted-read.sh returned aggregate monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. tools/monitor-actions-redacted-read.sh returned no 30-day actions. tools/geo-jobs-redacted-read.sh succeeded in planner runtime with aggregate count=17: real_candidate pending=7 split dot_com=5 other_tld=2 and age buckets 30d_plus=2, 7_29d=5; test_like pending=5 dot_com split 30d_plus=4, 7_29d=1; test_like lead=1; test_like paid=2; test_like internal_test=2 foundry_owned. tools/monitor-check.log latest visible run processed four active due monitors on 2026-06-15 and did not touch the quarantined first-check cohort. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
+    "source_ref": "2026-06-20T02:08:29Z planner probes: tools/monitor-status-redacted-read.sh returned aggregate monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. tools/monitor-actions-redacted-read.sh returned no 30-day actions. tools/geo-jobs-redacted-read.sh succeeded in planner runtime with aggregate count=17: real_candidate pending=7 split dot_com=5 other_tld=2 and age buckets 30d_plus=2, 7_29d=5; test_like pending=5 dot_com split 30d_plus=4, 7_29d=1; test_like lead=1; test_like paid=2; test_like internal_test=2 foundry_owned. tools/monitor-check.log latest visible run processed four active due monitors on 2026-06-15 and did not touch the quarantined first-check cohort. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -34,6 +34,6 @@
       "After action, refresh aggregate status/reason/count, score-fix status/class buckets, and day/action/count proof only."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-06-20T00:08:26Z"
+    "last_verified_at": "2026-06-20T02:08:29Z"
   }
 ]
