@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	mailer "github.com/unitedideas/nothumansearch/internal/email"
 	"github.com/unitedideas/nothumansearch/internal/models"
 	"github.com/unitedideas/nothumansearch/internal/notify"
 
@@ -1059,6 +1060,26 @@ pre { background:#0d0d0e; border:1px solid var(--border); border-radius:8px; pad
 		site.Domain, site.Domain, site.Domain, fixTargetScore, fixPreviewBlock(site))
 }
 
+// alertRevenue notifies the operator when NHS earns money. Discord is not
+// configured on NHS (no DISCORD_BOT_TOKEN), so email via Resend is the reliable
+// channel. Recipient defaults to hello@8bitconcepts.com; set OPERATOR_ALERT_EMAIL
+// to route it elsewhere (e.g. a personal inbox).
+func alertRevenue(subject, body string) {
+	notify.DiscordAsync(subject + " — " + body) // no-op unless Discord is wired
+	to := os.Getenv("OPERATOR_ALERT_EMAIL")
+	if to == "" {
+		to = "hello@8bitconcepts.com"
+	}
+	client, err := mailer.NewClientFromEnv()
+	if err != nil {
+		log.Printf("alertRevenue: email unavailable (%v); would have sent: %s — %s", err, subject, body)
+		return
+	}
+	if _, err := client.Send(to, subject, "<p>"+html.EscapeString(body)+"</p>", body); err != nil {
+		log.Printf("alertRevenue: send to %s failed: %v", to, err)
+	}
+}
+
 // POST /webhook/stripe — Stripe events. Handles checkout.session.completed and
 // nothing else for now (NHS has exactly one paid product).
 // Requires STRIPE_WEBHOOK_SECRET to be set for signature verification.
@@ -1112,6 +1133,14 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 					log.Printf("fix webhook: account activate: %v", err)
 				}
 			}
+			alertRevenue("💰 New Not Human Search subscription — $9.99/mo",
+				fmt.Sprintf("%s subscribed to NHS at $9.99/mo. Stripe customer %s, subscription %s.", email, customerID, subID))
+			models.LogIntentEvent(h.DB, models.IntentEvent{
+				EventName:  "nhs_subscription_paid",
+				EntityType: "api_subscription",
+				EntityID:   subID,
+				Metadata:   map[string]any{"email_domain": emailDomain(email), "amount_cents": cs.AmountTotal},
+			})
 			w.WriteHeader(http.StatusOK)
 			return
 		}
