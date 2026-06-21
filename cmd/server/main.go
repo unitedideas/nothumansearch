@@ -114,6 +114,13 @@ func main() {
 	apiKeyHandler := handlers.NewAPIKeyHandler(database.DB, baseURL)
 	usageGate := handlers.NewUsageGate(database.DB, baseURL)
 
+	// Auth: humans log in with a magic link (session cookie); bots use API keys.
+	// Both flow from the same $9.99/mo subscription.
+	authSvc := handlers.NewAuthService(database.DB, baseURL)
+	apiHandler.Auth = authSvc
+	apiKeyHandler.Auth = authSvc
+	webHandler.Auth = authSvc
+
 	mux := http.NewServeMux()
 
 	// Static
@@ -276,7 +283,16 @@ func main() {
 	mux.HandleFunc("/api/v1/checkout", fixHandler.AgenticCheckout)
 	mux.HandleFunc("/api/v1/api-keys/subscribe", apiKeyHandler.Subscribe)
 	mux.HandleFunc("/api/v1/api-keys/activate", apiKeyHandler.Activate)
-	mux.Handle("/api/v1/search", usageGate.Billable("rest", "/api/v1/search", http.HandlerFunc(apiHandler.Search)))
+
+	// Human auth (magic-link login + session) and the subscribe entry point.
+	mux.HandleFunc("/login", authSvc.Login)
+	mux.HandleFunc("/auth/verify", authSvc.Verify)
+	mux.HandleFunc("/logout", authSvc.Logout)
+	mux.HandleFunc("/subscribe", authSvc.SubscribePage)
+
+	// Search is subscription-gated inside the handler (session or API key), so it
+	// is no longer wrapped in the anonymous-quota Billable middleware.
+	mux.HandleFunc("/api/v1/search", apiHandler.Search)
 	mux.Handle("/api/v1/site/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
 	mux.Handle("/api/v1/sites/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)

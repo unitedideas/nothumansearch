@@ -269,6 +269,10 @@
 </head>
 <body>
     <div class="container">
+        <div class="authbar" style="display:flex;justify-content:flex-end;gap:14px;padding:10px 0;font-size:13px;">
+            {{if .AccountEmail}}<span style="color:var(--text-muted);">{{.AccountEmail}}</span><a href="/logout" style="color:var(--accent);text-decoration:none;">Log out</a>
+            {{else}}<a href="/login" style="color:var(--accent);text-decoration:none;">Log in</a><a href="/subscribe" style="color:var(--accent);text-decoration:none;">Subscribe&nbsp;$9.99/mo</a>{{end}}
+        </div>
         <header>
             <div class="logo"><img src="/static/img/logo.svg" width="38" height="38" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:10px"><a href="/" style="color:inherit;text-decoration:none;">Not Human Search</a></div>
             {{if .Heading}}
@@ -323,6 +327,17 @@
             <a href="/?category=productivity" class="filter-btn {{if eq .Category "productivity"}}active{{end}}">Productivity</a>
             <a href="/?category=security" class="filter-btn {{if eq .Category "security"}}active{{end}}">Security</a>
             <a href="/?category=health" class="filter-btn {{if eq .Category "health"}}active{{end}}">Health</a>
+        </div>
+        {{end}}
+
+        {{if .Locked}}
+        <div class="cta-box" style="border:1px solid var(--accent);">
+            <h3>{{.Total}} results match{{if .Query}} "{{.Query}}"{{end}} &mdash; preview</h3>
+            <p>Not Human Search is subscription-only. You're seeing the top 3. Unlock every result for <strong>$9.99/mo</strong>.</p>
+            <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                <a href="/subscribe{{if .AccountEmail}}?email={{.AccountEmail}}{{end}}" style="background:var(--accent);color:var(--bg);padding:10px 18px;border-radius:6px;font-weight:600;text-decoration:none;">Subscribe &mdash; $9.99/mo</a>
+                {{if not .AccountEmail}}<a href="/login" style="background:var(--bg);color:var(--accent);border:1px solid rgba(217,119,87,0.35);padding:10px 18px;border-radius:6px;font-weight:600;text-decoration:none;">Already a member? Log in</a>{{end}}
+            </div>
         </div>
         {{end}}
 

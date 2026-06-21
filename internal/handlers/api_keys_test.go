@@ -32,10 +32,10 @@ func TestAPIKeySubscribeGetDocumentsPlans(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode subscribe document: %v", err)
 	}
-	if len(payload.Plans) != 3 {
-		t.Fatalf("plans count = %d, want 3", len(payload.Plans))
+	if len(payload.Plans) != 1 {
+		t.Fatalf("plans count = %d, want 1", len(payload.Plans))
 	}
-	want := map[string]int{"starter": 1000, "pro": 10000, "scale": 100000}
+	want := map[string]int{"unlimited": 50000}
 	for _, plan := range payload.Plans {
 		if got := want[plan.Plan]; got != plan.MonthlyLimit {
 			t.Fatalf("plan %q monthly_limit = %d, want %d", plan.Plan, plan.MonthlyLimit, got)

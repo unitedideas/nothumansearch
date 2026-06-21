@@ -32,22 +32,14 @@ type APIPlan struct {
 }
 
 func APIPlans() []APIPlan {
-	return []APIPlan{
-		APIPlanFor("starter"),
-		APIPlanFor("pro"),
-		APIPlanFor("scale"),
-	}
+	return []APIPlan{APIPlanFor("unlimited")}
 }
 
+// APIPlanFor returns the single public plan: $9.99/mo with a 50,000 call/month
+// soft "unlimited" cap (the cap protects against a single agent running tens of
+// thousands of crawl/search calls on one seat). Any plan name resolves to it.
 func APIPlanFor(name string) APIPlan {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "pro":
-		return APIPlan{Name: "pro", MonthlyLimit: 10000, PriceCents: 4900}
-	case "scale":
-		return APIPlan{Name: "scale", MonthlyLimit: 100000, PriceCents: 19900}
-	default:
-		return APIPlan{Name: "starter", MonthlyLimit: 1000, PriceCents: 1900}
-	}
+	return APIPlan{Name: "unlimited", MonthlyLimit: 50000, PriceCents: 999}
 }
 
 func HashAPIKey(raw string) string {
@@ -176,6 +168,9 @@ func CurrentMonthUsage(db *sql.DB, key *APIKey, anonHash string) (int, error) {
 }
 
 func RecordUsageEvent(db *sql.DB, key *APIKey, anonHash, surface, method, path, tool string, units, status int, ua string) error {
+	if db == nil {
+		return nil
+	}
 	if units < 0 {
 		units = 0
 	}

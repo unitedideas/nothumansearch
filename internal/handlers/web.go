@@ -17,6 +17,7 @@ import (
 type WebHandler struct {
 	DB   *sql.DB
 	tmpl *template.Template
+	Auth *AuthService
 }
 
 type scoreReason struct {
@@ -167,16 +168,38 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	totalSites, avgScore, _ := models.GetStats(h.DB)
 	popularTags, _ := models.TopTags(h.DB, 12)
 
+	// Subscription gate: searching/filtering the index requires an active human
+	// session or API key. Unentitled visitors get a 3-result metered preview plus
+	// a subscribe/login CTA. Browsing the bare homepage (no query) stays open.
+	entitled := true
+	var accountEmail string
+	if h.Auth != nil {
+		if acct := h.Auth.CurrentAccount(r); acct != nil {
+			accountEmail = acct.Email
+		}
+		entitled, _, _ = h.Auth.SearchEntitled(r)
+	}
+	locked := false
+	if !entitled && (q != "" || category != "") {
+		locked = true
+		if len(sites) > 3 {
+			sites = sites[:3]
+		}
+	}
+
 	data := map[string]interface{}{
-		"Query":       q,
-		"Category":    category,
-		"Sites":       sites,
-		"Total":       total,
-		"Page":        page,
-		"HasNext":     page*20 < total,
-		"TotalSites":  totalSites,
-		"AvgScore":    avgScore,
-		"PopularTags": popularTags,
+		"Query":        q,
+		"Category":     category,
+		"Sites":        sites,
+		"Total":        total,
+		"Page":         page,
+		"HasNext":      !locked && page*20 < total,
+		"TotalSites":   totalSites,
+		"AvgScore":     avgScore,
+		"PopularTags":  popularTags,
+		"Entitled":     entitled,
+		"Locked":       locked,
+		"AccountEmail": accountEmail,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

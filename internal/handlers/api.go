@@ -19,7 +19,8 @@ import (
 )
 
 type APIHandler struct {
-	DB *sql.DB
+	DB   *sql.DB
+	Auth *AuthService
 }
 
 // submitCrawlSem caps concurrent inline crawl goroutines spawned by /api/v1/submit.
@@ -118,6 +119,30 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/search?q=...&category=...&min_score=...&page=...
 func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
+	// Subscription gate: full REST search requires an active API key (bots) or an
+	// active human session. Unentitled callers get a 402 with the subscribe path —
+	// no results are run, so the endpoint can't be scraped for free.
+	if h.Auth != nil {
+		entitled, via, key := h.Auth.SearchEntitled(r)
+		if !entitled {
+			h.writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+				"error":         "subscription_required",
+				"message":       "Not Human Search is subscription-only ($9.99/mo). Get an API key and send it as 'Authorization: Bearer <key>'.",
+				"subscribe_url": h.Auth.BaseURL + "/subscribe",
+			})
+			return
+		}
+		if via == "api_key" && h.Auth.MeterKey(r, key, "rest", "/api/v1/search") {
+			h.writeJSON(w, http.StatusPaymentRequired, map[string]interface{}{
+				"error":         "quota_exceeded",
+				"message":       "Monthly API quota exceeded (50,000 calls). Resets on the 1st.",
+				"limit":         key.MonthlyLimit,
+				"subscribe_url": h.Auth.BaseURL + "/subscribe",
+			})
+			return
+		}
+	}
+
 	q := r.URL.Query()
 	page := 1
 	if p := q.Get("page"); p != "" {

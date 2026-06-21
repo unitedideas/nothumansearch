@@ -51,7 +51,7 @@ func TestCommerceCatalogIncludesAPIPlans(t *testing.T) {
 	for _, product := range payload.Products {
 		got[product.ID] = true
 	}
-	for _, id := range []string{"nhs_geo_fix_my_score", "nhs_api_starter", "nhs_api_pro", "nhs_api_scale"} {
+	for _, id := range []string{"nhs_geo_fix_my_score", "nhs_api_unlimited"} {
 		if !got[id] {
 			t.Fatalf("catalog missing product %q; got=%v", id, got)
 		}
@@ -60,7 +60,7 @@ func TestCommerceCatalogIncludesAPIPlans(t *testing.T) {
 
 func TestCommerceQuoteSupportsAPIPlans(t *testing.T) {
 	h := NewFixHandler(nil, "https://nothumansearch.ai")
-	body := bytes.NewBufferString(`{"product_id":"nhs_api_pro"}`)
+	body := bytes.NewBufferString(`{"product_id":"nhs_api_unlimited"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/quote", body)
 	rr := httptest.NewRecorder()
 
@@ -80,11 +80,11 @@ func TestCommerceQuoteSupportsAPIPlans(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode quote: %v", err)
 	}
-	if payload.ProductID != "nhs_api_pro" || payload.Plan != "pro" {
-		t.Fatalf("quote product/plan = %q/%q, want nhs_api_pro/pro", payload.ProductID, payload.Plan)
+	if payload.ProductID != "nhs_api_unlimited" || payload.Plan != "unlimited" {
+		t.Fatalf("quote product/plan = %q/%q, want nhs_api_unlimited/unlimited", payload.ProductID, payload.Plan)
 	}
-	if payload.Amount != 4900 || payload.MonthlyLimit != 10000 {
-		t.Fatalf("quote amount/limit = %d/%d, want 4900/10000", payload.Amount, payload.MonthlyLimit)
+	if payload.Amount != 999 || payload.MonthlyLimit != 50000 {
+		t.Fatalf("quote amount/limit = %d/%d, want 999/50000", payload.Amount, payload.MonthlyLimit)
 	}
 	if payload.CheckoutEndpoint != "https://nothumansearch.ai/api/v1/api-keys/subscribe" {
 		t.Fatalf("checkout endpoint = %q", payload.CheckoutEndpoint)

@@ -109,22 +109,23 @@ func (g *UsageGate) consume(w http.ResponseWriter, r *http.Request, surface, met
 	return key, anonHash, limit, used, true
 }
 
+// ConsumeMCP is the MCP hard wall: every billable MCP tool call requires an
+// active API key (no anonymous quota). Returns key_required when no key is
+// supplied, invalid_api_key when the key is unknown/inactive, and quota_exceeded
+// when the key is over its monthly cap.
 func (g *UsageGate) ConsumeMCP(r *http.Request, tool string) (*models.APIKey, string, int, int, error) {
 	keyRaw := extractAPIKey(r)
 	anonHash := models.HashAnonymousID(clientIP(r))
-	var key *models.APIKey
-	if keyRaw != "" {
-		var err error
-		key, err = models.ResolveAPIKey(g.DB, keyRaw)
-		if err != nil {
-			_ = models.RecordUsageEvent(g.DB, nil, anonHash, "mcp", "tools/call", "/mcp", tool, 0, http.StatusUnauthorized, r.UserAgent())
-			return nil, anonHash, 0, 0, errors.New("invalid_api_key")
-		}
+	if keyRaw == "" {
+		_ = models.RecordUsageEvent(g.DB, nil, anonHash, "mcp", "tools/call", "/mcp", tool, 0, http.StatusUnauthorized, r.UserAgent())
+		return nil, anonHash, 0, 0, errors.New("key_required")
 	}
-	limit := models.AnonymousMonthlyQuota
-	if key != nil {
-		limit = key.MonthlyLimit
+	key, err := models.ResolveAPIKey(g.DB, keyRaw)
+	if err != nil {
+		_ = models.RecordUsageEvent(g.DB, nil, anonHash, "mcp", "tools/call", "/mcp", tool, 0, http.StatusUnauthorized, r.UserAgent())
+		return nil, anonHash, 0, 0, errors.New("invalid_api_key")
 	}
+	limit := key.MonthlyLimit
 	used, err := models.CurrentMonthUsage(g.DB, key, anonHash)
 	if err != nil {
 		return key, anonHash, limit, used, err

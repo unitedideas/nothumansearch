@@ -444,9 +444,13 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 		if err != nil {
 			status := http.StatusPaymentRequired
 			message := models.QuotaErrorMessage(limit)
-			if err.Error() == "invalid_api_key" {
+			switch err.Error() {
+			case "invalid_api_key":
 				status = http.StatusUnauthorized
 				message = "API key was not found or is inactive"
+			case "key_required":
+				status = http.StatusUnauthorized
+				message = "Not Human Search requires a subscription. Get an API key for $9.99/mo at " + h.BaseURL + "/subscribe, then send it as 'Authorization: Bearer <key>'."
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(status)

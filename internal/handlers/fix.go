@@ -289,7 +289,8 @@ func apiPlanFromProductID(productID string) (models.APIPlan, bool) {
 	id = strings.TrimPrefix(id, "api_")
 	id = strings.TrimPrefix(id, "nhs_api_")
 	switch id {
-	case "starter", "pro", "scale":
+	case "unlimited", "starter", "pro", "scale":
+		// Legacy tier names still resolve (all collapse to the single plan).
 		return models.APIPlanFor(id), true
 	default:
 		return models.APIPlan{}, false
@@ -1091,6 +1092,26 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if cs.Metadata["product"] == "nhs_api_subscription" {
+			// Robust activation: mark the human account active even if the
+			// success-redirect (/api/v1/api-keys/activate, which also mints the
+			// API key) was never hit. The API key is created on that redirect.
+			email := cs.Metadata["email"]
+			if email == "" {
+				email = cs.CustomerEmail
+			}
+			customerID := ""
+			if cs.Customer != nil {
+				customerID = cs.Customer.ID
+			}
+			subID := ""
+			if cs.Subscription != nil {
+				subID = cs.Subscription.ID
+			}
+			if email != "" {
+				if _, err := models.SetAccountSubscription(h.DB, email, customerID, subID, cs.Metadata["plan"], "active"); err != nil {
+					log.Printf("fix webhook: account activate: %v", err)
+				}
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -1144,6 +1165,15 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := models.UpsertSubscriptionStatus(h.DB, customerID, sub.ID, string(sub.Status), sub.Metadata["plan"]); err != nil {
 			log.Printf("fix webhook: subscription status: %v", err)
+		}
+		// Keep the human account in lockstep with the API key: a cancellation or
+		// lapse here flips the website session's entitlement off too.
+		if email := sub.Metadata["email"]; email != "" {
+			if _, err := models.SetAccountSubscription(h.DB, email, customerID, sub.ID, sub.Metadata["plan"], string(sub.Status)); err != nil {
+				log.Printf("fix webhook: account status: %v", err)
+			}
+		} else if event.Type == "customer.subscription.deleted" {
+			_ = models.DeactivateAccountBySubscription(h.DB, sub.ID)
 		}
 	}
 

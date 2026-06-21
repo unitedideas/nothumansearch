@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -16,6 +17,7 @@ import (
 type APIKeyHandler struct {
 	DB      *sql.DB
 	BaseURL string
+	Auth    *AuthService
 }
 
 func NewAPIKeyHandler(db *sql.DB, baseURL string) *APIKeyHandler {
@@ -174,6 +176,17 @@ func (h *APIKeyHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeFixJSON(w, http.StatusInternalServerError, map[string]any{"error": "api_key_create_failed"})
 		return
+	}
+
+	// Same subscription powers the human side: activate the account and sign the
+	// buyer in immediately (session cookie) so they can search the website now.
+	if _, aerr := models.SetAccountSubscription(h.DB, email, customerID, subscriptionID, s.Metadata["plan"], "active"); aerr != nil {
+		log.Printf("activate: account subscription update failed for %s: %v", email, aerr)
+	}
+	if h.Auth != nil && email != "" {
+		if serr := h.Auth.StartSession(w, r, email); serr != nil {
+			log.Printf("activate: instant sign-in failed for %s: %v", email, serr)
+		}
 	}
 	resp := map[string]any{
 		"plan":          key.Plan,
