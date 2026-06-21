@@ -112,7 +112,7 @@ func (h *APIKeyHandler) subscribeDocument(w http.ResponseWriter) {
 			"price": map[string]any{
 				"amount":   plan.PriceCents,
 				"currency": "USD",
-				"display":  fmt.Sprintf("$%d/mo", plan.PriceCents/100),
+				"display":  fmt.Sprintf("$%.2f/mo", float64(plan.PriceCents)/100),
 			},
 		})
 	}

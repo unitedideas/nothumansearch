@@ -249,7 +249,7 @@ func (h *FixHandler) apiProduct(plan models.APIPlan) map[string]interface{} {
 		"price": map[string]interface{}{
 			"amount":   plan.PriceCents,
 			"currency": "USD",
-			"display":  fmt.Sprintf("$%d/mo", plan.PriceCents/100),
+			"display":  fmt.Sprintf("$%.2f/mo", float64(plan.PriceCents)/100),
 			"interval": "month",
 		},
 		"required_metadata": []string{"email", "plan"},
