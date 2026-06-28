@@ -3,7 +3,7 @@
     "title": "Close out the active June 28 NHS full-recrawl with aggregate quality proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-28T13:08:24Z planner probes: tools/full-recrawl.lock exists with pid=77700 and started_at=1782651605; tools/recrawl-health.log records 2026-06-28 06:00:05 full_recrawl start, preflight api_status=200 api_ok=1, and remote_start command=/app/crawler_-recrawl_-workers_10 with no post_full_recrawl completion line yet. tools/recrawl.log records 2026-06-28 full_recrawl starting and live crawl output through 13:07Z, including timeout failures and successful bounded site updates. Public stats currently return total_sites=4304 avg_score=37 top_category=developer. Public categories currently return developer=1315, ai-tools=921, other=800, data=395, finance=196, productivity=172, ecommerce=153, communication=125, security=110, health=60, jobs=25, education=21, news=10, spam=1. No process environments, raw private identifiers, or crawl-domain queue dumps were inspected.",
+    "source_ref": "2026-06-28T16:08:09Z planner probes: tools/full-recrawl.lock exists with pid=77700 and started_at=1782651605; tools/recrawl-health.log records 2026-06-28 06:00:05 full_recrawl start, preflight api_status=200 api_ok=1, and remote_start command=/app/crawler_-recrawl_-workers_10 with no post_full_recrawl completion line yet. tools/recrawl.log records same-day live crawl output through 16:07Z, including timeout failures and successful bounded site updates. Public stats currently return total_sites=4303 avg_score=37 top_category=developer. Public categories currently return developer=1316, ai-tools=914, other=805, data=393, finance=197, productivity=171, ecommerce=154, communication=125, security=110, health=60, jobs=25, education=21, news=11, spam=1. Weekly discovery log last completed 2026-06-22 with Total unique candidates=3667 and New domains to crawl=0; no current discovery lock was inspected. No process environments, raw private identifiers, or crawl-domain queue dumps were inspected.",
     "priority": 99,
     "public": false,
     "human_gate_kind": null,
@@ -14,13 +14,13 @@
       "Write aggregate closeout evidence to a tracked ops/ledgers artifact, then remove this generated WorkItem."
     ],
     "created_at": "2026-06-28T13:08:24Z",
-    "last_verified_at": "2026-06-28T13:08:24Z"
+    "last_verified_at": "2026-06-28T16:08:09Z"
   },
   {
     "title": "Finish NHS API-key commerce handoff and admin traffic aggregate repair after the active recrawl completes",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-28T13:08:24Z planner probes: active tools/full-recrawl.lock is present, so deploy-gated product repair should wait. /api/v1/api-keys/subscribe GET with Accept:text/html returns HTTP 200 application/json, has_html=false, has_form=false, plan_ids=[nhs_api_unlimited], top_level_checkout_url=false, body_has_checkout_url=true, nested response_fields is a list. /api/v1/quote?product_id=nhs_api_starter returns product_id=nhs_api_unlimited amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; /api/v1/quote?product_id=nhs_api_unlimited returns the same unlimited metadata. /.well-known/commerce.json top-level keys are agentic_payments, currency, products, seller, version; agentic_payments endpoint keys are api_activation, api_subscribe, catalog, checkout, quote; top-level catalog/quote/checkout compatibility fields are absent. /.well-known/agent.json commerce keys are present. Admin traffic keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, or secrets were fetched or committed.",
+    "source_ref": "2026-06-28T16:08:09Z planner probes: active tools/full-recrawl.lock is present, so deploy-gated product repair should wait. /api/v1/api-keys/subscribe GET with Accept:text/html returns HTTP 200 application/json, has_html=false, has_form=false, plan_ids=[nhs_api_unlimited], top_level_checkout_url=false, body_has_checkout_url=true, nested response_fields is a list. /api/v1/quote?product_id=nhs_api_starter returns product_id=nhs_api_unlimited amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; /api/v1/quote?product_id=nhs_api_unlimited returns the same unlimited metadata. /.well-known/commerce.json top-level keys are agentic_payments, currency, products, seller, version; agentic_payments endpoint keys are api_activation, api_subscribe, catalog, checkout, quote; top-level catalog/quote/checkout compatibility fields are absent. /.well-known/agent.json commerce fields include agentic_payments_ready, api_subscribe, catalog, checkout, manifest, payment_modes, private_preview_required, quote, unsupported_payment_modes. Admin traffic keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages are absent; errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, or secrets were fetched or committed.",
     "priority": 97,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -34,6 +34,6 @@
       "After deploy, verify explicit GET JSON, Accept:text/html HTML/content type, HEAD/OPTIONS behavior, commerce.json, agent.json, catalog, starter quote, unlimited quote, admin traffic keys, public stats, and public categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-06-28T13:08:24Z"
+    "last_verified_at": "2026-06-28T16:08:09Z"
   }
 ]
