@@ -36,5 +36,21 @@
     ],
     "created_at": "2026-06-19T07:08:26Z",
     "last_verified_at": "2026-06-28T18:10:00Z"
+  },
+  {
+    "title": "Add CI coverage for NHS aggregate-only harness scripts",
+    "source_family": "ops",
+    "source_agent": "business-worker-nothumansearch",
+    "source_ref": "work_machine_c01ad4a036fbfca8: added tools/full-recrawl-closeout.py and unittest fixture coverage, but repo CI does not yet run the harness helper tests as an obvious verification target.",
+    "priority": 64,
+    "public": false,
+    "human_gate_kind": null,
+    "acceptance_criteria": [
+      "Add repo-local verification coverage that runs tools/test-full-recrawl-closeout.py together with the existing harness helper tests.",
+      "Keep the check local-only and aggregate-only; do not call production endpoints, fetch raw crawl rows, or require secrets.",
+      "Document the command in harness/README.md or the existing CI workflow so future workers use one obvious harness verification path."
+    ],
+    "created_at": "2026-06-28T18:25:00Z",
+    "last_verified_at": "2026-06-28T19:05:00Z"
   }
 ]
