@@ -7,9 +7,10 @@ PulseMCP, llms.txt directories) and submits any unseen ones to NHS's
 own /api/v1/submit endpoint. Idempotent: existing domains are no-ops
 thanks to ON CONFLICT DO NOTHING in the submit handler.
 
-Runs weekly via launchd. Compounds the index size over time without
+Runs daily via launchd. Compounds the index size over time without
 requiring manual seed-list updates.
 """
+import argparse
 import json
 import os
 import re
@@ -35,13 +36,43 @@ FLY_CONFIG_DIR = os.environ.get(
     "/Users/owlassist/foundry-businesses/nothumansearch/tools/.fly-config",
 )
 FLY_TOKEN_SERVICE = os.environ.get("NHS_FLY_TOKEN_SERVICE", "fly-api-token")
+GITHUB_TOKEN_SERVICES = tuple(
+    s.strip()
+    for s in os.environ.get(
+        "NHS_GITHUB_TOKEN_SERVICES",
+        "github-token,gh-token,github-pat,github-api-token",
+    ).split(",")
+    if s.strip()
+)
 _GH_TOKEN = None
+
+
+def keychain_password(service, account="foundry"):
+    try:
+        return subprocess.check_output(
+            ["/usr/bin/security", "find-generic-password", "-a", account, "-s", service, "-w"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+        ).strip()
+    except Exception:
+        return ""
 
 
 def github_token():
     global _GH_TOKEN
     if _GH_TOKEN is not None:
         return _GH_TOKEN
+    for name in ("NHS_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"):
+        token = os.environ.get(name, "").strip()
+        if token:
+            _GH_TOKEN = token
+            return _GH_TOKEN
+    for service in GITHUB_TOKEN_SERVICES:
+        token = keychain_password(service)
+        if token:
+            _GH_TOKEN = token
+            return _GH_TOKEN
     try:
         _GH_TOKEN = subprocess.check_output(
             ["gh", "auth", "token"],
@@ -73,6 +104,7 @@ SKIP_ROOT_DOMAINS = {
     "archive.org", "web.archive.org",
     # MCP registries themselves — we harvest them, don't submit them
     "mcp.so", "smithery.ai", "glama.ai", "pulsemcp.com",
+    "mcp.directory", "mcpservers.org", "mcpservers.com", "mcpmarket.com",
     "llmstxt.site", "llmstxt.cloud", "llmstxt.org",
     "goo.gl", "bit.ly", "t.co", "tinyurl.com",
     # NHS-internal — never submit ourselves or test domains
@@ -88,6 +120,29 @@ def registrable_domain(host):
     return ".".join(parts[-2:])
 
 URL_RE = re.compile(r"https?://[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}(?:/[^\s\"'<>)]*)?")
+HREF_RE = re.compile(r"href=[\"']([^\"'#?]+(?:[?#][^\"']*)?)[\"']", re.IGNORECASE)
+
+
+def curl_get(url, timeout=20):
+    curl_bin = "/usr/bin/curl"
+    if not os.path.exists(curl_bin):
+        raise URLError("curl_missing")
+    return subprocess.check_output(
+        [
+            curl_bin,
+            "-fsSL",
+            "--max-time",
+            str(timeout),
+            "-A",
+            UA,
+            "-H",
+            "Accept: */*",
+            url,
+        ],
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=timeout + 5,
+    )
 
 
 def http_get(url, timeout=20, retries=2):
@@ -102,11 +157,19 @@ def http_get(url, timeout=20, retries=2):
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read().decode("utf-8", errors="replace")
-        except (HTTPError, URLError) as e:
+        except HTTPError as e:
             last = e
             # 4xx is usually permanent; retry 429 + 5xx + transient 410
-            if isinstance(e, HTTPError) and e.code not in (410, 429, 500, 502, 503, 504):
+            if e.code not in (410, 429, 500, 502, 503, 504):
                 raise
+            if attempt < retries:
+                time.sleep(1.5 * (attempt + 1))
+        except URLError as e:
+            last = e
+            try:
+                return curl_get(url, timeout=timeout)
+            except Exception:
+                pass
             if attempt < retries:
                 time.sleep(1.5 * (attempt + 1))
     raise last  # type: ignore[misc]
@@ -128,6 +191,57 @@ def extract_domain(raw_url):
     if registrable_domain(host) in SKIP_ROOT_DOMAINS:
         return None
     return host
+
+
+def domains_from_text(body):
+    domains = set()
+    for match in URL_RE.findall(body):
+        d = extract_domain(match)
+        if d:
+            domains.add(d)
+    return domains
+
+
+def iter_json_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for child in value.values():
+            yield from iter_json_strings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from iter_json_strings(child)
+
+
+def domains_from_json(value):
+    domains = set()
+    for text in iter_json_strings(value):
+        for match in URL_RE.findall(text):
+            d = extract_domain(match)
+            if d:
+                domains.add(d)
+    return domains
+
+
+def detail_urls_from_html(base_url, body, host, limit=120):
+    urls = []
+    seen = set()
+    for href in HREF_RE.findall(body):
+        absolute = urllib.parse.urljoin(base_url, href)
+        parsed = urllib.parse.urlparse(absolute)
+        if parsed.scheme not in ("http", "https") or parsed.netloc != host:
+            continue
+        path = parsed.path.lower()
+        if not any(marker in path for marker in ("/server", "/mcp")):
+            continue
+        normalized = urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", parsed.query, ""))
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        urls.append(normalized)
+        if len(urls) >= limit:
+            break
+    return urls
 
 
 def from_mcp_registry():
@@ -239,6 +353,110 @@ def from_mcpso(max_pages=10):
     return domains
 
 
+def from_glama(max_pages=10):
+    """Harvest domains from Glama's MCP API."""
+    domains = set()
+    cursor = ""
+    pages = 0
+    for _ in range(max_pages):
+        params = {"first": "100"}
+        if cursor:
+            params["after"] = cursor
+        url = "https://glama.ai/api/mcp/v1/servers?" + urllib.parse.urlencode(params)
+        try:
+            body = http_get(url)
+            data = json.loads(body)
+        except (HTTPError, URLError, json.JSONDecodeError) as e:
+            print(f"[glama p{pages + 1}] fetch failed: {e}", file=sys.stderr)
+            break
+        domains |= domains_from_json(data.get("servers", []))
+        page_info = data.get("pageInfo", {})
+        pages += 1
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("endCursor") or ""
+        if not cursor:
+            break
+        time.sleep(0.25)
+    print(f"[glama] {len(domains)} candidate domains across {pages} pages")
+    return domains
+
+
+def from_html_registry(label, urls, detail_limit=80):
+    """Harvest external URL domains from registry listing pages and detail pages."""
+    domains = set()
+    detail_urls = []
+    for url in urls:
+        try:
+            body = http_get(url)
+        except (HTTPError, URLError) as e:
+            print(f"[{label}] {url} fetch failed: {e}", file=sys.stderr)
+            continue
+        domains |= domains_from_text(body)
+        parsed = urllib.parse.urlparse(url)
+        detail_urls.extend(detail_urls_from_html(url, body, parsed.netloc, limit=detail_limit))
+        time.sleep(0.2)
+
+    seen_details = set()
+    for url in detail_urls:
+        if url in seen_details:
+            continue
+        seen_details.add(url)
+        try:
+            body = http_get(url, timeout=15, retries=1)
+        except (HTTPError, URLError) as e:
+            print(f"[{label}] detail fetch failed: {url}: {e}", file=sys.stderr)
+            continue
+        domains |= domains_from_text(body)
+        time.sleep(0.1)
+
+    print(f"[{label}] {len(domains)} candidate domains")
+    return domains
+
+
+def from_mcp_directory():
+    return from_html_registry(
+        "mcp.directory",
+        (
+            "https://mcp.directory/",
+            "https://mcp.directory/servers",
+            "https://mcp.directory/servers?sort=trending",
+            "https://mcp.directory/servers?sort=newest",
+        ),
+    )
+
+
+def from_mcpservers_org():
+    return from_html_registry(
+        "mcpservers.org",
+        (
+            "https://mcpservers.org/",
+        ),
+    )
+
+
+def from_mcpservers_com():
+    return from_html_registry(
+        "mcpservers.com",
+        (
+            "https://mcpservers.com/",
+            "https://mcpservers.com/servers",
+        ),
+    )
+
+
+def from_mcpmarket():
+    return from_html_registry(
+        "mcpmarket.com",
+        (
+            "https://mcpmarket.com/",
+            "https://mcpmarket.com/server",
+            "https://mcpmarket.com/servers",
+        ),
+        detail_limit=40,
+    )
+
+
 def from_llmstxt_site():
     """Scrape llms.txt index sites for referenced domains."""
     domains = set()
@@ -337,7 +555,9 @@ def from_github_mcp_topic(max_pages=33):
                 d = extract_domain(hp)
                 if d:
                     domains.add(d)
-            time.sleep(0.2 if github_token() else 6.5)  # stay under 10 rpm when unauthenticated
+            # GitHub search is separately rate-limited. Authenticated requests
+            # still need pacing to avoid secondary 403s.
+            time.sleep(2.2 if github_token() else 6.5)
     print(f"[github] {len(domains)} candidate domains")
     return domains
 
@@ -376,16 +596,7 @@ def submit(domain):
 
 
 def fly_token():
-    try:
-        token = subprocess.check_output(
-            ["/usr/bin/security", "find-generic-password", "-a", "foundry", "-s", FLY_TOKEN_SERVICE, "-w"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=5,
-        ).strip()
-    except Exception:
-        return ""
-    return token
+    return keychain_password(FLY_TOKEN_SERVICE)
 
 
 def fly_unavailable_reason():
@@ -454,13 +665,26 @@ def crawl_via_ssh(domains):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Discover and submit new agent-ready domains to NHS.")
+    parser.add_argument(
+        "--sources-only",
+        action="store_true",
+        help="Fetch discovery sources and report candidate counts without checking/submitting to NHS.",
+    )
+    args = parser.parse_args()
+
     print(f"=== NHS discovery run @ {time.strftime('%Y-%m-%d %H:%M:%S')} ===")
     candidates = set()
     sources = [
         (from_mcp_registry, 100),
+        (from_glama, 98),
         (from_pulsemcp, 95),
+        (from_mcp_directory, 92),
         (from_mcpso, 90),
+        (from_mcpservers_org, 88),
+        (from_mcpservers_com, 86),
         (from_smithery, 85),
+        (from_mcpmarket, 84),
         (from_github_mcp_topic, 80),
         (from_awesome_mcp, 75),
         (from_apis_guru, 35),
@@ -480,6 +704,13 @@ def main():
             for domain in domains:
                 weights[domain] = max(weights.get(domain, 0), weight)
     print(f"Total unique candidates: {len(candidates)}")
+    if args.sources_only:
+        sample = sorted(candidates, key=lambda d: (-weights.get(d, 0), d))[:25]
+        print("Top candidate sample:")
+        for domain in sample:
+            print(f"  {domain} weight={weights.get(domain, 0)}")
+        print("=== done: sources only ===")
+        return 0
 
     new_domains = set()
     skipped = 0
