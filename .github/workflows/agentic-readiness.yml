@@ -7,6 +7,8 @@ on:
     branches: [main]
     paths:
       - 'templates/**'
+      - '.github/workflows/agentic-readiness.yml'
+      - 'harness/README.md'
       - 'harness/discovery-quality-latest.json'
       - 'harness/discovery-quarantine-latest.json'
       - 'internal/models/queries.go'
@@ -20,8 +22,13 @@ on:
       - 'tools/taxonomy-other-redacted-sample.py'
       - 'tools/test-discovery-quality-report.py'
       - 'tools/test-discovery-quarantine-report.py'
+      - 'tools/test-harness-verifier-contract.py'
       - 'tools/test-taxonomy-other-redacted-sample.py'
+      - 'tools/test-full-recrawl-closeout.py'
+      - 'tools/full-recrawl-closeout.py'
       - 'tools/quality-gate-discovery-test.py'
+      - 'tools/test-refresh-discovery-quality.py'
+      - 'tools/verify-harness-local.sh'
       - 'tools/fixtures/discovery-quarantine-ci.json'
 
 jobs:
@@ -39,15 +46,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
-      - name: Run discovery quality gate tests
+      - name: Run local harness verification
         run: |
-          python3 -m unittest \
-            tools/test-discovery-quality-report.py \
-            tools/test-discovery-quarantine-report.py \
-            tools/test-taxonomy-other-redacted-sample.py \
-            tools/quality-gate-discovery-test.py
-      - name: Verify aggregate-only discovery quarantine gate
-        run: |
-          python3 tools/quality-gate-discovery.py \
-            --quarantine tools/fixtures/discovery-quarantine-ci.json \
-            --repo-root .
+          tools/verify-harness-local.sh

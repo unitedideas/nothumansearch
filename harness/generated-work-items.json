@@ -38,19 +38,18 @@
     "last_verified_at": "2026-06-29T11:08Z"
   },
   {
-    "title": "Add a repo-local guard that CI and harness docs reference the same verifier",
+    "title": "Add negative fixture coverage for the harness verifier contract guard",
     "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-06-29T11:08Z planner inspection: untracked tools/verify-harness-local.sh exists and consolidates local aggregate-only harness tests, including tools/test-full-recrawl-closeout.py, discovery quality/quarantine tests, refresh-discovery-quality tests, taxonomy-other sample tests, and the quality-gate-discovery fixture run. The proposed guard is still bounded to .github/workflows/agentic-readiness.yml, harness/README.md, and local fixtures/scripts. No production endpoints, secrets, or raw crawl rows are required.",
-    "priority": 55,
+    "source_agent": "qlimit-worker",
+    "source_ref": "2026-06-29 local guard work: tools/test-harness-verifier-contract.py protects README/workflow references and the workflow path filter now includes the protected surfaces. A later hardening pass can add explicit negative fixture tests that mutate copied README/workflow files and prove the guard fails for each drift mode without touching production.",
+    "priority": 35,
     "public": false,
     "human_gate_kind": null,
     "acceptance_criteria": [
-      "Add a local fixture or script test that fails if harness/README.md stops documenting tools/verify-harness-local.sh.",
-      "Add a local fixture or script test that fails if .github/workflows/agentic-readiness.yml stops invoking tools/verify-harness-local.sh for the harness verification job.",
-      "Keep the guard local-only; do not call production endpoints, require secrets, or inspect raw crawl rows."
+      "Add a fixture-based or temporary-copy test path that proves missing tools/verify-harness-local.sh in harness/README.md fails locally.",
+      "Add a fixture-based or temporary-copy test path that proves missing tools/verify-harness-local.sh in the discovery-quality-gate workflow job fails locally.",
+      "Run tools/verify-harness-local.sh locally; do not call production endpoints, require secrets, or inspect raw crawl rows."
     ],
-    "created_at": "2026-06-28T21:04:00Z",
-    "last_verified_at": "2026-06-29T11:08Z"
+    "created_at": "2026-06-29T11:40:00Z"
   }
 ]
