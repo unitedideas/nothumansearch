@@ -92,8 +92,28 @@ type SearchParams struct {
 	HasOpenAPI  bool
 	HasLLMsTxt  bool
 	OrderNewest bool // when true, sorts by created_at DESC instead of score
+	PinDomain   string
 	Limit       int
 	Page        int
+}
+
+func normalizedPinDomain(domain string) string {
+	domain = strings.TrimSpace(strings.ToLower(domain))
+	domain = strings.TrimPrefix(domain, "https://")
+	domain = strings.TrimPrefix(domain, "http://")
+	domain = strings.TrimPrefix(domain, "www.")
+	if i := strings.IndexAny(domain, "/?#"); i >= 0 {
+		domain = domain[:i]
+	}
+	return strings.TrimSuffix(domain, ".")
+}
+
+func pinDomainOrderClause(argN int, domain string) (string, string, bool) {
+	domain = normalizedPinDomain(domain)
+	if domain == "" {
+		return "", "", false
+	}
+	return fmt.Sprintf("CASE WHEN lower(domain) = $%d THEN 1 ELSE 0 END DESC, ", argN), domain, true
 }
 
 func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
@@ -211,6 +231,12 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 
 	// Fetch with relevance ranking
 	offset := (p.Page - 1) * p.Limit
+	pinOrder := ""
+	if clause, domain, ok := pinDomainOrderClause(argN, p.PinDomain); ok {
+		pinOrder = clause
+		args = append(args, domain)
+		argN++
+	}
 	var orderBy string
 	if useFTS {
 		// Rank by: all-terms-match boost + OR-relevance * score-multiplier + additive
@@ -221,12 +247,13 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 		// project_nhs_ranking_improvement.md (2026-04-15). Initial /150 floor was too
 		// weak for multi-term queries; bumped to /75 after A/B on 10 baseline queries.
 		orderBy = fmt.Sprintf(
-			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, is_featured DESC, agentic_score DESC",
+			"ORDER BY %sts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, is_featured DESC, agentic_score DESC",
+			pinOrder,
 			tsQueryArg+1, tsQueryArg)
 	} else if p.OrderNewest {
-		orderBy = "ORDER BY created_at DESC, agentic_score DESC"
+		orderBy = "ORDER BY " + pinOrder + "created_at DESC, agentic_score DESC"
 	} else {
-		orderBy = "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
+		orderBy = "ORDER BY " + pinOrder + "is_featured DESC, agentic_score DESC, updated_at DESC"
 	}
 
 	query := fmt.Sprintf(`

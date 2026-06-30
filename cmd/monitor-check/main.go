@@ -84,6 +84,24 @@ func monitorLogIdentity(email string) string {
 	return "email_domain=" + domain + " email_hash=" + hash
 }
 
+const (
+	firstCheckFailedQuarantineReason    = "first monitor check failed"
+	firstCheckZeroScoreQuarantineReason = "first monitor check returned zero score"
+)
+
+func firstCheckQuarantineReason(m *models.Monitor, site *models.Site, cerr error) (string, bool) {
+	if m == nil || (m.LastScore != nil && *m.LastScore > 0) {
+		return "", false
+	}
+	if cerr != nil {
+		return firstCheckFailedQuarantineReason, true
+	}
+	if site != nil && site.AgenticScore == 0 {
+		return firstCheckZeroScoreQuarantineReason, true
+	}
+	return "", false
+}
+
 // handleOne applies a single crawl result to a single monitor row.
 // site/cerr are the shared crawl result for this domain; we accept nil
 // site when cerr != nil.
@@ -100,12 +118,21 @@ func handleOne(db *sql.DB, mailer *email.Client, baseURL string, m *models.Monit
 		if dry {
 			return nil
 		}
-		return models.UpdateMonitorCheck(db, m.ID, 0, "", false)
+		reason, _ := firstCheckQuarantineReason(m, nil, cerr)
+		return models.QuarantineMonitorCheck(db, m.ID, 0, "", reason)
 	}
 
 	score := site.AgenticScore
 	sigs := signalsString(site)
 	hash := hashString(sigs)
+
+	if reason, ok := firstCheckQuarantineReason(m, site, nil); ok {
+		log.Printf("  WARN %s: quarantining first-check monitor, score=%d reason=%s", m.Domain, score, reason)
+		if dry {
+			return nil
+		}
+		return models.QuarantineMonitorCheck(db, m.ID, score, hash, reason)
+	}
 
 	// First-ever check: just record, don't alert.
 	if m.LastScore == nil {
