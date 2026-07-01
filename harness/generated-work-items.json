@@ -3,7 +3,7 @@
     "title": "Finish NHS API-key commerce handoff and admin traffic aggregate repair after July 1 recrawl completion",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-01T20:08Z planner probes: July 1 full recrawl is complete. tools/recrawl-health.log records 2026-07-01 10:10:43 wrapper=full-recrawl event=completion phase=full_recrawl api_status=200 api_ok=1 workers=10 dry_run=0. tools/recrawl.log records Done Success=10151 Failed=387 Total=10538 and NHS full_recrawl complete. No tools/*.lock files are present. Public stats returned total_sites=4300 avg_score=37 top_category=developer. Public categories returned developer=1309, ai-tools=920, other=807, data=394, finance=196, productivity=169, ecommerce=154, communication=125, security=111, health=60, jobs=25, education=21, news=8, spam=1. Public /api/v1/api-keys/subscribe GET with Accept:text/html returns HTTP/2 200 content-type application/json, body_len=802, has_html=false, json_parseable=true. /api/v1/quote?product_id=nhs_api_starter returns product_id=nhs_api_unlimited amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; /api/v1/quote?product_id=nhs_api_unlimited returns product_id=nhs_api_unlimited amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. /.well-known/commerce.json top-level keys are agentic_payments, currency, products, seller, version; agentic_payments endpoint keys are api_activation, api_subscribe, catalog, checkout, quote; top-level catalog/quote/checkout compatibility fields are absent. /.well-known/agent.json commerce fields include agentic_payments_ready, api_subscribe, catalog, checkout, manifest, payment_modes, private_preview_required, quote, unsupported_payment_modes. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false, scanner_pages=false, errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, or secrets were fetched or committed.",
+    "source_ref": "2026-07-01T22:08Z planner probes: July 1 full recrawl is complete. tools/recrawl-health.log records 2026-07-01 10:10:43 wrapper=full-recrawl event=completion phase=full_recrawl api_status=200 api_ok=1 workers=10 dry_run=0. tools/recrawl.log records Done Success=10151 Failed=387 Total=10538 and NHS full_recrawl complete. No tools/*.lock files are present. Public stats returned total_sites=4300 avg_score=37 top_category=developer. Public categories returned developer=1309, ai-tools=920, other=807, data=394, finance=196, productivity=169, ecommerce=154, communication=125, security=111, health=60, jobs=25, education=21, news=8, spam=1. Public /api/v1/api-keys/subscribe GET with Accept:text/html returns HTTP 200 content-type application/json, body_len=802, has_html=false, json_parseable=true. /api/v1/quote?product_id=nhs_api_starter returns product_id=nhs_api_unlimited amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. /api/v1/quote?product_id=nhs_api_unlimited returns product_id=nhs_api_unlimited amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. /.well-known/commerce.json exposes checkout surfaces under agentic_payments endpoints and still lacks top-level catalog/quote/checkout compatibility fields. /.well-known/agent.json commerce fields are present. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false, scanner_pages=false, errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, or secrets were fetched or committed.",
     "priority": 98,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -16,13 +16,13 @@
       "Before deploy, verify no active long-running crawler or full-recrawl lock exists; after deploy, verify explicit GET JSON, Accept:text/html HTML/content type, HEAD/OPTIONS behavior, commerce.json, agent.json, catalog, starter quote, unlimited quote, admin traffic keys, public stats, and public categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-01T20:08Z"
+    "last_verified_at": "2026-07-01T22:08Z"
   },
   {
     "title": "Refresh NHS MCP registry/public metadata from 4,100+ to current 4,300+ aggregate count",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-01T20:08Z planner probes: public /api/v1/stats returned total_sites=4300 avg_score=37 top_category=developer after the completed July 1 full recrawl. tools/mcp-registry/server.json still says '4,100+ sites' in the registry description. tools/recrawl-health.log and tools/recrawl.log both show the July 1 full recrawl completed successfully before this metadata check. No raw indexed domains, crawl rows, tokens, or registry credentials were fetched or committed.",
+    "source_ref": "2026-07-01T22:08Z planner probes: public /api/v1/stats returned total_sites=4300 avg_score=37 top_category=developer after the completed July 1 full recrawl. tools/mcp-registry/server.json still says '4,100+ sites' in the registry description. README.md still contains older 1,900+ marketing copy while directing readers to /api/v1/stats for the current count. tools/recrawl-health.log and tools/recrawl.log both show the July 1 full recrawl completed successfully before this metadata check. No raw indexed domains, crawl rows, tokens, or registry credentials were fetched or committed.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "public_action_lock_required",
@@ -34,13 +34,13 @@
       "Commit the updated tools/mcp-registry/server.json and any aggregate-only proof artifact."
     ],
     "created_at": "2026-07-01T18:08Z",
-    "last_verified_at": "2026-07-01T20:08Z"
+    "last_verified_at": "2026-07-01T22:08Z"
   },
   {
     "title": "Review NHS first-check zero-score monitor quarantines from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-01T20:08Z planner probes: tools/monitor-status-redacted-read.sh returned aggregate monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. tools/monitor-actions-redacted-read.sh returned no 30-day actions. tools/geo-jobs-redacted-read.sh succeeded in planner runtime with aggregate count=17: real_candidate pending=7 split dot_com=5 other_tld=2 and age buckets 30d_plus=3, 7_29d=4; test_like pending=5 split 30d_plus=4 and 7_29d=1; test_like lead=1; test_like paid=2; test_like internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
+    "source_ref": "2026-07-01T22:08Z planner probes: tools/monitor-status-redacted-read.sh returned aggregate monitor status active=4; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. tools/monitor-actions-redacted-read.sh returned no 30-day actions. tools/geo-jobs-redacted-read.sh succeeded in planner runtime with aggregate count=17: real_candidate pending=7 split dot_com=5 other_tld=2 and age buckets 30d_plus=3, 7_29d=4; test_like pending=5 split 30d_plus=4 and 7_29d=1; test_like lead=1; test_like paid=2; test_like internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -52,6 +52,6 @@
       "After action, refresh aggregate status/reason/count, score-fix status/class buckets, and day/action/count proof only."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-01T20:08Z"
+    "last_verified_at": "2026-07-01T22:08Z"
   }
 ]
