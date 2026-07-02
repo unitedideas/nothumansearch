@@ -36,6 +36,10 @@ FLY_CONFIG_DIR = os.environ.get(
     "/Users/owlassist/foundry-businesses/nothumansearch/tools/.fly-config",
 )
 FLY_TOKEN_SERVICE = os.environ.get("NHS_FLY_TOKEN_SERVICE", "fly-api-token")
+KEYCHAIN_PATH = os.environ.get(
+    "NHS_KEYCHAIN_PATH",
+    "/Users/owlassist/Library/Keychains/foundry-automation.keychain-db",
+)
 GITHUB_TOKEN_SERVICES = tuple(
     s.strip()
     for s in os.environ.get(
@@ -48,9 +52,22 @@ _GH_TOKEN = None
 
 
 def keychain_password(service, account="foundry"):
+    args = ["/usr/bin/security", "find-generic-password", "-a", account, "-s", service, "-w"]
+    if KEYCHAIN_PATH and os.path.exists(KEYCHAIN_PATH):
+        try:
+            subprocess.run(
+                ["/usr/bin/security", "unlock-keychain", "-p", "", KEYCHAIN_PATH],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+            )
+        except Exception:
+            pass
+        args.append(KEYCHAIN_PATH)
     try:
         return subprocess.check_output(
-            ["/usr/bin/security", "find-generic-password", "-a", account, "-s", service, "-w"],
+            args,
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=5,
