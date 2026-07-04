@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -80,6 +82,125 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 	}
 	if strings.Contains(highScoreOut.String(), "Fix this for $199") {
 		t.Fatalf("expected high-score hard-signal site to omit score-fix CTA")
+	}
+}
+
+func TestHomepagePinDomainOnlyAppliesToBareFirstPage(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		category string
+		page     int
+		want     string
+	}{
+		{name: "bare home", page: 1, want: "bringyour.ai"},
+		{name: "search keeps relevance", query: "payments", page: 1},
+		{name: "category keeps category ranking", category: "ai-tools", page: 1},
+		{name: "later pages keep normal ordering", page: 2},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := homepagePinDomain(tc.query, tc.category, tc.page); got != tc.want {
+				t.Fatalf("homepagePinDomain(%q, %q, %d) = %q, want %q", tc.query, tc.category, tc.page, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestUnfilteredTopPinDomainOnlyAppliesToDefaultLeaderboard(t *testing.T) {
+	tests := []struct {
+		name       string
+		category   string
+		tag        string
+		hasAPI     bool
+		hasMCP     bool
+		hasOpenAPI bool
+		hasLLMsTxt bool
+		want       string
+	}{
+		{name: "default top", want: "bringyour.ai"},
+		{name: "category keeps category ranking", category: "developer"},
+		{name: "tag keeps tag ranking", tag: "mcp"},
+		{name: "api filter keeps signal ranking", hasAPI: true},
+		{name: "mcp filter keeps signal ranking", hasMCP: true},
+		{name: "openapi filter keeps signal ranking", hasOpenAPI: true},
+		{name: "llms filter keeps signal ranking", hasLLMsTxt: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := unfilteredTopPinDomain(tc.category, tc.tag, tc.hasAPI, tc.hasMCP, tc.hasOpenAPI, tc.hasLLMsTxt)
+			if got != tc.want {
+				t.Fatalf("unfilteredTopPinDomain(...) = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCampaignSubscribeURLRequiresLinkedInQlimit(t *testing.T) {
+	tests := map[string]struct {
+		show bool
+		want string
+	}{
+		"/?qc=agent-readable-hiring&utm_source=linkedin&utm_medium=qlimit&utm_campaign=agent-readable-hiring": {
+			show: true,
+			want: "/subscribe?qc=agent-readable-hiring&utm_source=linkedin&utm_medium=qlimit&utm_campaign=agent-readable-hiring",
+		},
+		"/?utm_source=linkedin&utm_medium=organic": {
+			show: false,
+			want: "/subscribe",
+		},
+		"/?utm_source=google&utm_medium=qlimit": {
+			show: false,
+			want: "/subscribe",
+		},
+		"/": {
+			show: false,
+			want: "/subscribe",
+		},
+	}
+	for path, tc := range tests {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		got, show := campaignSubscribeURL(req)
+		if show != tc.show || got != tc.want {
+			t.Fatalf("campaignSubscribeURL(%q) = (%q, %v), want (%q, %v)", path, got, show, tc.want, tc.show)
+		}
+	}
+}
+
+func TestHomeTemplateShowsCampaignSubscribeCTAOnlyWhenRequested(t *testing.T) {
+	h, err := NewWebHandler(nil, "../../templates")
+	if err != nil {
+		t.Fatalf("parse templates: %v", err)
+	}
+	data := map[string]interface{}{
+		"Sites":                    []models.Site{},
+		"Total":                    0,
+		"TotalSites":               100,
+		"AvgScore":                 40,
+		"ShowCampaignSubscribeCTA": true,
+		"CampaignSubscribeURL":     "/subscribe?utm_source=linkedin&utm_medium=qlimit",
+	}
+
+	var out bytes.Buffer
+	if err := h.tmpl.ExecuteTemplate(&out, "home.html", data); err != nil {
+		t.Fatalf("execute home template: %v", err)
+	}
+	html := out.String()
+	for _, want := range []string{"Run Not Human Search from your agents.", "/subscribe?utm_source=linkedin&amp;utm_medium=qlimit", "Subscribe $9.99/mo"} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected campaign CTA to contain %q", want)
+		}
+	}
+
+	data["ShowCampaignSubscribeCTA"] = false
+	out.Reset()
+	if err := h.tmpl.ExecuteTemplate(&out, "home.html", data); err != nil {
+		t.Fatalf("execute home template without CTA: %v", err)
+	}
+	if strings.Contains(out.String(), "Run Not Human Search from your agents.") {
+		t.Fatalf("campaign CTA should not render without campaign flag")
 	}
 }
 

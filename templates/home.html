@@ -307,6 +307,16 @@
             <a class="primary-link" href="/score">Score Your Site</a>
             <a class="secondary-link" href="/guide">Improve a score</a>
         </div>
+        {{if .ShowCampaignSubscribeCTA}}
+        <div style="max-width:760px;margin:18px auto 0;padding:16px 18px;background:var(--surface);border:1px solid rgba(217,119,87,0.45);border-radius:8px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;text-align:left;">
+            <div style="min-width:240px;flex:1;">
+                <div style="font-size:12px;text-transform:uppercase;color:var(--accent);font-weight:700;letter-spacing:.08em;margin-bottom:6px;">API access</div>
+                <div style="color:var(--text);font-weight:700;margin-bottom:4px;">Run Not Human Search from your agents.</div>
+                <div style="color:var(--text-muted);font-size:13px;line-height:1.5;">Unlimited search includes human access plus an API key for recurring agent and MCP workflows.</div>
+            </div>
+            <a href="{{.CampaignSubscribeURL}}" style="display:inline-block;background:var(--accent);color:#0d0d0e;text-decoration:none;padding:11px 16px;border-radius:6px;font-weight:700;font-size:14px;white-space:nowrap;">Subscribe $9.99/mo</a>
+        </div>
+        {{end}}
         {{end}}
 
         {{if not .Heading}}

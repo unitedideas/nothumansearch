@@ -26,6 +26,36 @@ type scoreReason struct {
 	Found  bool
 }
 
+const homepagePinnedListingDomain = "bringyour.ai"
+
+func homepagePinDomain(q, category string, page int) string {
+	if q == "" && category == "" && page == 1 {
+		return homepagePinnedListingDomain
+	}
+	return ""
+}
+
+func unfilteredTopPinDomain(category, tag string, hasAPI, hasMCP, hasOpenAPI, hasLLMsTxt bool) string {
+	if category == "" && tag == "" && !hasAPI && !hasMCP && !hasOpenAPI && !hasLLMsTxt {
+		return homepagePinnedListingDomain
+	}
+	return ""
+}
+
+func campaignSubscribeURL(r *http.Request) (string, bool) {
+	if r == nil {
+		return "/subscribe", false
+	}
+	q := r.URL.Query()
+	if strings.ToLower(q.Get("utm_source")) != "linkedin" || strings.ToLower(q.Get("utm_medium")) != "qlimit" {
+		return "/subscribe", false
+	}
+	if r.URL.RawQuery == "" {
+		return "/subscribe", true
+	}
+	return "/subscribe?" + r.URL.RawQuery, true
+}
+
 func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 	funcMap := template.FuncMap{
 		"scoreClass": func(score int) string {
@@ -154,10 +184,11 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := models.SearchParams{
-		Query:    q,
-		Category: category,
-		Limit:    20,
-		Page:     page,
+		Query:     q,
+		Category:  category,
+		PinDomain: homepagePinDomain(q, category, page),
+		Limit:     20,
+		Page:      page,
 	}
 
 	sites, total, err := models.SearchSites(h.DB, params)
@@ -186,20 +217,23 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 			sites = sites[:3]
 		}
 	}
+	subscribeURL, showCampaignSubscribeCTA := campaignSubscribeURL(r)
 
 	data := map[string]interface{}{
-		"Query":        q,
-		"Category":     category,
-		"Sites":        sites,
-		"Total":        total,
-		"Page":         page,
-		"HasNext":      !locked && page*20 < total,
-		"TotalSites":   totalSites,
-		"AvgScore":     avgScore,
-		"PopularTags":  popularTags,
-		"Entitled":     entitled,
-		"Locked":       locked,
-		"AccountEmail": accountEmail,
+		"Query":                    q,
+		"Category":                 category,
+		"Sites":                    sites,
+		"Total":                    total,
+		"Page":                     page,
+		"HasNext":                  !locked && page*20 < total,
+		"TotalSites":               totalSites,
+		"AvgScore":                 avgScore,
+		"PopularTags":              popularTags,
+		"Entitled":                 entitled,
+		"Locked":                   locked,
+		"AccountEmail":             accountEmail,
+		"ShowCampaignSubscribeCTA": showCampaignSubscribeCTA && accountEmail == "",
+		"CampaignSubscribeURL":     subscribeURL,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -394,7 +428,7 @@ func (h *WebHandler) TopPage(w http.ResponseWriter, r *http.Request) {
 		Heading:    "Top 100 Agent-Ready Sites",
 		Subheading: "The sites AI agents can actually use. Ranked by agentic readiness — publish llms.txt, OpenAPI, ai-plugin, MCP, or a structured API to appear here.",
 		OGImage:    "og-top.png",
-		Params:     models.SearchParams{Limit: 100},
+		Params:     models.SearchParams{PinDomain: homepagePinnedListingDomain, Limit: 100},
 	})
 }
 

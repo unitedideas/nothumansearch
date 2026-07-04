@@ -329,14 +329,19 @@ func (h *APIHandler) Top(w http.ResponseWriter, r *http.Request) {
 	if limit > 100 {
 		limit = 100
 	}
+	hasAPI := q.Get("has_api") == "true"
+	hasMCP := q.Get("has_mcp") == "true"
+	hasOpenAPI := q.Get("has_openapi") == "true"
+	hasLLMsTxt := q.Get("has_llms_txt") == "true"
 
 	sites, total, err := models.SearchSites(h.DB, models.SearchParams{
 		Category:   q.Get("category"),
 		Tag:        q.Get("tag"),
-		HasAPI:     q.Get("has_api") == "true",
-		HasMCP:     q.Get("has_mcp") == "true",
-		HasOpenAPI: q.Get("has_openapi") == "true",
-		HasLLMsTxt: q.Get("has_llms_txt") == "true",
+		HasAPI:     hasAPI,
+		HasMCP:     hasMCP,
+		HasOpenAPI: hasOpenAPI,
+		HasLLMsTxt: hasLLMsTxt,
+		PinDomain:  unfilteredTopPinDomain(q.Get("category"), q.Get("tag"), hasAPI, hasMCP, hasOpenAPI, hasLLMsTxt),
 		Limit:      limit,
 		Page:       1,
 	})
