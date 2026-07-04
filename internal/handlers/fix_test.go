@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
+
+	gostripe "github.com/stripe/stripe-go/v82"
 )
 
 func TestScoreFixEligibleRequiresHardSignal(t *testing.T) {
@@ -91,6 +94,173 @@ func TestCommerceQuoteSupportsAPIPlans(t *testing.T) {
 	}
 	if payload.ActivationEndpoint == "" {
 		t.Fatalf("activation endpoint missing")
+	}
+}
+
+func TestCommerceManifestReportsLeadCaptureWhenStripeMissing(t *testing.T) {
+	t.Setenv("STRIPE_SECRET_KEY", "")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
+	t.Cleanup(func() { gostripe.Key = "" })
+
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/commerce.json", nil)
+	rr := httptest.NewRecorder()
+
+	h.CommerceManifest(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		ManualInvoiceFallback bool `json:"manual_invoice_fallback"`
+		AgenticPayments       struct {
+			Ready              bool   `json:"ready"`
+			CatalogReady       bool   `json:"catalog_ready"`
+			CheckoutConfigured bool   `json:"checkout_configured"`
+			WebhookConfigured  bool   `json:"webhook_configured"`
+			Status             string `json:"status"`
+		} `json:"agentic_payments"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	if payload.AgenticPayments.Ready {
+		t.Fatalf("ready = true with no Stripe config")
+	}
+	if !payload.AgenticPayments.CatalogReady {
+		t.Fatalf("catalog_ready = false, want true")
+	}
+	if payload.AgenticPayments.CheckoutConfigured || payload.AgenticPayments.WebhookConfigured {
+		t.Fatalf("checkout/webhook configured with empty env: %#v", payload.AgenticPayments)
+	}
+	if payload.AgenticPayments.Status != "lead_capture" {
+		t.Fatalf("status = %q, want lead_capture", payload.AgenticPayments.Status)
+	}
+	if !payload.ManualInvoiceFallback {
+		t.Fatalf("manual_invoice_fallback = false, want true")
+	}
+}
+
+func TestCommerceManifestReportsLiveCheckoutWhenStripeConfigured(t *testing.T) {
+	t.Setenv("STRIPE_SECRET_KEY", "sk_test_configured")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_configured")
+	t.Cleanup(func() { gostripe.Key = "" })
+
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/commerce.json", nil)
+	rr := httptest.NewRecorder()
+
+	h.CommerceManifest(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("manifest status = %d, want 200; body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		ManualInvoiceFallback bool `json:"manual_invoice_fallback"`
+		AgenticPayments       struct {
+			Ready              bool   `json:"ready"`
+			CheckoutConfigured bool   `json:"checkout_configured"`
+			WebhookConfigured  bool   `json:"webhook_configured"`
+			Status             string `json:"status"`
+		} `json:"agentic_payments"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	if !payload.AgenticPayments.Ready {
+		t.Fatalf("ready = false with Stripe key and webhook configured")
+	}
+	if !payload.AgenticPayments.CheckoutConfigured || !payload.AgenticPayments.WebhookConfigured {
+		t.Fatalf("checkout/webhook not configured: %#v", payload.AgenticPayments)
+	}
+	if payload.AgenticPayments.Status != "live_checkout" {
+		t.Fatalf("status = %q, want live_checkout", payload.AgenticPayments.Status)
+	}
+	if payload.ManualInvoiceFallback {
+		t.Fatalf("manual_invoice_fallback = true, want false")
+	}
+}
+
+func TestFixCheckoutMetadataIncludesAttributionAndProductID(t *testing.T) {
+	metadata := fixCheckoutMetadata("fix_form", "example.com", "buyer@example.com", 42, "https://github.com/acme/site", "report", reportPriceCents, map[string]string{
+		"qc":           "campaign-123",
+		"utm_source":   "linkedin",
+		"utm_medium":   "qlimit",
+		"utm_campaign": "campaign-123",
+	})
+
+	want := map[string]string{
+		"tenant":       "nothumansearch",
+		"product":      "nhs_fix_my_score",
+		"product_id":   "nhs_geo_fix_report",
+		"source":       "fix_form",
+		"tier":         "report",
+		"host":         "example.com",
+		"email":        "buyer@example.com",
+		"email_domain": "example.com",
+		"job_id":       "42",
+		"amount_cents": "2900",
+		"repo_url":     "https://github.com/acme/site",
+		"qc":           "campaign-123",
+		"utm_source":   "linkedin",
+		"utm_medium":   "qlimit",
+		"utm_campaign": "campaign-123",
+	}
+	for key, value := range want {
+		if metadata[key] != value {
+			t.Fatalf("metadata[%s] = %q, want %q; metadata=%#v", key, metadata[key], value, metadata)
+		}
+	}
+}
+
+func TestFixCancelURLPreservesRetryContext(t *testing.T) {
+	h := NewFixHandler(nil, "https://nothumansearch.ai")
+	got := h.fixCancelURL("example.com", "report", "buyer@example.com", map[string]string{
+		"qc":           "campaign-123",
+		"utm_source":   "linkedin",
+		"utm_medium":   "qlimit",
+		"utm_campaign": "campaign-123",
+	})
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse cancel URL: %v", err)
+	}
+	if parsed.Scheme+"://"+parsed.Host+parsed.Path != "https://nothumansearch.ai/fix/example.com" {
+		t.Fatalf("cancel URL path = %s://%s%s", parsed.Scheme, parsed.Host, parsed.Path)
+	}
+	values := parsed.Query()
+	want := map[string]string{
+		"tier":         "report",
+		"email":        "buyer@example.com",
+		"qc":           "campaign-123",
+		"utm_source":   "linkedin",
+		"utm_medium":   "qlimit",
+		"utm_campaign": "campaign-123",
+	}
+	for key, value := range want {
+		if values.Get(key) != value {
+			t.Fatalf("cancel query %s = %q, want %q in %s", key, values.Get(key), value, got)
+		}
+	}
+}
+
+func TestFixCampaignHiddenInputs(t *testing.T) {
+	html := fixCampaignHiddenInputs(map[string]string{
+		"qc":         `campaign-"123"`,
+		"utm_source": "linkedin",
+		"utm_medium": "qlimit",
+	})
+	for _, want := range []string{
+		`name="qc" value="campaign-&#34;123&#34;"`,
+		`name="utm_source" value="linkedin"`,
+		`name="utm_medium" value="qlimit"`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("hidden inputs missing %q in %s", want, html)
+		}
+	}
+	if strings.Contains(html, "utm_campaign") {
+		t.Fatalf("empty attribution should not render utm_campaign input: %s", html)
 	}
 }
 
