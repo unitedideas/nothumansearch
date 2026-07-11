@@ -3,7 +3,7 @@
     "title": "Close out active NHS July 11 full recrawl with aggregate quality proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-11T14:08Z planner probes: tools/full-recrawl.lock exists with pid=11251 started_at=2026-07-11T13:00:08Z/06:00:08 PDT. tools/recrawl-health.log records 2026-07-11 06:00:08 wrapper=full-recrawl event=start, preflight api_status=200 api_ok=1, action=full_pressure workers=10, and remote_start command=/app/crawler_-recrawl_-workers_10. tools/recrawl.log has fresh July 11 crawl lines through 14:07Z and no later Done/NHS full_recrawl complete line; latest completed full recrawl remains 2026-07-10 with Done Success=10188 Failed=366 Total=10554 and wrapper completion at 10:00:56 PDT. Seed refresh completed 2026-07-11 with Done Success=474 Failed=9 Total=483. Public aggregate probes during the active run returned total_sites=4310 avg_score=37 top_category=developer and category buckets developer=1312, ai-tools=921, other=809, data=392, finance=199, productivity=164, ecommerce=159, communication=121, security=115, health=62, jobs=26, education=21, news=8, spam=1. No process environments, raw indexed domains, crawl row ids, discovery candidate domains, tokens, or private customer identifiers were fetched or committed.",
+    "source_ref": "2026-07-11T16:08Z planner probes: tools/full-recrawl.lock exists with pid=11251 started_at=1783774808/2026-07-11 06:00:08 PDT. tools/recrawl-health.log records 2026-07-11 06:00:08 wrapper=full-recrawl event=start, preflight api_status=200 api_ok=1, action=full_pressure workers=10, and remote_start command=/app/crawler_-recrawl_-workers_10. tools/recrawl.log has fresh July 11 crawl lines through 16:08Z and no later Done/NHS full_recrawl complete line; latest completed full recrawl remains 2026-07-10 with Done Success=10188 Failed=366 Total=10554 and wrapper completion at 10:00:56 PDT. Seed refresh completed 2026-07-11 with Done Success=474 Failed=9 Total=483. Public aggregate probes during the active run returned total_sites=4307 avg_score=37 top_category=developer and category buckets developer=1312, ai-tools=921, other=807, data=392, finance=200, productivity=164, ecommerce=158, communication=121, security=113, health=62, jobs=26, education=21, news=8, spam=1. No process environments, raw indexed domains, crawl row ids, discovery candidate domains, tokens, or private customer identifiers were fetched or committed.",
     "priority": 100,
     "public": false,
     "human_gate_kind": "active_recrawl_boundary",
@@ -15,13 +15,13 @@
       "Keep committed proof free of raw domains, URLs, row ids, tokens, private notes, and customer identifiers."
     ],
     "created_at": "2026-07-11T14:08Z",
-    "last_verified_at": "2026-07-11T14:08Z"
+    "last_verified_at": "2026-07-11T16:08Z"
   },
   {
     "title": "Finish NHS API-key commerce handoff and admin traffic aggregate repair after active recrawl clears",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-11T14:08Z planner probes: deploy-gated work is currently blocked by active tools/full-recrawl.lock from 2026-07-11T13:00:08Z. Prior same-day public probes remain the current product gap: /api/v1/api-keys/subscribe GET with Accept:text/html returned HTTP 200 application/json with no browser-readable HTML; /api/v1/quote?product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000, while the unlimited quote returned the same metadata; commerce.json uses agentic_payments endpoints without top-level catalog/quote/checkout compatibility fields; agent.json commerce fields are present; /api/v1/admin/traffic exposes daily, days, errors, errors_last_hour, top_pages, top_referrers but not route_buckets or scanner_pages. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, raw domains, or candidate domains were fetched or committed.",
+    "source_ref": "2026-07-11T16:08Z planner probes: deploy-gated work is currently blocked by active tools/full-recrawl.lock from 2026-07-11 06:00:08 PDT. Current public probes: /api/v1/api-keys/subscribe GET with Accept:text/html returned HTTP 200 content-type application/json, has_html=false, plan_ids=nhs_api_unlimited, top-level response_fields=null, nested subscribe.response_fields is a list, so browser-readable HTML handoff is still missing while JSON remains available. /api/v1/quote?product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; /api/v1/quote?product_id=nhs_api_unlimited returned the same metadata, proving starter product selection is still wrong. commerce.json top-level keys are agentic_payments,currency,manual_invoice_fallback,products,seller,version and agentic_payment endpoint keys are api_activation,api_subscribe,catalog,checkout,quote; agent.json commerce fields were previously present. /api/v1/admin/traffic exposes daily, days, errors, errors_last_hour, top_pages, top_referrers but not route_buckets or scanner_pages, with errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, raw domains, or candidate domains were fetched or committed.",
     "priority": 96,
     "public": true,
     "human_gate_kind": "deploy_required_after_active_recrawl",
@@ -34,13 +34,13 @@
       "After deploy, verify JSON, HTML/content type, manifest, quote, admin traffic, stats, and categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-11T14:08Z"
+    "last_verified_at": "2026-07-11T16:08Z"
   },
   {
     "title": "Review NHS first-check zero-score monitor quarantines from credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-11T14:08Z planner probes: redacted helpers returned monitor active=4, bounded-rerun-zero quarantine=1, first-check-zero quarantine=2, and monitor actions counts=[] for days=30. Current score-fix aggregate count=20: real_candidate pending=10 split dot_com=6 other_tld=4 with age buckets 30d_plus=7, 7_29d=1, and 1_6d=2; test_like pending=5, lead=1, paid=2, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
+    "source_ref": "2026-07-11T16:08Z planner probes: redacted helpers returned monitor active=4, bounded-rerun-zero quarantine=1, first-check-zero quarantine=2, and monitor actions counts=[] for days=30. Current score-fix aggregate count=20: real_candidate pending=10 split dot_com=6 other_tld=4 with age buckets 30d_plus=7, 7_29d=1, and 1_6d=2; test_like pending=5, lead=1, paid=2, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -51,6 +51,6 @@
       "Refresh only aggregate status/reason/count, score-fix status/class buckets, and day/action/count proof."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-11T14:08Z"
+    "last_verified_at": "2026-07-11T16:08Z"
   }
 ]
