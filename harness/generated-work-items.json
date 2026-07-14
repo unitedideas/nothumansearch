@@ -3,7 +3,7 @@
     "title": "Refresh NHS MCP registry and repo-visible aggregate count metadata after July 13 recrawl closeout",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-14T07:08Z planner probes: July 13 full recrawl remains closed. tools/recrawl-health.log records 2026-07-13 10:06:42 post_full_recrawl api_status=200 api_ok=1 plus completion workers=10; tools/recrawl.log records Done Success=10202 Failed=359 Total=10561 and NHS full_recrawl complete; no top-level crawl locks were present, only stale tools/.fly-config Fly CLI lock files. Public /api/v1/stats returned total_sites=4315 avg_score=37 top_category=developer. Public /api/v1/categories returned developer=1312, ai-tools=931, other=804, data=394, finance=197, productivity=163, ecommerce=161, communication=122, security=115, health=60, jobs=26, education=20, news=9, spam=1. Weekly discovery completed 2026-07-13 with Total unique candidates=4128, New domains to crawl=0, already_indexed=4128, and final done marker. Repo-visible stale aggregate count copy remains in tools/mcp-registry/server.json, README.md, templates/about.html, and templates/home.html meta descriptions; templates/home.html AI Dev Jobs positions copy is sibling-product metadata and excluded. Aggregate closeout artifact exists at harness/full-recrawl-closeout-2026-07-13.md. No raw indexed domains, crawl rows, registry credentials, candidate domains, URLs, tokens, or process environments were fetched for committed artifacts.",
+    "source_ref": "2026-07-14T09:08Z planner probes: July 13 full recrawl remains closed. tools/recrawl-health.log records 2026-07-13 10:06:42 post_full_recrawl api_status=200 api_ok=1 plus completion workers=10; tools/recrawl.log records Done Success=10202 Failed=359 Total=10561 and NHS full_recrawl complete; no top-level crawl locks were present, only stale tools/.fly-config Fly CLI lock files. Public /api/v1/stats returned total_sites=4315 avg_score=37 top_category=developer. Public /api/v1/categories returned developer=1312, ai-tools=931, other=804, data=394, finance=197, productivity=163, ecommerce=161, communication=122, security=115, health=60, jobs=26, education=20, news=9, spam=1. Weekly discovery completed 2026-07-13 with Total unique candidates=4128, New domains to crawl=0, already_indexed=4128, and final done marker. Repo-visible stale aggregate count copy remains in tools/mcp-registry/server.json, README.md, templates/about.html, and templates/home.html meta descriptions; templates/home.html AI Dev Jobs positions copy is sibling-product metadata and excluded. Aggregate closeout artifact exists at harness/full-recrawl-closeout-2026-07-13.md. No raw indexed domains, crawl rows, registry credentials, candidate domains, URLs, tokens, or process environments were fetched for committed artifacts.",
     "priority": 96,
     "public": true,
     "human_gate_kind": "public_action_lock_required",
@@ -15,13 +15,13 @@
       "Verify registry.modelcontextprotocol.io reflects the new version/count after publish and commit aggregate-only proof."
     ],
     "created_at": "2026-07-05T17:08Z",
-    "last_verified_at": "2026-07-14T07:08:00Z"
+    "last_verified_at": "2026-07-14T09:08:00Z"
   },
   {
     "title": "Finish NHS API-key commerce handoff and admin traffic aggregate repair after July 13 recrawl closeout",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-14T07:08Z planner probes: July 13 full recrawl is closed and no top-level crawl locks were present. Public /api/v1/api-keys/subscribe GET with Accept:text/html returned HTTP 200 content-type application/json, has_html=false, body_len=802, plan_ids=nhs_api_unlimited, top-level response_fields=null, nested subscribe.response_fields is a list, so browser-readable HTML handoff remains missing while JSON remains available. /api/v1/quote?product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; /api/v1/quote?product_id=nhs_api_unlimited returned the same unlimited metadata, proving starter product selection remains wrong. /api/v1/admin/traffic exposes daily, days, errors, errors_last_hour, top_pages, top_referrers but not route_buckets or scanner_pages; errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, raw domains, or candidate domains were fetched or committed.",
+    "source_ref": "2026-07-14T09:08Z planner probes: July 13 full recrawl is closed and no top-level crawl locks were present. Public /api/v1/api-keys/subscribe GET with Accept:text/html returned HTTP 200 content-type application/json, has_html=false, body_len=802, plan_ids=nhs_api_unlimited, top-level response_fields=null, nested subscribe.response_fields is a list, so browser-readable HTML handoff remains missing while JSON remains available. /api/v1/quote?product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; /api/v1/quote?product_id=nhs_api_unlimited returned the same unlimited metadata, proving starter product selection remains wrong. /api/v1/admin/traffic exposes daily, days, errors, errors_last_hour, top_pages, top_referrers but not route_buckets or scanner_pages; errors_last_hour=0. No raw checkout URLs, buyer emails, payment ids, IPs, user agents, referers, private queries, tokens, process environments, raw domains, or candidate domains were fetched or committed.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -34,13 +34,13 @@
       "After deploy, verify JSON, HTML/content type, manifest, quote, admin traffic, stats, and categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-14T07:08:00Z"
+    "last_verified_at": "2026-07-14T09:08:00Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-14T07:08Z planner redacted helpers: monitor-status aggregate returned active=4, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions returned counts=[] for days=30. score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=2, 1_6d=1; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row IDs, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
+    "source_ref": "2026-07-14T09:08Z planner redacted helpers: monitor-status aggregate returned active=4, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions returned counts=[] for days=30. score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=2, 1_6d=1; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers. No raw monitor domains, URLs, row IDs, emails, tokens, review notes, payment identifiers, customer identifiers, score-fix hosts, or payment rows were fetched or committed.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -52,6 +52,6 @@
       "Refresh only aggregate status/reason/count, score-fix status/class buckets, and day/action/count proof."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-14T07:08:00Z"
+    "last_verified_at": "2026-07-14T09:08:00Z"
   }
 ]
