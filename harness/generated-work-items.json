@@ -3,7 +3,7 @@
     "title": "Refresh NHS MCP registry and repo-visible aggregate count metadata after July 18 recrawl and seed refresh",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-19T05:08Z planner probes: July 18 full_recrawl completed at 09:52:05 PT; recrawl.log summary Success=10223 Failed=344 Total=10567. July 18 seed_refresh completed at 05:38:51 PT with Success=477 Failed=6 Total=483. No top-level crawl locks remain; only Fly CLI internal tools/.fly-config locks are present. Public stats: total_sites=4313 avg_score=37 top_category=developer. Category counts: developer=1319 avg_score=38, ai-tools=924 avg_score=43, other=814 avg_score=28, data=388 avg_score=33, finance=199 avg_score=44, spam=1 avg_score=0. Weekly discovery completed 2026-07-13 with Total unique candidates=4128 New domains to crawl=0. Stale NHS count copy remains in tools/mcp-registry/server.json, README.md, templates/about.html, and templates/home.html; templates/home.html also contains a sibling ADB positions count that is not NHS metadata.",
+    "source_ref": "2026-07-19T07:09Z planner probes: July 18 full_recrawl completed at 09:52:05 PT; recrawl.log summary Success=10223 Failed=344 Total=10567. July 18 seed_refresh completed at 05:38:51 PT with Success=477 Failed=6 Total=483. No top-level crawl locks remain; only Fly CLI internal tools/.fly-config locks are present. Public stats: total_sites=4313 avg_score=37 top_category=developer. Category counts: developer=1319 avg_score=38, ai-tools=924 avg_score=43, other=814 avg_score=28, data=388 avg_score=33, finance=199 avg_score=44, productivity=162 avg_score=40. Weekly discovery completed 2026-07-13 with Total unique candidates=4128 New domains to crawl=0. Stale NHS count copy remains in tools/mcp-registry/server.json, README.md, templates/about.html, and templates/home.html; templates/home.html also contains a sibling ADB positions count that is not NHS metadata.",
     "priority": 96,
     "public": true,
     "human_gate_kind": "public_action_lock_required",
@@ -14,13 +14,13 @@
       "Verify live metadata surfaces and MCP registry publish after deploy/publish."
     ],
     "created_at": "2026-07-05T17:08:00Z",
-    "last_verified_at": "2026-07-19T05:08:17Z"
+    "last_verified_at": "2026-07-19T07:09:09Z"
   },
   {
     "title": "Repair NHS API-key commerce handoff and admin traffic aggregates after July 18 recrawl closeout",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-19T05:08Z planner probes: recrawl boundary is closed. Subscribe GET with Accept:text/html returned HTTP/2 200 content-type application/json body_len=802 has_html=false content_type=application/json plan_ids=nhs_api_unlimited. Starter quote request for product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
+    "source_ref": "2026-07-19T07:09Z planner probes: recrawl boundary is closed. Subscribe GET with Accept:text/html returned HTTP/2 200 content-type application/json body_len=802 has_html=false content_type=application/json plan_ids=nhs_api_unlimited nested_response_fields_shape=list. Starter quote request for product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; unlimited quote returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -32,13 +32,13 @@
       "After deploy, verify JSON subscribe, HTML handoff, quote selection, admin traffic keys, stats, and categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-19T05:08:17Z"
+    "last_verified_at": "2026-07-19T07:09:09Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-19T05:08Z planner probes: monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions returned counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers.",
+    "source_ref": "2026-07-19T07:09Z planner probes: monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions returned counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -50,6 +50,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-19T05:08:17Z"
+    "last_verified_at": "2026-07-19T07:09:09Z"
   }
 ]
