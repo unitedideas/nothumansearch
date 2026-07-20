@@ -3,7 +3,7 @@
     "title": "Refresh NHS MCP registry and repo-visible aggregate count metadata after July 19 recrawl",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-20T06:08Z planner probes: local time is 2026-07-19 23:08 PT, before the Monday 05:00 PT discovery trigger, so July 13 discovery remains current. July 19 full_recrawl completed at 09:47:31 PT; tools/recrawl-health.log records post_full_recrawl api_status=200 api_ok=1 and completion workers=10. recrawl.log summary Success=10227 Failed=344 Total=10571. Same-day seed_refresh completed at 05:38:29 PT with Success=477 Failed=6 Total=483. No active top-level crawl locks are present; only stale tools/.fly-config flyctl locks remain and are not crawl locks. Public stats: total_sites=4310 avg_score=37 top_category=developer. Category counts: developer=1318 avg=38, ai-tools=927 avg=43, other=816 avg=28, data=387 avg=33, finance=198 avg=44, productivity=160 avg=40, ecommerce=155 avg=41, communication=122 avg=39, security=112 avg=40, health=60 avg=43, jobs=26 avg=42, education=20 avg=50, news=8 avg=51, spam=1 avg=0. Weekly discovery last completed 2026-07-13 with Total unique candidates=4128 New domains to crawl=0. Stale NHS count copy remains in README.md, templates/about.html, templates/home.html meta descriptions, and tools/mcp-registry/server.json; templates/home.html AI Dev Jobs positions copy is sibling-product metadata and excluded.",
+    "source_ref": "2026-07-20T08:08Z planner probes: local time is 2026-07-20 01:07 PT, before the Monday 05:00 PT discovery trigger, so July 13 discovery remains current. July 19 full_recrawl completed at 09:47:31 PT; tools/recrawl-health.log records post_full_recrawl api_status=200 api_ok=1 and completion workers=10. recrawl.log summary Success=10227 Failed=344 Total=10571. Same-day seed_refresh completed at 05:38:29 PT with Success=477 Failed=6 Total=483. No active top-level crawl locks are present; only stale tools/.fly-config flyctl locks remain and are not crawl locks. Public stats: total_sites=4310 avg_score=37 top_category=developer. Category counts: developer=1318 avg=38, ai-tools=927 avg=43, other=816 avg=28, data=387 avg=33, finance=198 avg=44, productivity=160 avg=40, ecommerce=155 avg=41, communication=122 avg=39, security=112 avg=40, health=60 avg=43, jobs=26 avg=42, education=20 avg=50, news=8 avg=51, spam=1 avg=0. Weekly discovery last completed 2026-07-13 with Total unique candidates=4128 New domains to crawl=0. Stale NHS count copy remains in README.md, templates/about.html, templates/home.html meta descriptions, and tools/mcp-registry/server.json; templates/home.html AI Dev Jobs positions copy is sibling-product metadata and excluded.",
     "priority": 96,
     "public": true,
     "human_gate_kind": "public_action_lock_required",
@@ -14,13 +14,13 @@
       "Verify live metadata surfaces and MCP registry publish after deploy/publish."
     ],
     "created_at": "2026-07-05T17:08:00Z",
-    "last_verified_at": "2026-07-20T06:08:00Z"
+    "last_verified_at": "2026-07-20T08:08:00Z"
   },
   {
     "title": "Repair NHS API-key commerce handoff and admin traffic aggregates after July 19 recrawl closeout",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-20T06:08Z planner probes: recrawl boundary is closed. Subscribe GET with Accept:text/html returned HTTP/2 200 content-type application/json body_len=802 has_html=false plan_ids=nhs_api_unlimited top_response_fields_shape=NoneType nested_response_fields_shape=list, so machine-readable JSON remains available but browser-readable HTML handoff remains missing. Starter quote request for product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; unlimited quote returned product_id=nhs_api_unlimited with the same unlimited metadata. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
+    "source_ref": "2026-07-20T08:08Z planner probes: recrawl boundary is closed. Subscribe GET with Accept:text/html returned HTTP/2 200 content-type application/json body_len=802 has_html=false plan_ids=nhs_api_unlimited top_response_fields_shape=NoneType nested_response_fields_shape=list, so machine-readable JSON remains available but browser-readable HTML handoff remains missing. Starter quote request for product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; unlimited quote returned product_id=nhs_api_unlimited with the same unlimited metadata. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -32,13 +32,13 @@
       "After deploy, verify JSON subscribe, HTML handoff, quote selection, admin traffic keys, stats, and categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-20T06:08:00Z"
+    "last_verified_at": "2026-07-20T08:08:00Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-20T06:08Z planner redacted helpers: monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions returned counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers.",
+    "source_ref": "2026-07-20T08:08Z planner redacted helpers: monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions returned counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because neither nhs-admin-api-key nor nothumansearch-admin-key was available, while this planner runtime can read aggregate helpers.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -50,6 +50,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-20T06:08:00Z"
+    "last_verified_at": "2026-07-20T08:08:00Z"
   }
 ]
