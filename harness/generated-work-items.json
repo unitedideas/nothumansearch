@@ -3,7 +3,7 @@
     "title": "Refresh NHS post-recrawl discovery-quality and stale aggregate metadata proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-21T17:08Z planner probes: July 21 full_recrawl closed in tools/recrawl-health.log at 09:58:24 PDT with post_full_recrawl api_status=200 api_ok=1 and completion phase=full_recrawl workers=10 dry_run=0. No top-level crawl lock is present. July 21 seed_refresh completed at 05:38:59 PDT; seed-refresh.log summary Success=477 Failed=6 Total=483. Public aggregate probes returned total_sites=4320 avg_score=37 top_category=developer; categories include developer=1323 avg=38, ai-tools=923 avg=43, other=830 avg=28, data=389 avg=33, finance=196 avg=43, productivity=161 avg=40, spam=1 avg=0. Weekly discovery completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0. Stale NHS count copy remains in README.md, templates/about.html, templates/home.html meta copy, and tools/mcp-registry/server.json; templates/home.html also contains a sibling ADB positions count that is not NHS metadata.",
+    "source_ref": "2026-07-21T20:08Z planner probes: July 21 full_recrawl closed in tools/recrawl-health.log at 09:58:24 PDT with post_full_recrawl api_status=200 api_ok=1 and completion phase=full_recrawl workers=10 dry_run=0. No top-level crawl lock is present. July 21 seed_refresh completed at 05:38:59 PDT. Public aggregate probes returned total_sites=4320 avg_score=37 top_category=developer; categories include developer=1323 avg=38, ai-tools=923 avg=43, other=830 avg=28, data=389 avg=33, finance=196 avg=43, productivity=161 avg=40, ecommerce=153 avg=41, communication=122 avg=39. Weekly discovery completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0. Stale NHS count copy remains in README.md, templates/about.html, templates/home.html meta copy, and tools/mcp-registry/server.json; sibling ADB positions copy is not NHS metadata.",
     "priority": 98,
     "public": false,
     "human_gate_kind": "none",
@@ -16,31 +16,32 @@
       "Commit aggregate proof and metadata-copy fixes without raw domains, URLs, row ids, emails, payment ids, or process environments."
     ],
     "created_at": "2026-07-20T19:08:31Z",
-    "last_verified_at": "2026-07-21T17:08:15Z"
+    "last_verified_at": "2026-07-21T20:08:53Z"
   },
   {
     "title": "Repair NHS API-key commerce handoff and admin traffic aggregates after recrawl boundary closes",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-21T17:08Z planner probes: July 21 full-recrawl boundary is closed, so deploy-required repair is unblocked. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 json_parse=true plans=[nhs_api_unlimited] has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing and only the unlimited plan is advertised. Starter quote request for product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount=999 total=999 payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000; unlimited quote returned product_id=nhs_api_unlimited with the same populated metadata. This proves product selection is wrong, not that quote metadata is empty. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
+    "source_ref": "2026-07-21T20:08Z planner probes: July 21 full-recrawl boundary is closed, so deploy-required repair is unblocked. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 has_html=false plans=null; machine-readable JSON is available but browser-readable HTML handoff is missing and the plan list is not a useful HTML handoff. Starter quote request for product_id=nhs_api_starter returned product_id=nhs_api_unlimited with amount_cents=null total_cents=null payment_mode=stripe_checkout monthly_limit=50000; unlimited quote returned product_id=nhs_api_unlimited with amount_cents=null total_cents=null payment_mode=stripe_checkout monthly_limit=50000. This proves product selection is wrong and quote price fields are currently null. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
     "acceptance_criteria": [
       "Preserve working JSON subscribe, catalog, quote, and agent commerce surfaces.",
       "Repair starter vs unlimited quote product selection and verify both quote responses separately with requested product_id matching returned product_id.",
+      "Restore non-null quote amount/total fields for each API-key plan or document the expected replacement fields in the contract tests.",
       "Add browser-readable HTML/content negotiation for GET /api/v1/api-keys/subscribe when Accept:text/html is requested.",
       "Repair aggregate admin traffic route_buckets and scanner_pages without raw identifiers.",
-      "After deploy, verify JSON subscribe, HTML handoff, quote selection, admin traffic keys, stats, and categories."
+      "After deploy, verify JSON subscribe, HTML handoff, quote selection, quote price fields, admin traffic keys, stats, and categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-21T17:08:15Z"
+    "last_verified_at": "2026-07-21T20:08:53Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-21T17:08Z redacted helpers: monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because admin-key aliases were unavailable, while this planner runtime can read aggregate helpers.",
+    "source_ref": "2026-07-21T20:08Z redacted helpers: monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed in executor runtime because admin-key aliases were unavailable, while this planner runtime can read aggregate helpers.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -52,6 +53,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-21T17:08:15Z"
+    "last_verified_at": "2026-07-21T20:08:53Z"
   }
 ]
