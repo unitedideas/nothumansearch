@@ -3,7 +3,7 @@
     "title": "Close out active July 25 NHS full-recrawl with aggregate quality proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-25T13:07Z planner probes: current local time 06:07 PDT. tools/full-recrawl.lock exists with pid=73104 and started_at=1784984405. tools/recrawl-health.log has 2026-07-25 06:00:05 event=start phase=full_recrawl, preflight api_status=200 api_ok=1, action=full_pressure workers=10, and remote_start command=/app/crawler_-recrawl_-workers_10, with no post_full_recrawl or completion line yet. July 25 seed_refresh completed at 05:38:30 with Success=477 Failed=6 Total=483 and api_status=200 api_ok=1. Weekly discovery completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0. Public aggregate probes during the active boundary returned total_sites=4402 avg_score=38 top_category=developer; categories include developer=1328 avg=38, ai-tools=937 avg=43, other=861 avg=29, data=392 avg=33, finance=199 avg=44, productivity=163 avg=41, ecommerce=158 avg=41, communication=125 avg=39.",
+    "source_ref": "2026-07-25T15:08Z planner probes: tools/full-recrawl.lock exists with pid=73104 and started_at=1784984405. tools/recrawl-health.log has 2026-07-25 06:00:05 event=start phase=full_recrawl, preflight api_status=200 api_ok=1, action=full_pressure workers=10, and remote_start command=/app/crawler_-recrawl_-workers_10, with no post_full_recrawl or completion line yet. July 25 seed_refresh completed at 05:38:30 with Success=477 Failed=6 Total=483 and api_status=200 api_ok=1. Weekly discovery completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0. Public aggregate probes during the active boundary returned total_sites=4401 avg_score=38 top_category=developer; categories include developer=1329 avg=38, ai-tools=936 avg=43, other=861 avg=29, data=392 avg=33, finance=199 avg=44, productivity=163 avg=41, ecommerce=157 avg=41, communication=125 avg=39.",
     "priority": 99,
     "public": false,
     "human_gate_kind": "none",
@@ -15,13 +15,13 @@
       "Keep committed proof aggregate-only with no raw domains, URLs, row ids, emails, payment ids, tokens, or process environments."
     ],
     "created_at": "2026-07-25T13:07:50Z",
-    "last_verified_at": "2026-07-25T13:07:50Z"
+    "last_verified_at": "2026-07-25T15:08:26Z"
   },
   {
     "title": "Repair NHS API-key commerce handoff and admin traffic aggregates after active recrawl closes",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-25T13:07Z planner probes: deploy-required repair is blocked by the active July 25 full-recrawl boundary until wrapper completion or stale-lock proof. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 json_parse=true has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing, plans only include id=nhs_api_unlimited, and subscribe.allowed_plans lists starter, pro, scale. POST /api/v1/quote returned product_id=nhs_api_unlimited for requested nhs_api_starter, nhs_api_pro, nhs_api_scale, and nhs_api_unlimited; all responses had plan=unlimited amount=999 total=999 amount_cents=null total_cents=null payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
+    "source_ref": "2026-07-25T15:08Z planner probes: deploy-required repair is blocked by the active July 25 full-recrawl boundary until wrapper completion or stale-lock proof. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 json_parse=true has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing, plans only include id=nhs_api_unlimited, and subscribe.allowed_plans lists starter, pro, scale. POST /api/v1/quote returned product_id=nhs_api_unlimited for requested nhs_api_starter, nhs_api_pro, nhs_api_scale, and nhs_api_unlimited; all responses had plan=unlimited amount=999 total=999 amount_cents=null total_cents=null payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -35,13 +35,13 @@
       "After deploy, verify JSON subscribe, HTML handoff, POST /api/v1/quote selection, quote price fields, admin traffic keys, stats, and categories."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-25T13:07:50Z"
+    "last_verified_at": "2026-07-25T15:08:26Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-25T13:07Z planner probes: Keychain aliases nhs-admin-api-key and nothumansearch-admin-key are SET in this planner runtime, but prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed because admin-key aliases were unavailable in that executor runtime. Redacted helpers returned monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned.",
+    "source_ref": "2026-07-25T15:08Z planner probes: Keychain aliases nhs-admin-api-key and nothumansearch-admin-key are SET in this planner runtime, but prior executor ops/ledgers/work_machine_fcedfb84df6bfca3.md failed closed because admin-key aliases were unavailable in that executor runtime. Redacted helpers returned monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -53,6 +53,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-06-19T07:08:26Z",
-    "last_verified_at": "2026-07-25T13:07:50Z"
+    "last_verified_at": "2026-07-25T15:08:26Z"
   }
 ]
