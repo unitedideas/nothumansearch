@@ -3,7 +3,7 @@
     "title": "Close out active July 26 NHS full-recrawl boundary with aggregate proof",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-26T13:08Z planner probes: local time 2026-07-26 06:07 PDT. tools/full-recrawl.lock exists with pid=83561 and started_at=1785070805. tools/recrawl-health.log shows 2026-07-26 06:00:05 full_recrawl start, 06:00:06 preflight api_status=200 api_ok=1, health_outcome action=full_pressure workers=10, and remote_start command=/app/crawler_-recrawl_-workers_10; no 2026-07-26 post_full_recrawl or completion line was present at probe time. The same morning seed-refresh completed at 05:39:07 with api_status=200 api_ok=1. Public aggregate stats probe during the active boundary returned total_sites=4400 avg_score=37 top_category=developer. Weekly discovery latest completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0.",
+    "source_ref": "2026-07-26T15:08Z planner probes: local time 2026-07-26 08:08 PDT. tools/full-recrawl.lock exists with pid=83561 and started_at=1785070805. tools/recrawl-health.log shows 2026-07-26 06:00:05 full_recrawl start, 06:00:06 preflight api_status=200 api_ok=1, health_outcome action=full_pressure workers=10, and remote_start command=/app/crawler_-recrawl_-workers_10; no 2026-07-26 post_full_recrawl or completion line was present at probe time. The same morning seed-refresh completed at 05:39:07 with api_status=200 api_ok=1 and seed-refresh totals Success=476 Failed=7 Total=483. Public aggregate stats probe during the active boundary returned total_sites=4401 avg_score=38 top_category=developer; top categories developer=1328, ai-tools=938, other=867, data=393, finance=198. Weekly discovery latest completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0.",
     "priority": 99,
     "public": true,
     "human_gate_kind": "active_recrawl_boundary",
@@ -14,13 +14,13 @@
       "Do not inspect process environments or print raw recrawl rows, domains, URLs beyond public product surfaces, row ids, emails, payment ids, tokens, or private notes."
     ],
     "created_at": "2026-07-26T13:08:00Z",
-    "last_verified_at": "2026-07-26T13:08:00Z"
+    "last_verified_at": "2026-07-26T15:08:00Z"
   },
   {
     "title": "Repair NHS API-key commerce handoff and admin traffic aggregates after recrawl clears",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-26T13:08Z planner probes: deploy-required repair remains valid but should wait until the active full-recrawl boundary clears. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing, plans only include id=nhs_api_unlimited, and subscribe.allowed_plans lists starter, pro, scale. POST /api/v1/quote returned product_id=nhs_api_unlimited for requested nhs_api_starter, nhs_api_pro, nhs_api_scale, and nhs_api_unlimited; all responses had amount=999 total=999 amount_cents=null total_cents=null payment_mode=stripe_checkout. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
+    "source_ref": "2026-07-26T15:08Z planner probes: deploy-required repair remains valid but should wait until the active full-recrawl boundary clears. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing, plans only include id=nhs_api_unlimited, and subscribe.allowed_plans lists starter, pro, scale. POST /api/v1/quote returned product_id=nhs_api_unlimited for requested nhs_api_starter, nhs_api_pro, nhs_api_scale, and nhs_api_unlimited; all responses had amount=999 total=999 amount_cents=null total_cents=null payment_mode=stripe_checkout. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_after_recrawl_boundary_clears",
@@ -33,13 +33,13 @@
       "After deploy, verify JSON subscribe, HTML handoff, POST /api/v1/quote selection, quote price fields, admin traffic keys, stats, and categories."
     ],
     "created_at": "2026-07-26T13:08:00Z",
-    "last_verified_at": "2026-07-26T13:08:00Z"
+    "last_verified_at": "2026-07-26T15:08:00Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-26T13:08Z planner probes: redacted helpers succeeded in this planner runtime. Monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor credential failures may still be executor-runtime-specific, so keep this as credential-capable private work.",
+    "source_ref": "2026-07-26T15:08Z planner probes: redacted helpers succeeded in this planner runtime. Monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions counts=[] for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor credential failures may still be executor-runtime-specific, so keep this as credential-capable private work.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -51,6 +51,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-07-26T13:08:00Z",
-    "last_verified_at": "2026-07-26T13:08:00Z"
+    "last_verified_at": "2026-07-26T15:08:00Z"
   }
 ]
