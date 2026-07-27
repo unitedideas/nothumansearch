@@ -3,7 +3,7 @@
     "title": "Refresh NHS post-recrawl aggregate proof and stale count metadata",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-27T07:08Z planner probes: July 26 full-recrawl boundary remains closed in tools/recrawl-health.log with 2026-07-26 09:49:06 post_full_recrawl health_check api_status=200 api_ok=1 and completion phase=full_recrawl workers=10 dry_run=0; bounded lock scan found no active recrawl/seed/discovery lock. Public aggregate probes returned total_sites=4412 avg_score=38 top_category=developer; categories include developer=1327 avg=38, ai-tools=939 avg=43, other=871 avg=29, data=394 avg=33, finance=199 avg=43, productivity=163 avg=41, ecommerce=160 avg=41, communication=124 avg=39, security=119 avg=39, health=55 avg=43. July 26 seed-refresh completed at 05:39:07 with api_status=200 api_ok=1. Weekly discovery latest completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0; July 27 Monday run is not yet due in the local worker clock, which is 2026-07-27 00:08 PT. Stale aggregate count scan found README.md still says 1,900+ agent-first sites, templates/about.html still says 1,900+ sites, templates/home.html meta descriptions still say 8,000+ agent-ready sites, and tools/mcp-registry/server.json still says 4,100+ sites.",
+    "source_ref": "2026-07-27T09:08Z planner probes: July 26 full-recrawl boundary remains closed in tools/recrawl-health.log with 2026-07-26 09:49:06 post_full_recrawl health_check api_status=200 api_ok=1 and completion phase=full_recrawl workers=10 dry_run=0; bounded lock scan found no active recrawl/seed/discovery lock. Public aggregate probes returned total_sites=4412 avg_score=38 top_category=developer; categories include developer=1327 avg=38, ai-tools=939 avg=43, other=871 avg=29, data=394 avg=33, finance=199 avg=43, productivity=163 avg=41, ecommerce=160 avg=41, communication=124 avg=39, security=119 avg=39, health=55 avg=43. July 26 seed-refresh completed at 05:39:07 with api_status=200 api_ok=1. Weekly discovery latest completed 2026-07-20 with Total unique candidates=3551 and New domains to crawl=0; July 27 Monday run is not yet due in the local worker clock, which is 2026-07-27 02:08 PT. Stale aggregate count scan found README.md still says 1,900+ agent-first sites, templates/about.html still says 1,900+ sites, templates/home.html meta descriptions still say 8,000+ agent-ready sites, and tools/mcp-registry/server.json still says 4,100+ sites.",
     "priority": 98,
     "public": true,
     "human_gate_kind": "public_action_lock_required",
@@ -15,13 +15,13 @@
       "Keep committed proof aggregate-only with no raw domains, URLs beyond public product surfaces, row ids, emails, payment ids, tokens, or process environments."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-27T07:08:00Z"
+    "last_verified_at": "2026-07-27T09:08:00Z"
   },
   {
     "title": "Repair NHS API-key commerce handoff and admin traffic aggregates",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-27T07:08Z planner probes: July 26 full-recrawl boundary is closed and no active crawl lock exists, so deploy-required repair remains unblocked. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing, plans only include id=nhs_api_unlimited, subscribe.allowed_plans lists starter, pro, scale, and nested subscribe.response_fields is a list. POST /api/v1/quote returned product_id=nhs_api_unlimited for requested nhs_api_starter, nhs_api_pro, nhs_api_scale, and nhs_api_unlimited; all responses had amount=999 total=999 amount_cents=null total_cents=null payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
+    "source_ref": "2026-07-27T09:08Z planner probes: July 26 full-recrawl boundary is closed and no active crawl lock exists, so deploy-required repair remains unblocked. Subscribe GET with Accept:text/html returned HTTP 200 content-type application/json body_len=802 has_html=false; machine-readable JSON is available but browser-readable HTML handoff is missing, plans only include id=nhs_api_unlimited, subscribe.allowed_plans lists starter, pro, scale, and nested subscribe.response_fields is a list. POST /api/v1/quote returned product_id=nhs_api_unlimited for requested nhs_api_starter, nhs_api_pro, nhs_api_scale, and nhs_api_unlimited; all responses had amount=999 total=999 amount_cents=null total_cents=null payment_mode=stripe_checkout checkout_method=POST monthly_limit=50000. Admin traffic aggregate keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0.",
     "priority": 94,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -34,13 +34,13 @@
       "After deploy, verify JSON subscribe, HTML handoff, POST /api/v1/quote selection, quote price fields, admin traffic keys, stats, and categories."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-27T07:08:00Z"
+    "last_verified_at": "2026-07-27T09:08:00Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-27T07:08Z planner probes: redacted helpers succeeded in this planner runtime. Monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions count remains empty for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor credential failures may still be executor-runtime-specific, so keep this as credential-capable private work.",
+    "source_ref": "2026-07-27T09:08Z planner probes: redacted helpers succeeded in this planner runtime. Monitor-status aggregate active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2; monitor-actions count remains empty for days=30. Score-fix aggregate count=20 with real_candidate pending=10 split dot_com=6 other_tld=4 and age buckets 30d_plus=7, 7_29d=3; test_like pending=5, paid=2, lead=1, internal_test=2 foundry_owned. Prior executor credential failures may still be executor-runtime-specific, so keep this as credential-capable private work.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -52,6 +52,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-27T07:08:00Z"
+    "last_verified_at": "2026-07-27T09:08:00Z"
   }
 ]
