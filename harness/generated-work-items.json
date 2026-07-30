@@ -1,27 +1,27 @@
 [
   {
-    "title": "Verify today's deferred crawl cycle through the installed secondary retries",
+    "title": "Close out today's active full-recrawl boundary before deploy work",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-30T18:16Z aggregate planner evidence: sync-state automation-events records cadence-not-elapsed skips for nothumansearch-seed-refresh at 05:30 PT and nothumansearch-full-recrawl at 06:00 PT after July 29 recovery runs. The Mac remained awake and the health guard reported api_status=200 api_ok=1 recrawl_active=0 through 10:59 PT. No seed-refresh, full-recrawl, or discovery lock is present. Both launchd jobs are loaded with last exit code 0 and installed secondary windows at 11:30 PT for seed refresh and 12:30 PT for full recrawl. The last successful seed refresh completed July 29 at 07:41 PT and the last successful full recrawl completed July 29 at 16:46 PT; live health remains 200.",
+    "source_ref": "2026-07-30T20:08Z aggregate planner evidence: the installed 11:30 PT seed-refresh retry completed at 11:40:58 with api_status=200 api_ok=1 workers=10 and cleared its lock. The installed 12:30 PT full-recrawl retry then started non-overlapping at 12:30:07, passed preflight health with api_status=200 api_ok=1, selected workers=10, and recorded remote_start. tools/full-recrawl.lock is present with pid=69491 and started_at=1785439807; the health guard reports recrawl_active=1 and api_status=200 through 13:00 PT. Live health is 200. The mid-run public aggregate is total_sites=4364 avg_score=38 and must not be treated as final closeout proof.",
     "priority": 100,
     "public": false,
-    "human_gate_kind": "installed_secondary_retry_observation",
+    "human_gate_kind": "active_recrawl_boundary",
     "acceptance_criteria": [
-      "Do not trigger a manual seed refresh or full recrawl. At or after the installed 11:30 PT retry window, verify that launchd wakes nothumansearch-seed-refresh, the sync-state lease is claimed and re-verified, recrawl-health records start/preflight/remote_start, and the run reaches aggregate completion with api_ok=1 and its lock cleared.",
-      "If seed refresh completes, observe the installed 12:30 PT full-recrawl retry without overlapping the seed run; verify its lease, start, health preflight, bounded worker settings, aggregate completion, api_ok=1, and lock cleanup.",
-      "If either retry skips again, does not start, overlaps, exits without a completion record, or leaves a stale lock, repair the durable launchd-to-sync-state cadence/lease/run path and verify the repair through the installed live path; do not substitute a manual broad crawl.",
-      "Record only aggregate run timing, cadence decision, lease ownership, wrapper event classes, success/failure totals, lock cleanup, and public health/stats/categories proof. Do not copy per-domain crawl rows or raw customer identifiers.",
-      "Keep deploy-required NHS product work blocked while a retry crawl boundary is active; unblock it only after the wrapper completion or a verified no-run repair closeout."
+      "Do not trigger another seed refresh or full recrawl. Observe the active installed full-recrawl run through the repo-local wrapper and sync-state leased path.",
+      "Require recrawl-health to record post_full_recrawl health_check and completion with api_ok=1, then verify tools/full-recrawl.lock is cleared.",
+      "After completion, capture only aggregate success/failure totals plus public health, stats, and categories. Do not copy per-domain crawl rows or raw customer identifiers.",
+      "If the wrapper exits without completion, public health fails, or the lock becomes stale, repair the durable launchd-to-sync-state lease/run path and rerun the original failing installed path; do not substitute an ad hoc broad crawl.",
+      "Keep deploy-required NHS product work blocked until wrapper completion and lock cleanup are observed."
     ],
     "created_at": "2026-07-30T18:16:00Z",
-    "last_verified_at": "2026-07-30T18:16:00Z"
+    "last_verified_at": "2026-07-30T20:08:44Z"
   },
   {
     "title": "Align NHS canonical API plan contract, browser handoff, and traffic aggregates",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-30T18:16Z planner probes plus marketing/api-unlimited-plan-discovery-drift-2026-07-29.md: live health is 200 and no crawl lock is present, but today's installed secondary crawl retries are still pending after cadence-not-elapsed primary skips, so deployment remains gated on their closeout. Live catalog and subscribe advertise only nhs_api_unlimited at $9.99/mo, while subscribe.allowed_plans still names starter/pro/scale and repo llms/OpenAPI advertise retired $19/$49/$199 tiers. POST /api/v1/quote for nhs_api_starter returned nhs_api_unlimited at amount=999 total=999 payment_mode=stripe_checkout monthly_limit=50000. GET /api/v1/api-keys/subscribe with Accept:text/html returned HTTP 200 application/json with no top-level checkout URL. Admin traffic still lacks route_buckets and scanner_pages with errors_last_hour=0. Live aggregates remain total_sites=4367 avg_score=38; developer=1324, ai-tools=935, other=853, spam=1. Weekly discovery last closed green July 27 with 3,982 unique candidates and 0 new domains. Repo metadata still claims 1,900+, 4,100+, and 8,000+ NHS sites across README, about, registry, and homepage meta copy.",
+    "source_ref": "2026-07-30T20:08Z planner probes plus marketing/api-unlimited-plan-discovery-drift-2026-07-29.md: live health is 200, but the installed full-recrawl retry is active with tools/full-recrawl.lock present, recrawl_active=1, and no completion record, so deployment remains gated on closeout. Live catalog and subscribe advertise only nhs_api_unlimited at $9.99/mo, while subscribe.allowed_plans still names starter/pro/scale and repo llms/OpenAPI advertise retired $19/$49/$199 tiers. POST /api/v1/quote for nhs_api_starter returned nhs_api_unlimited at amount=999 total=999 payment_mode=stripe_checkout monthly_limit=50000. GET /api/v1/api-keys/subscribe with Accept:text/html returned HTTP 200 application/json with no top-level checkout URL. Agent and commerce manifests still expose live catalog, quote, checkout, and subscribe URLs. Admin traffic still lacks route_buckets and scanner_pages with errors_last_hour=0. Mid-run aggregates are total_sites=4364 avg_score=38; developer=1324, ai-tools=935, other=853, spam=1. Weekly discovery last closed green July 27 with 3,982 unique candidates and 0 new domains. Repo metadata still claims 1,900+, 4,100+, and 8,000+ NHS sites across README, about, registry, and homepage meta copy.",
     "priority": 99,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -36,13 +36,13 @@
       "Keep API-plan names, prices, quotas, and purchase-readiness claims out of public promotion until the contract is synchronized."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-30T18:16:00Z"
+    "last_verified_at": "2026-07-30T20:08:44Z"
   },
   {
     "title": "Reconcile AssureDeck robots scoring before score-fix conversion",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-30T18:16Z bounded planner probes: NHS still serves the exact profile and score-fix page for assuredeck-evidence-2026.hanjunhee-o.chatgpt.site at HTTP 200, while the current origin robots.txt returns HTTP 200 with one generic User-Agent directive and zero recognized AI-agent User-Agent directives. The source artifact verifies current llms.txt, OpenAPI 3.1, structured API, and Schema.org signals, with AI-plugin and MCP missing. This remains a bounded scoring-trust and conversion-contract mismatch; public aggregates remain total_sites=4367 avg_score=38. Any bounded refresh must wait for today's installed crawl retries to close and must not become a broad recrawl.",
+    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-30T20:08Z bounded planner probes: NHS still serves the exact profile and score-fix page for assuredeck-evidence-2026.hanjunhee-o.chatgpt.site at HTTP 200, while the current origin robots.txt returns HTTP 200 with one generic User-Agent directive and zero recognized AI-agent User-Agent directives. The source artifact verifies current llms.txt, OpenAPI 3.1, structured API, and Schema.org signals, with AI-plugin and MCP missing. This remains a bounded scoring-trust and conversion-contract mismatch. The installed full recrawl is active, so any bounded refresh must wait for wrapper completion and lock cleanup and must not become another broad recrawl.",
     "priority": 98,
     "public": false,
     "human_gate_kind": "product_handoff_before_owner_contact",
@@ -54,6 +54,6 @@
       "Do not send outreach or submit the public form in this work item; any later owner touch requires account-identity verification, duplicate checks, a sync-state public-action lock, and a ledger entry."
     ],
     "created_at": "2026-07-30T04:09:34Z",
-    "last_verified_at": "2026-07-30T18:16:00Z"
+    "last_verified_at": "2026-07-30T20:08:44Z"
   }
 ]
