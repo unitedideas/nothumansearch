@@ -1,47 +1,30 @@
 [
   {
-    "title": "Close out the active July 29 NHS full-recrawl retry with aggregate health proof",
-    "source_family": "ops",
-    "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-29T22:10Z planner probes: the failed 05:30 seed-refresh lane was retried successfully and tools/recrawl-health.log records post_seed_refresh api_status=200 api_ok=1 plus completion at 07:41:14. The installed 12:30 retry started full_recrawl at 12:30:06, passed preflight with api_status=200 api_ok=1, selected full_pressure workers=10, and recorded remote_start at 12:30:07. At 15:09 PT, tools/full-recrawl.lock still exists with the matching 12:30 start, launchd reports the recrawl job running with runs=1 and no exit yet, and tools/recrawl.log is still advancing. No post_full_recrawl or completion wrapper line exists yet, so this remains an active crawl boundary within the recent approximately four-hour completion range. Weekly discovery remains green from 2026-07-27 with 3982 unique candidates, 0 new domains, and done=nothing new. Public aggregates returned total_sites=4388 avg_score=38 top_category=developer; developer=1326 avg=38, ai-tools=937 avg=43, other=858 avg=29, spam=1 avg=0.",
-    "priority": 99,
-    "public": false,
-    "human_gate_kind": "none",
-    "acceptance_criteria": [
-      "Use wrapper logs, launchd state, and bounded aggregate probes only; do not inspect process environments or raw per-domain crawl logs.",
-      "Treat the 07:41 seed retry as closed and the 12:30 full-recrawl retry as the active crawl boundary.",
-      "Wait for the installed leased wrapper to record post_full_recrawl plus completion with API-health proof, then verify the full-recrawl lock releases and launchd exits cleanly.",
-      "Record aggregate-only sequencing, non-overlap, API-health, live stats/categories, and lock-release proof; if the wrapper fails or the lock becomes stale, use the repo-local guard/runbook recovery path.",
-      "Do not trigger a manual full recrawl.",
-      "If wrapper, launchd, or sync-state behavior changes, update the shared source of truth and verify through the installed leased path before claiming it fixed."
-    ],
-    "created_at": "2026-07-29T14:08:15Z",
-    "last_verified_at": "2026-07-29T22:10:22Z"
-  },
-  {
     "title": "Align NHS canonical API plan contract, browser handoff, and traffic aggregates",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-29T22:10Z planner probes plus marketing/api-unlimited-plan-discovery-drift-2026-07-29.md: live catalog and subscribe advertise only nhs_api_unlimited, while repo llms/OpenAPI still advertise legacy starter/pro/scale plans at $19/$49/$199 and subscribe.allowed_plans still names starter/pro/scale. POST /api/v1/quote returned nhs_api_unlimited at amount=999 total=999 payment_mode=stripe_checkout monthly_limit=50000 for requested starter, pro, scale, and unlimited ids, so compatibility aliases may be intentional but the public contract is contradictory. GET /api/v1/api-keys/subscribe with Accept:text/html returned HTTP 200 content-type application/json with no top-level checkout URL, leaving the browser handoff missing. Admin traffic keys remain daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets=false scanner_pages=false errors_last_hour=0. Product-code/deploy work must wait until the active July 29 full-recrawl retry records completion and releases its lock.",
-    "priority": 96,
+    "source_ref": "2026-07-30T00:09Z planner probes plus marketing/api-unlimited-plan-discovery-drift-2026-07-29.md: the leased 12:30 full-recrawl retry closed at 16:46:36 with post_full_recrawl api_status=200 api_ok=1, the lock released, and launchd is not running with last exit code 0. Live catalog and subscribe advertise only nhs_api_unlimited at $9.99/mo, while repo llms/OpenAPI still advertise legacy starter/pro/scale plans at $19/$49/$199 and subscribe.allowed_plans still names starter/pro/scale. POST /api/v1/quote returned nhs_api_unlimited at amount=999 total=999 payment_mode=stripe_checkout monthly_limit=50000 for requested starter, pro, scale, and unlimited ids. GET /api/v1/api-keys/subscribe with Accept:text/html returned HTTP 200 content-type application/json with no top-level checkout URL. Admin traffic still lacks route_buckets and scanner_pages with errors_last_hour=0. Live aggregates are total_sites=4367 avg_score=38; repo metadata still claims 1,900+, 4,100+, and 8,000+ NHS sites across README, about, registry, and homepage meta copy.",
+    "priority": 99,
     "public": true,
-    "human_gate_kind": "deploy_required_after_recrawl_retry_closeout",
+    "human_gate_kind": "deploy_required",
     "acceptance_criteria": [
       "Confirm one canonical NHS API plan contract; if nhs_api_unlimited is canonical, align llms.txt, OpenAPI, API root, agent/commerce manifests, catalog, subscribe, quote, checkout, and MCP-facing copy while keeping legacy ids only as documented compatibility aliases.",
       "Preserve working machine-readable catalog, subscribe, quote, checkout, and agent commerce surfaces and add contract tests for the canonical id plus legacy alias behavior.",
       "Add browser-readable HTML/content negotiation for GET /api/v1/api-keys/subscribe when Accept:text/html is requested.",
       "Repair aggregate admin traffic route_buckets and scanner_pages without raw identifiers.",
-      "After orchestration closeout and deploy, verify canonical and legacy quote behavior, JSON subscribe, HTML handoff, agent discovery surfaces, admin traffic keys, stats, and categories.",
+      "Replace stale NHS site-count copy in README, about, homepage metadata, and the MCP registry manifest with a durable live-count or accurately rounded contract; do not alter the sibling AI Dev Jobs position count.",
+      "Before deploy, re-check that no crawl lock or long-running crawl boundary is active; after deploy, verify canonical and legacy quote behavior, JSON subscribe, HTML handoff, agent discovery surfaces, admin traffic keys, stats, and categories.",
+      "Take the sync-state public-action lock before deploy or MCP registry publication, then record live verification and the registry result.",
       "Keep API-plan names, prices, quotas, and purchase-readiness claims out of public promotion until the contract is synchronized."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-29T22:10:22Z"
+    "last_verified_at": "2026-07-30T00:09:02Z"
   },
   {
     "title": "Reconcile NHS monitor quarantines and score-fix pending rows in credential-capable executor",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-29T22:10Z planner probes: monitor redacted helpers succeeded, with active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2, and no monitor-admin action aggregates in 30 days. The score-fix redacted helper could not run in this planner runtime because both supported NHS admin Keychain service names were unavailable. The latest verified 20:09Z aggregate remains real_candidate pending=10 and test_like pending=5, but it must be refreshed in a credential-capable executor before mutation. Preserve credential-gated private execution and aggregate-only proof.",
+    "source_ref": "2026-07-30T00:09Z planner probes: all repo-local redacted helpers succeeded in this planner runtime. Monitor aggregates remain active=5, quarantined bounded_rerun_still_zero_score=1, quarantined first_monitor_check_returned_zero_agentic_score=2, with no monitor-admin actions in 30 days. Score-fix aggregates are count=20: real_candidate pending=10 split dot_com=6 other_tld=4 with age buckets 30d_plus=7 and 7_29d=3; test_like pending=5, paid=2, lead=1, and internal_test=2 foundry_owned. Prior executor closeouts such as ops/ledgers/work_machine_b94917061bade9e6.md prove that executor runtime still lacked both supported Keychain aliases, so preserve credential_required until the executor helper itself succeeds.",
     "priority": 90,
     "public": false,
     "human_gate_kind": "credential_required",
@@ -53,6 +36,6 @@
       "Refresh only aggregate status/reason/count, score-fix buckets, and day/action/count proof."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-29T22:10:22Z"
+    "last_verified_at": "2026-07-30T00:09:02Z"
   }
 ]
