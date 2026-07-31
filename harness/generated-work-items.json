@@ -3,7 +3,7 @@
     "title": "Make full-recrawl postflight health failures retry durably",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-31T03:08Z aggregate planner evidence: tools/recrawl-health.log still ends the installed full-recrawl retry with post_full_recrawl and completion at 2026-07-30 16:43:20 PT with api_status=000 api_ok=0. No seed-refresh, full-recrawl, or discovery lock is present. A fresh 20:08 PT probe recovered to /health HTTP 200, total_sites=4351, avg_score=38, developer=1321, ai-tools=932, other=856, spam=1. Current tools/recrawl-common.sh finish_wrapper performs only one postflight probe, logs completion regardless of api_ok, and returns success, so a transient unhealthy postflight can be recorded as a completed recurring run without durable health recheck or failure propagation.",
+    "source_ref": "2026-07-31T07:10Z aggregate planner evidence: tools/recrawl-health.log still ends the installed full-recrawl retry with post_full_recrawl and completion at 2026-07-30 16:43:20 PT with api_status=000 api_ok=0. No seed-refresh, full-recrawl, or discovery lock is present. A fresh 00:10 PT probe recovered to /health HTTP 200, total_sites=4351, avg_score=38, developer=1321, ai-tools=932, other=856, spam=1. Current tools/recrawl-common.sh finish_wrapper performs only one postflight probe, logs completion regardless of api_ok, and returns success, so a transient unhealthy postflight can be recorded as a completed recurring run without durable health recheck or failure propagation.",
     "priority": 100,
     "public": false,
     "human_gate_kind": "automation_repair_required",
@@ -17,13 +17,13 @@
       "Verify the installed launchd/sync-state path records a later healthy completion or explicit retry outcome before calling the repair complete; keep evidence aggregate-only."
     ],
     "created_at": "2026-07-31T00:08:20Z",
-    "last_verified_at": "2026-07-31T03:08:14Z"
+    "last_verified_at": "2026-07-31T07:10:13Z"
   },
   {
     "title": "Fix robots AI-policy false positives before score-fix conversion",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-31T03:08Z bounded proof: the live NHS profile HTML for assuredeck-evidence-2026.hanjunhee-o.chatgpt.site still reports 70/100 and the $29/$199 score-fix page still says robots.txt has explicit AI-crawler allow rules. The origin robots.txt is HTTP 200 with one generic User-Agent directive and zero recognized AI-agent User-Agent directives. internal/crawler/crawler.go still scans the entire robots body for tokens such as chatgpt, so the token in this origin's sitemap hostname can create the +5 false positive even though no explicit AI crawler policy exists.",
+    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-31T07:10Z bounded proof: the live NHS profile HTML for assuredeck-evidence-2026.hanjunhee-o.chatgpt.site still reports 70/100 and the $29/$199 score-fix page still says robots.txt has explicit AI-crawler allow rules. The origin robots.txt is HTTP 200 with one generic User-Agent directive and zero recognized AI-agent User-Agent directives. internal/crawler/crawler.go still scans the entire robots body for tokens such as chatgpt, so the token in this origin's sitemap hostname can create the +5 false positive even though no explicit AI crawler policy exists.",
     "priority": 99,
     "public": false,
     "human_gate_kind": "product_handoff_before_owner_contact",
@@ -36,13 +36,13 @@
       "Do not contact the owner or submit the public form in this work item; any later owner touch requires identity verification, duplicate checks, a sync-state public-action lock, and a ledger entry."
     ],
     "created_at": "2026-07-30T04:09:34Z",
-    "last_verified_at": "2026-07-31T03:08:14Z"
+    "last_verified_at": "2026-07-31T07:10:13Z"
   },
   {
     "title": "Align NHS canonical API plan contract, browser handoff, and traffic aggregates",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-31T03:08Z planner probes plus marketing/api-unlimited-plan-discovery-drift-2026-07-29.md: live health is HTTP 200 and no seed-refresh, full-recrawl, or discovery lock is present. Catalog and subscribe advertise only nhs_api_unlimited at $9.99/mo, while subscribe.allowed_plans still names starter/pro/scale and repo llms/OpenAPI advertise retired $19/$49/$199 tiers. POST /api/v1/quote for nhs_api_starter still returns nhs_api_unlimited at amount=999 total=999 payment_mode=stripe_checkout monthly_limit=50000. GET /api/v1/api-keys/subscribe with Accept:text/html returns HTTP 200 application/json with no top-level checkout URL. Admin traffic exposes only daily, days, errors, errors_last_hour, top_pages, and top_referrers; route_buckets and scanner_pages remain absent with errors_last_hour=0. Current aggregates are total_sites=4351 avg_score=38; developer=1321, ai-tools=932, other=856, spam=1. Weekly discovery closed green July 27 with 3,982 unique candidates and 0 new domains. Repo metadata still claims 1,900+, 4,100+, and 8,000+ NHS sites across README, about, registry, and homepage meta copy.",
+    "source_ref": "2026-07-31T07:10Z planner probes plus marketing/api-unlimited-plan-discovery-drift-2026-07-29.md: live health is HTTP 200 and no seed-refresh, full-recrawl, or discovery lock is present. Catalog and subscribe advertise only nhs_api_unlimited at $9.99/mo, while subscribe.allowed_plans still names starter/pro/scale and repo llms/OpenAPI advertise retired $19/$49/$199 tiers. POST /api/v1/quote for nhs_api_starter still returns nhs_api_unlimited at amount=999 total=999 payment_mode=stripe_checkout monthly_limit=50000. GET /api/v1/api-keys/subscribe with Accept:text/html returns HTTP 200 application/json with no top-level checkout URL. Admin traffic exposes only daily, days, errors, errors_last_hour, top_pages, and top_referrers; route_buckets and scanner_pages remain absent with errors_last_hour=0. Current aggregates are total_sites=4351 avg_score=38; developer=1321, ai-tools=932, other=856, spam=1. Weekly discovery closed green July 27 with 3,982 unique candidates and 0 new domains. Repo metadata still claims 1,900+, 4,100+, and 8,000+ NHS sites across README, about, registry, and homepage meta copy.",
     "priority": 98,
     "public": true,
     "human_gate_kind": "deploy_required",
@@ -57,6 +57,6 @@
       "Keep API-plan names, prices, quotas, and purchase-readiness claims out of public promotion until the contract is synchronized."
     ],
     "created_at": "2026-07-26T16:50:00Z",
-    "last_verified_at": "2026-07-31T03:08:14Z"
+    "last_verified_at": "2026-07-31T07:10:13Z"
   }
 ]
