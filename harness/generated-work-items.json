@@ -3,7 +3,7 @@
     "title": "Close the active July 31 full-recrawl boundary and harden postflight health retries",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-31T13:10Z aggregate planner evidence: tools/full-recrawl.lock exists with pid=43173 and started_at=1785502807. tools/recrawl-health.log records start phase=full_recrawl at 06:00:07 PT, preflight api_status=200 api_ok=1, full_pressure workers=10, and remote_start at 06:00:08, with no post_full_recrawl health_check or completion yet. tools/recrawl.log mtime advanced to 06:08:16 without raw crawl rows being inspected. A bounded current probe returns /health status=ok db=ok, total_sites=4351, avg_score=38, developer=1321, other=856, spam=1. The prior July 30 run ended with post_full_recrawl api_status=000 api_ok=0, and current tools/recrawl-common.sh finish_wrapper still performs one postflight probe, logs completion regardless of api_ok, and returns success.",
+    "source_ref": "2026-07-31T15:08Z aggregate planner evidence: tools/full-recrawl.lock still exists with pid=43173 and started_at=1785502807, and kill -0 confirms the wrapper pid remains alive. tools/recrawl-health.log records start phase=full_recrawl at 06:00:07 PT, preflight api_status=200 api_ok=1, full_pressure workers=10, and remote_start at 06:00:08, with no post_full_recrawl health_check or completion by 08:08 PT. A bounded current probe returns /health status=ok db=ok, total_sites=4351, avg_score=38, developer=1320, other=854, spam=1. The prior July 30 run ended with post_full_recrawl api_status=000 api_ok=0, and current tools/recrawl-common.sh finish_wrapper still performs one postflight probe, logs completion regardless of api_ok, and returns success.",
     "priority": 100,
     "public": false,
     "human_gate_kind": "active_recrawl_boundary",
@@ -17,13 +17,13 @@
       "Verify the installed launchd and sync-state retry path later records a healthy completion or an explicit failed/retry outcome before calling the automation repair complete."
     ],
     "created_at": "2026-07-31T13:10:06Z",
-    "last_verified_at": "2026-07-31T13:10:06Z"
+    "last_verified_at": "2026-07-31T15:08:00Z"
   },
   {
     "title": "Make MCP monitor registration consent-aware and redact PII telemetry",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "marketing/mcp-register-monitor-consent-privacy-handoff-2026-07-31.md plus 2026-07-31T13:10Z bounded proof: live MCP tools/list exposes 11 tools; register_monitor requires email and domain, has no consent field or annotations, and promises an unsubscribe URL. The public /monitor page has no privacy, terms, consent, or confirmation marker; /privacy and /terms return 404. Source inspection shows toolRegisterMonitor immediately calls models.RegisterMonitor, which inserts active by default or quarantined for a shared host, returns a management token, and then the shared MCP path stores the full arguments in both mcp_requests.arguments and intent_events.metadata.arguments. The July 31 full recrawl is active, so deploy-required acceptance waits for that boundary to close.",
+    "source_ref": "marketing/mcp-register-monitor-consent-privacy-handoff-2026-07-31.md plus 2026-07-31T15:08Z bounded proof: live /mcp and /monitor return 200, while /privacy and /terms remain 404. Source inspection still shows register_monitor requires email and domain without a consent field or side-effect annotations, immediately calls models.RegisterMonitor, returns an unsubscribe management token, and stores the full arguments in both mcp_requests.arguments and intent_events.metadata.arguments. Redacted aggregates remain active=5, quarantined=3, and real-candidate score-fix pending=10 with no real-candidate lead or paid rows. The July 31 full recrawl remains active, so deploy-required acceptance waits for that boundary to close.",
     "priority": 99,
     "public": false,
     "human_gate_kind": "privacy_and_product_repair_required",
@@ -38,13 +38,13 @@
       "Keep tool calls, confirmation sends, confirmations, activations, alerts, and unsubscribes as separate metrics; do not describe calls as customers, unique people, owners, verified inboxes, or consent."
     ],
     "created_at": "2026-07-31T13:10:06Z",
-    "last_verified_at": "2026-07-31T13:10:06Z"
+    "last_verified_at": "2026-07-31T15:08:00Z"
   },
   {
     "title": "Fix robots AI-policy false positives before score-fix conversion",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-31T13:10Z bounded proof: the live NHS profile for assuredeck-evidence-2026.hanjunhee-o.chatgpt.site remains 70/100 and links positive AI Bot Access evidence, while the $29/$199 score-fix page says robots.txt explicit AI-crawler allow rules are already present. The origin robots.txt has one generic User-Agent directive, zero recognized AI-agent User-Agent directives, and one chatgpt token elsewhere. internal/crawler/crawler.go still scans the entire robots body for recognized tokens. The July 31 full recrawl is active, so the targeted refresh and deploy wait for the boundary to close.",
+    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-31T15:08Z bounded proof: the live NHS profile and score-fix route both return 200, and the profile remains 70/100. The origin robots.txt has one User-Agent directive, zero recognized AI-agent User-Agent directives, and one recognized token elsewhere. internal/crawler/crawler.go still lowercases the entire robots body and marks has_robots_ai on any recognized substring, so a hostname or sitemap token remains a false-positive path. The July 31 full recrawl remains active, so the one-host refresh and deploy wait for the boundary to close.",
     "priority": 98,
     "public": false,
     "human_gate_kind": "product_handoff_before_owner_contact",
@@ -57,6 +57,6 @@
       "Do not contact the owner or submit the public form in this work item; any later owner touch requires identity verification, duplicate checks, a sync-state public-action lock, and a ledger entry."
     ],
     "created_at": "2026-07-30T04:09:34Z",
-    "last_verified_at": "2026-07-31T13:10:06Z"
+    "last_verified_at": "2026-07-31T15:08:00Z"
   }
 ]
