@@ -1,29 +1,29 @@
 [
   {
-    "title": "Close the active July 31 full-recrawl boundary and harden postflight health retries",
+    "title": "Harden full-recrawl postflight health retries and failure propagation",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "2026-07-31T15:08Z aggregate planner evidence: tools/full-recrawl.lock still exists with pid=43173 and started_at=1785502807, and kill -0 confirms the wrapper pid remains alive. tools/recrawl-health.log records start phase=full_recrawl at 06:00:07 PT, preflight api_status=200 api_ok=1, full_pressure workers=10, and remote_start at 06:00:08, with no post_full_recrawl health_check or completion by 08:08 PT. A bounded current probe returns /health status=ok db=ok, total_sites=4351, avg_score=38, developer=1320, other=854, spam=1. The prior July 30 run ended with post_full_recrawl api_status=000 api_ok=0, and current tools/recrawl-common.sh finish_wrapper still performs one postflight probe, logs completion regardless of api_ok, and returns success.",
+    "source_ref": "ops/ledgers/full-recrawl-closeout-2026-07-31.md; tools/recrawl-health.log shows the July 31 run closed green at 09:59:13 PT with api_status=200 api_ok=1 and no lock remains, while the July 30 run recorded completion with api_status=000 api_ok=0. Current tools/recrawl-common.sh finish_wrapper still performs one postflight probe, records completion regardless of api_ok, and returns success. Bounded 10:09 PT proof: health status=ok db=ok, total_sites=4343 avg_score=38, developer=1320, other=850, spam=1.",
     "priority": 100,
     "public": false,
-    "human_gate_kind": "active_recrawl_boundary",
+    "human_gate_kind": "automation_harness_repair",
     "acceptance_criteria": [
-      "Do not edit product code, deploy, start another crawl, or remove the live lock while the July 31 full-recrawl boundary is active.",
-      "Observe completion through tools/recrawl-health.log and tools/full-recrawl.lock only; record postflight status, completion, lock release, and bounded public stats/categories without reading or committing raw per-domain crawl rows.",
-      "If the current run closes green with post_full_recrawl api_ok=1, write aggregate closeout proof and remove the active-boundary item before enabling deploy-required product work.",
-      "If postflight remains api_ok=0 or the lock becomes stale, use the repo runbook to classify the failure; do not trigger another full recrawl merely to reproduce it.",
-      "Harden finish_wrapper with bounded health retries, logged attempt counts and backoff, IndexNow gating, nonzero exit on exhausted postflight failure, and unconditional lock cleanup.",
-      "Add fixture tests for immediate success, transient 000 then 200, persistent failure, exit status, IndexNow gating, and lock release.",
-      "Verify the installed launchd and sync-state retry path later records a healthy completion or an explicit failed/retry outcome before calling the automation repair complete."
+      "Preserve the July 31 aggregate closeout and remove the stale active-recrawl boundary; do not start another full recrawl to reproduce the July 30 postflight failure.",
+      "Add bounded postflight health retries with logged attempt counts, backoff, final HTTP status, and final api_ok state.",
+      "Return nonzero when postflight health remains unhealthy after retries so the installed launchd and sync-state retry path can act.",
+      "Run IndexNow only after a healthy postflight and log an explicit skip reason otherwise.",
+      "Release the local run lock on success, remote-command failure, postflight failure, interruption, and dry-run paths.",
+      "Add fixture tests for immediate success, transient 000 then 200, persistent failure, remote-command failure, exit status, IndexNow gating, and lock release.",
+      "Verify the installed recurring path on a later scheduled bounded run records either healthy completion or explicit failed/retry state; do not use a manual broad recrawl as the acceptance test."
     ],
-    "created_at": "2026-07-31T13:10:06Z",
-    "last_verified_at": "2026-07-31T15:08:00Z"
+    "created_at": "2026-07-31T17:09:08Z",
+    "last_verified_at": "2026-07-31T17:09:08Z"
   },
   {
     "title": "Make MCP monitor registration consent-aware and redact PII telemetry",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "marketing/mcp-register-monitor-consent-privacy-handoff-2026-07-31.md plus 2026-07-31T15:08Z bounded proof: live /mcp and /monitor return 200, while /privacy and /terms remain 404. Source inspection still shows register_monitor requires email and domain without a consent field or side-effect annotations, immediately calls models.RegisterMonitor, returns an unsubscribe management token, and stores the full arguments in both mcp_requests.arguments and intent_events.metadata.arguments. Redacted aggregates remain active=5, quarantined=3, and real-candidate score-fix pending=10 with no real-candidate lead or paid rows. The July 31 full recrawl remains active, so deploy-required acceptance waits for that boundary to close.",
+    "source_ref": "marketing/mcp-register-monitor-consent-privacy-handoff-2026-07-31.md plus 2026-07-31T17:09Z bounded proof: live /mcp and /monitor return 200, while /privacy and /terms remain 404. Source still shows register_monitor requires email and domain without a consent field or side-effect annotations, immediately calls models.RegisterMonitor, returns an unsubscribe management token, and stores full arguments in both mcp_requests.arguments and intent_events.metadata.arguments. Redacted aggregates remain active=5, quarantined=3, and real-candidate score-fix pending=10. The July 31 recrawl closed green and no crawl lock remains.",
     "priority": 99,
     "public": false,
     "human_gate_kind": "privacy_and_product_repair_required",
@@ -34,17 +34,16 @@
       "Redact at the shared MCP logging boundary so raw emails, confirmation tokens, and unsubscribe tokens cannot enter mcp_requests.arguments or intent_events.metadata; retain only allowlisted aggregate fields.",
       "Return stable status and confirmation-delivery fields, avoid exposing an unsubscribe token before confirmation, keep duplicates idempotent, and replace raw internal error propagation with bounded public error classes.",
       "Add tests for missing consent, pending registration, confirmation, expired and replayed tokens, duplicates, delivery failure, legacy active rows, quarantine, rate limits, analytics redaction, token non-disclosure, and REST/MCP parity.",
-      "After the active recrawl closes and a later product-worker deploy completes, verify the MCP schema, confirmation delivery, activation, unsubscribe, redacted analytics, REST parity, and monitor-worker eligibility with a Foundry-owned test inbox.",
-      "Keep tool calls, confirmation sends, confirmations, activations, alerts, and unsubscribes as separate metrics; do not describe calls as customers, unique people, owners, verified inboxes, or consent."
+      "After a later product-worker deploy, verify the MCP schema, confirmation delivery, activation, unsubscribe, redacted analytics, REST parity, and monitor-worker eligibility with a Foundry-owned test inbox."
     ],
     "created_at": "2026-07-31T13:10:06Z",
-    "last_verified_at": "2026-07-31T15:08:00Z"
+    "last_verified_at": "2026-07-31T17:09:08Z"
   },
   {
     "title": "Fix robots AI-policy false positives before score-fix conversion",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-31T15:08Z bounded proof: the live NHS profile and score-fix route both return 200, and the profile remains 70/100. The origin robots.txt has one User-Agent directive, zero recognized AI-agent User-Agent directives, and one recognized token elsewhere. internal/crawler/crawler.go still lowercases the entire robots body and marks has_robots_ai on any recognized substring, so a hostname or sitemap token remains a false-positive path. The July 31 full recrawl remains active, so the one-host refresh and deploy wait for the boundary to close.",
+    "source_ref": "marketing/assuredeck-robots-signal-scorefix-guard-2026-07-29.md plus 2026-07-31T17:09Z source proof: internal/crawler/crawler.go still lowercases the entire robots body and marks has_robots_ai on any recognized substring, so a hostname, sitemap URL, or comment remains a false-positive path. The July 31 recrawl closed green and no crawl lock remains; bounded live /score and /report return 200.",
     "priority": 98,
     "public": false,
     "human_gate_kind": "product_handoff_before_owner_contact",
@@ -52,11 +51,11 @@
       "Parse robots.txt User-Agent directives and set the AI-policy signal only when a recognized AI crawler token is named in a directive; ignore matching tokens in hostnames, sitemap URLs, comments, and unrelated directives.",
       "Add regression tests for a chatgpt-containing sitemap hostname, comments containing GPTBot, generic wildcard only, explicit AI-agent allow rules, and explicit AI-agent deny rules.",
       "Keep the signal semantics as an explicit AI crawler policy whether allow or deny, and remove UI/checklist wording that equates every positive policy signal with allow/access.",
-      "Wait for the active full-recrawl boundary to close before deploy, then run one bounded refresh for the exact AssureDeck host; do not run a broad recrawl.",
+      "Before deploy, recheck that no recrawl or seed-refresh lock is active, then run one bounded refresh for the exact existing fixture host; do not run a broad recrawl.",
       "Verify the refreshed profile score, projected score, $29 report, and $199 managed checklist agree with current llms.txt, OpenAPI, structured API, Schema.org, AI-plugin, MCP, and robots evidence.",
-      "Do not contact the owner or submit the public form in this work item; any later owner touch requires identity verification, duplicate checks, a sync-state public-action lock, and a ledger entry."
+      "Do not contact the owner or submit a public form; any later owner touch requires identity verification, duplicate checks, a sync-state public-action lock, and a ledger entry."
     ],
     "created_at": "2026-07-30T04:09:34Z",
-    "last_verified_at": "2026-07-31T15:08:00Z"
+    "last_verified_at": "2026-07-31T17:09:08Z"
   }
 ]
