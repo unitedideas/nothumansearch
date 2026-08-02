@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -119,8 +120,10 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		}
 		return string(data)
 	}
-	if marker := strings.TrimSpace(read("release-source-revision")); marker != "$Format:%H$" {
-		t.Fatalf("release source marker = %q", marker)
+	marker := strings.TrimSpace(read("release-source-revision"))
+	_, markerHexError := hex.DecodeString(marker)
+	if marker != "$Format:%H$" && (len(marker) != 40 || markerHexError != nil) {
+		t.Fatalf("release source marker is neither the checkout placeholder nor an archived commit: %q", marker)
 	}
 	if attributes := read(".gitattributes"); !strings.Contains(attributes, "release-source-revision export-subst") {
 		t.Fatal("release source marker is not expanded by git archive")
