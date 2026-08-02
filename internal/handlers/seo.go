@@ -163,7 +163,7 @@ Not Human Search is itself an MCP server. Wire it into your agent once and get l
 
 Endpoint: %s/mcp
 Transport: streamable-http
-Tools (11): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions, check_url
+Tools (12): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions, check_url, prepare_provider_action
 
 Claude Code setup:
   claude mcp add --transport http nothumansearch %s/mcp
@@ -180,7 +180,20 @@ Base URL: %s/api/v1
 
 ### Search
 GET /search?q={query}&category={cat}&tag={tag}&min_score={0-100}&has_api=true&has_mcp=true&has_openapi=true&has_llms_txt=true&page={n}
-Returns: {results: [{domain, name, description, agentic_score, category, tags, signals...}], total, page, has_next}
+Returns: {results: [...unchanged neutral organic results...], paid_offers: [...separate disclosed provider-funded actions...], total, page, has_next, search_id}
+
+### Optional Provider-Funded Actions
+Search and canonical provider links remain free. An active provider offer can
+appear only in the separate paid_offers collection beside a site already returned
+organically. Money never changes organic membership, score, order, or total.
+
+POST /api/v1/action-tickets
+Creates a signed action URL after the caller supplies search_id, offer_id, one
+controlled demand topic already on the receipt, and the exact versioned principal-
+authorization attestation. Creating a ticket charges neither party.
+
+Consent wording: /privacy#consent-v1
+Provider setup: /providers
 
 ### Site Details
 GET /site/{domain}
@@ -255,8 +268,6 @@ Report: %s/report
 ## Developer Resources
 - One-line install (Claude Code / Cursor / Cline / Continue):
     curl -fsSL https://nothumansearch.ai/install | sh
-- AI Dev Jobs companion MCP:
-    curl -fsSL https://aidevboard.com/install | sh
 - Verify any MCP server in 3 curls: https://gist.github.com/unitedideas/ce709323717b95eb56f7be7392a0a557
 - Q2 2026 agent-ready sites curation (120 categorized): https://gist.github.com/unitedideas/c60bb35943ef609f99123bdfae146e55
 - NHS Score Check GitHub Action (fail CI on score drop): https://github.com/unitedideas/nhs-score-check-action
@@ -393,6 +404,12 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"name":        "recent_additions",
 				"description": "Agent-first sites added to the index within the last N days (default 7, max 90). For tracking ecosystem momentum and weekly digests.",
 			},
+			{
+				"name":        "prepare_provider_action",
+				"description": "Create a signed, authorization-attested action ticket for a separately disclosed provider-funded offer. Requires an organic search receipt; accepts controlled fields only. Exact wording is published at /privacy#consent-v1.",
+				"endpoint":    h.BaseURL + "/api/v1/action-tickets",
+				"method":      "POST",
+			},
 		},
 	})
 }
@@ -416,7 +433,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 		"name_for_human":        "Not Human Search",
 		"name_for_model":        "nothumansearch",
 		"description_for_human": "Search engine that finds websites AI agents can actually use, ranked by agentic readiness score.",
-		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/top (top-scored sites, filterable by signal — great for embedding a ranked list), GET /api/v1/site/{domain} for a specific site's score, GET /api/v1/verify-mcp?url= to live-probe any URL for MCP compliance, POST /api/v1/check to run an on-demand crawl. Prefer /api/v1/search over listing tools manually. For richer capabilities connect via MCP at /mcp — 11 tools including find_mcp_servers, recent_additions, check_url.",
+		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/top (top-scored sites, filterable by signal), GET /api/v1/site/{domain}, GET /api/v1/verify-mcp?url=, and POST /api/v1/check. Organic search is free and neutral. Separately disclosed provider-funded actions may appear only beside an already-returned organic result. For richer capabilities connect via MCP at /mcp — 12 tools including prepare_provider_action.",
 		"auth":                  map[string]string{"type": "none"},
 		"api": map[string]string{
 			"type": "openapi",
@@ -655,12 +672,244 @@ paths:
                   receipt_recorded: { type: boolean, description: True only when the query-free receipt transaction committed }
                   search_id: { type: string, description: Query-free receipt for an optional detail-selection request }
                   results: { type: array, items: { $ref: "#/components/schemas/Site" } }
+                  paid_offers_available: { type: boolean, description: True only when a committed search receipt has separately disclosed provider-funded actions for exact returned organic sites }
+                  paid_offers:
+                    type: array
+                    description: Separate optional actions; never included in results, score, total, or organic ordering
+                    items: { $ref: "#/components/schemas/PublicProviderOffer" }
                   total: { type: integer }
                   page: { type: integer }
                   per_page: { type: integer }
                   has_next: { type: boolean }
         "429":
           description: Temporary search safety limit exceeded; free access resumes after the reset
+  /provider/claims:
+    get:
+      summary: List provider claims and DNS ownership-check status for the signed-in account
+      operationId: listProviderClaims
+      description: Each claim exposes the last successful ownership check, next scheduled check, and consecutive failure count without exposing the stored token hash or raw DNS answers.
+      security: [{ SessionCookie: [] }]
+      responses:
+        "200":
+          description: Provider claims with safe ownership-freshness status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [claims]
+                properties:
+                  claims: { type: array, items: { $ref: "#/components/schemas/ProviderClaim" } }
+        "401": { description: Human account session required }
+    post:
+      summary: Begin an indexed-domain provider claim
+      operationId: createProviderClaim
+      description: The returned TXT value must remain published after verification. NHS persists only its SHA-256 token hash, then automatically rechecks domain control; raw DNS answers are not retained.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [domain]
+              properties:
+                domain: { type: string, description: Domain already present in the NHS index }
+      responses:
+        "201":
+          description: Claim, one-time DNS TXT challenge, and ownership-freshness contract
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderClaimChallengeResponse" }
+        "401": { description: Human account session required }
+        "409": { description: Domain is already claimed or the account already has a claim }
+  /provider/claims/{claim_id}/verify:
+    post:
+      summary: Verify the claim's DNS TXT challenge and return the callback key once
+      operationId: verifyProviderClaim
+      description: Keep the verified TXT value published. NHS stores only the token hash and automatically rechecks it. Paid-action eligibility stops after %d consecutive failures or when the last successful check reaches %d days old.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: claim_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Verified claim, current ownership freshness, and a newly issued provider key returned once when applicable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderClaimVerifyResponse" }
+        "409": { description: DNS challenge missing, mismatched, or expired; a real failed repeat check on a verified claim advances its freshness failure count }
+  /provider/claims/{claim_id}/challenge:
+    post:
+      summary: Rotate a pending claim's DNS challenge
+      operationId: rotateProviderClaimChallenge
+      description: Replaces the pending token hash and returns the new TXT value once. After verification, keep that value published for automatic ownership rechecks.
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: claim_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Rotated one-time DNS TXT challenge and ownership-freshness contract
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderClaimChallengeResponse" }
+  /provider/claims/{claim_id}/revoke:
+    post:
+      summary: Revoke a provider claim, keys, offers, and outstanding action authorization
+      operationId: revokeProviderClaim
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: claim_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Claim revoked }
+  /provider/claims/{claim_id}/keys/rotate:
+    post:
+      summary: Rotate the claim-scoped provider callback key
+      operationId: rotateProviderCallbackKey
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: claim_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: New provider key returned once; prior keys revoked }
+  /provider/offers:
+    get:
+      summary: List offers owned by the signed-in provider account
+      operationId: listProviderOffers
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: claim_id, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Provider offers and commercial states }
+    post:
+      summary: Create a draft provider-funded action offer
+      operationId: createProviderOffer
+      description: Drafts cannot appear beside organic results until NHS records real prepaid funding or exact capped CPA terms and activates the offer.
+      security: [{ SessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/ProviderOfferRequest" }
+                - { type: object, required: [claim_id] }
+      responses:
+        "201": { description: Draft offer created }
+        "409": { description: Offer inventory limit reached }
+  /provider/offers/{offer_id}:
+    get:
+      summary: Get one offer owned by the signed-in provider account
+      operationId: getProviderOffer
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Provider offer }
+    put:
+      summary: Update an owned draft offer
+      operationId: updateProviderOffer
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderOfferRequest" }
+      responses:
+        "200": { description: Updated offer }
+  /provider/offers/{offer_id}/pause:
+    post:
+      summary: Pause an owned offer
+      operationId: pauseProviderOffer
+      security: [{ SessionCookie: [] }]
+      parameters:
+        - { name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Offer paused }
+  /action-tickets:
+    post:
+      summary: Prepare an authorization-attested action for a disclosed paid offer
+      operationId: createActionTicket
+      description: Requires a committed organic search receipt and exact principal-consent v1 attestation. Accepts controlled constraints only; no name, email, contact detail, raw prompt, agent identity, or principal identity. See https://nothumansearch.ai/privacy#consent-v1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionTicketRequest" }
+      responses:
+        "201": { description: New signed action ticket and attributed provider URL }
+        "200": { description: Exact idempotent replay reconstructed from the persisted ticket snapshot }
+        "402": { description: Provider budget unavailable; the principal is not charged }
+        "409": { description: Offer unavailable, revoked, or request conflicts with a prior ticket }
+  /provider/outcomes:
+    post:
+      summary: Record an idempotent provider-reported action outcome
+      operationId: recordProviderOutcome
+      description: Provider-authenticated assertion, not an independent NHS audit. A charged ticket may later receive an invalid or duplicate credit after expiry or revocation; no positive outcome or new charge may cross those boundaries.
+      security: [{ ProviderKey: [] }]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ticket_id, attribution_token, outcome]
+              properties:
+                ticket_id: { type: string, format: uuid }
+                attribution_token: { type: string }
+                outcome: { type: string, enum: [accepted, activated, converted, rejected, duplicate, invalid] }
+      responses:
+        "201": { description: New signed provider-outcome receipt }
+        "200": { description: Exact idempotent replay }
+        "401": { description: Valid claim-scoped provider key required }
+        "409": { description: Invalid transition, revoked authorization, or conflicting idempotency payload }
+  /provider/receipts/{receipt_id}:
+    get:
+      summary: Retrieve one receipt owned by the authenticated provider
+      operationId: getProviderReceipt
+      security: [{ ProviderKey: [] }]
+      parameters:
+        - { name: receipt_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Signed provider receipt }
+        "401": { description: Valid claim-scoped provider key required }
+        "404": { description: Receipt not found for this provider }
+  /action-receipts/verify:
+    post:
+      summary: Verify immutable NHS signature separately from freshness and current accounting state
+      operationId: verifyActionReceipt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [signed_receipt, signature]
+              properties:
+                signed_receipt: { type: string, description: Exact canonical JSON returned by NHS }
+                signature: { type: string, description: Unpadded base64url HMAC }
+      responses:
+        "200":
+          description: Signature validity, time-window status, and current online commercial state when available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signature_valid: { type: boolean }
+                  within_validity_window: { type: boolean }
+                  time_status: { type: string, enum: [current, expired, not_yet_valid, invalid_time] }
+                  receipt: { $ref: "#/components/schemas/SignedOutcomeReceipt" }
+                  current_state_available: { type: boolean }
+                  current_state_status: { type: string, enum: [current, not_found, unavailable] }
+                  current_state: { $ref: "#/components/schemas/PublicOutcomeReceiptState" }
   /site/{domain}:
     get:
       summary: Get detailed agentic readiness report for a site
@@ -796,7 +1045,172 @@ paths:
                   total:   { type: integer }
                   limit:   { type: integer }
 components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: nhs_session
+      description: Human account session created by the fail-closed email sign-in flow
+    ProviderKey:
+      type: apiKey
+      in: header
+      name: X-NHS-Provider-Key
+      description: Claim-scoped callback key returned once after DNS verification or explicit rotation
   schemas:
+    ProviderClaim:
+      type: object
+      description: Provider ownership state. NHS never returns the persisted challenge-token hash or raw DNS answers.
+      required: [id, site_id, domain, verification_method, verification_record_name, status, challenge_expires_at, verification_consecutive_failures, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        site_id: { type: string, format: uuid }
+        domain: { type: string }
+        verification_method: { type: string, enum: [dns_txt] }
+        verification_record_name: { type: string, description: TXT record name that must remain published while the claim is verified }
+        status: { type: string, enum: [pending, verified, revoked] }
+        challenge_expires_at: { type: string, format: date-time, description: Expiry for a pending one-time challenge; it does not authorize removal of a verified TXT record }
+        verified_at: { type: string, format: date-time, nullable: true }
+        verification_last_succeeded_at: { type: string, format: date-time, nullable: true, description: Last successful DNS ownership check; paid actions require this to remain within the freshness window }
+        verification_last_attempted_at: { type: string, format: date-time, nullable: true }
+        verification_consecutive_failures: { type: integer, minimum: 0, description: Consecutive automatic or owner-triggered DNS failures since the last success }
+        verification_next_check_at: { type: string, format: date-time, nullable: true, description: Next scheduled automatic DNS ownership check }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    OwnershipFreshness:
+      type: object
+      description: Machine-readable persistent DNS ownership contract and claim-specific safe status; no token, token hash, or raw DNS answer is exposed.
+      required: [proof_method, record_must_remain_published, stored_challenge_material, raw_dns_answers_retained, automatic_reverification, recheck_interval_seconds, paid_actions_stop_after_consecutive_failures, paid_actions_stop_when_last_success_age_reaches_seconds, last_succeeded_at, next_check_at, consecutive_failures]
+      properties:
+        proof_method: { type: string, enum: [dns_txt] }
+        record_must_remain_published: { type: boolean, enum: [true] }
+        stored_challenge_material: { type: string, enum: [sha256_hash_only], description: NHS persists only the SHA-256 hash of the challenge token }
+        raw_dns_answers_retained: { type: boolean, enum: [false], description: TXT answers are compared in memory and are not persisted }
+        automatic_reverification: { type: boolean, enum: [true] }
+        recheck_interval_seconds: { type: integer, enum: [%d], description: Interval scheduled after a successful check; next_check_at reflects any earlier failure retry }
+        paid_actions_stop_after_consecutive_failures: { type: integer, enum: [%d], description: This consecutive failed check revokes the claim and stops paid-action eligibility }
+        paid_actions_stop_when_last_success_age_reaches_seconds: { type: integer, enum: [%d], description: Paid-action eligibility stops at this age even before a revocation update is recorded }
+        last_succeeded_at: { type: string, format: date-time, nullable: true }
+        next_check_at: { type: string, format: date-time, nullable: true }
+        consecutive_failures: { type: integer, minimum: 0 }
+    ProviderClaimChallengeResponse:
+      type: object
+      required: [claim, dns_challenge, ownership_freshness, verify_endpoint]
+      properties:
+        claim: { $ref: "#/components/schemas/ProviderClaim" }
+        dns_challenge:
+          type: object
+          required: [record_type, record_name, record_value, expires_at, returned_once]
+          properties:
+            record_type: { type: string, enum: [TXT] }
+            record_name: { type: string }
+            record_value: { type: string, description: Returned once. Keep the full TXT value published after verification; NHS stores only the token hash. }
+            expires_at: { type: string, format: date-time }
+            returned_once: { type: boolean, enum: [true] }
+        ownership_freshness: { $ref: "#/components/schemas/OwnershipFreshness" }
+        verify_endpoint: { type: string }
+    ProviderClaimVerifyResponse:
+      type: object
+      required: [claim, verified, provider_key_returned, ownership_freshness]
+      properties:
+        claim: { $ref: "#/components/schemas/ProviderClaim" }
+        verified: { type: boolean, enum: [true] }
+        provider_key: { type: string, description: Newly issued callback key returned once when this verification created it }
+        provider_key_metadata: { type: object }
+        provider_key_returned: { type: boolean }
+        save_this_key_now: { type: boolean }
+        key_endpoint: { type: string, description: Explicit rotation endpoint when a concurrent verification already issued the active key }
+        ownership_freshness: { $ref: "#/components/schemas/OwnershipFreshness" }
+    ProviderOfferRequest:
+      type: object
+      additionalProperties: false
+      required: [name, summary, action_type, action_url, charge_event, bounty_cents, currency, principal_price_mode, principal_currency, billing_mode]
+      properties:
+        claim_id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        summary: { type: string, minLength: 1, maxLength: 280 }
+        action_type: { type: string, enum: [lead, demo, trial, signup, purchase, quote, application, booking] }
+        action_url: { type: string, format: uri, description: HTTPS URL on the verified provider domain, with no query or fragment }
+        charge_event: { type: string, enum: [accepted, activated, converted] }
+        bounty_cents: { type: integer, minimum: 1, maximum: 1000000 }
+        currency: { type: string, enum: [usd] }
+        principal_price_mode: { type: string, enum: [free, fixed, quote, provider_pricing] }
+        principal_price_cents: { type: integer, minimum: 0, maximum: 100000000 }
+        principal_currency: { type: string, enum: [usd] }
+        billing_mode: { type: string, enum: [prepaid, terms] }
+        terms_credit_limit_cents: { type: integer, minimum: 1, maximum: 10000000 }
+        terms_period_days: { type: integer, minimum: 1, maximum: 90 }
+    PublicProviderOffer:
+      type: object
+      description: Separate disclosed action attached to an exact returned organic site; the provider action URL is withheld until a consented ticket is created
+      properties:
+        id: { type: string, format: uuid }
+        provider_domain: { type: string }
+        organic_position: { type: integer, minimum: 1 }
+        name: { type: string }
+        summary: { type: string }
+        action_type: { type: string }
+        disclosure: { type: string, enum: [Provider-funded action] }
+        organic_rank_paid: { type: boolean, enum: [false] }
+        principal_price:
+          type: object
+          properties:
+            mode: { type: string, enum: [free, fixed, quote, provider_pricing] }
+            amount_minor: { type: integer, minimum: 0 }
+            currency: { type: string, enum: [usd] }
+        nhs_compensation:
+          type: object
+          properties:
+            event: { type: string, enum: [accepted, activated, converted] }
+            amount_minor: { type: integer, minimum: 1 }
+            currency: { type: string, enum: [usd] }
+        prepare_action_endpoint: { type: string, format: uri }
+    ActionTicketRequest:
+      type: object
+      additionalProperties: false
+      required: [offer_id, search_id, demand_topic, principal_consent, consent_version]
+      properties:
+        offer_id: { type: string, format: uuid }
+        search_id: { type: string, description: Committed query-free organic search receipt }
+        demand_topic: { type: string, enum: [payments, commerce, jobs, data, search, weather, maps, email, messaging, image, video, audio, documents, security, finance, health, education, news, analytics, automation, productivity, identity, storage, ai-tools, developer-tools, other] }
+        region_code: { type: string, pattern: "^[A-Z]{2}(-[A-Z0-9]{1,3})?$" }
+        budget_band: { type: string, enum: [unspecified, under_100, 100_499, 500_1999, 2000_plus], default: unspecified }
+        urgency: { type: string, enum: [unspecified, now, 7_days, 30_days, researching], default: unspecified }
+        requirement_flags:
+          type: array
+          uniqueItems: true
+          items: { type: string, enum: [api_access, mcp, sandbox, self_serve, enterprise, compliance, multilingual, human_support] }
+        principal_consent: { type: boolean, enum: [true], description: Caller attests it is authorized by the principal under the exact published v1 wording }
+        consent_version: { type: string, enum: [nhs-principal-consent-v1] }
+    SignedOutcomeReceipt:
+      type: object
+      properties:
+        v: { type: integer, enum: [1] }
+        kid: { type: string }
+        receipt_id: { type: string, format: uuid }
+        ticket_id: { type: string, format: uuid }
+        offer_id: { type: string, format: uuid }
+        nhs_event_id: { type: string, format: uuid }
+        outcome: { type: string, enum: [accepted, activated, converted, rejected, duplicate, invalid] }
+        provider_reported_at: { type: integer, format: int64 }
+        recorded_at: { type: integer, format: int64 }
+        expires_at: { type: integer, format: int64 }
+        charged_minor: { type: integer, minimum: 0 }
+        currency: { type: string, enum: [usd] }
+        charge_status: { type: string, enum: [charged, credited, none] }
+    PublicOutcomeReceiptState:
+      type: object
+      description: Mutable online state, separate from immutable signature validity
+      properties:
+        receipt_id: { type: string, format: uuid }
+        action_ticket_id: { type: string, format: uuid }
+        receipt_outcome: { type: string }
+        current_ticket_status: { type: string }
+        original_charge_credited: { type: boolean }
+        superseded_by_later_state: { type: boolean }
+        authorization_revoked: { type: boolean }
+        net_commercial_effect_cents: { type: integer, format: int64, minimum: 0 }
+        net_commercial_effect_currency: { type: string, enum: [usd] }
     Site:
       type: object
       properties:
@@ -820,7 +1234,12 @@ components:
           type: boolean
           deprecated: true
           description: Legacy display metadata only; never affects organic score or ordering
-`, h.BaseURL, searchCategoryOpenAPIEnum())
+`, h.BaseURL, searchCategoryOpenAPIEnum(),
+		models.ProviderClaimDNSFailureLimit,
+		int(models.ProviderClaimVerificationFreshness/(24*time.Hour)),
+		int64(models.ProviderClaimDNSRecheckInterval/time.Second),
+		models.ProviderClaimDNSFailureLimit,
+		int64(models.ProviderClaimVerificationFreshness/time.Second))
 }
 
 type sitemapURL struct {
@@ -860,6 +1279,8 @@ func (h *SEOHandler) Sitemap(w http.ResponseWriter, r *http.Request) {
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/communication-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/jobs-apis", ChangeFreq: "daily", Priority: "0.8"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/about", ChangeFreq: "weekly", Priority: "0.5"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/providers", ChangeFreq: "weekly", Priority: "0.8"})
+	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/privacy", ChangeFreq: "monthly", Priority: "0.5"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/guide", ChangeFreq: "weekly", Priority: "0.9"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/report", ChangeFreq: "daily", Priority: "0.9"})
 	sm.URLs = append(sm.URLs, sitemapURL{Loc: h.BaseURL + "/status", ChangeFreq: "hourly", Priority: "0.6"})

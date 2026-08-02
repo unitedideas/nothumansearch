@@ -72,6 +72,20 @@ func TestDemandReceiptIDFailsClosedWhenStoreIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestReceiptBearingResponseHeadersPreventCapabilityLeakage(t *testing.T) {
+	rr := httptest.NewRecorder()
+	protectReceiptBearingResponse(rr)
+	for name, want := range map[string]string{
+		"Cache-Control":   "private, no-store",
+		"Pragma":          "no-cache",
+		"Referrer-Policy": "no-referrer",
+	} {
+		if got := rr.Header().Get(name); got != want {
+			t.Errorf("%s = %q, want %q", name, got, want)
+		}
+	}
+}
+
 func TestWebSearchRateLimitRunsBeforeDatabaseSearch(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/?q=payment", nil)
 	limiter := newMCPDiscoveryRateLimiter(1, time.Hour)
@@ -87,6 +101,71 @@ func TestWebSearchRateLimitRunsBeforeDatabaseSearch(t *testing.T) {
 	if rr.Header().Get("Retry-After") == "" {
 		t.Fatal("web search 429 omitted Retry-After")
 	}
+	if got := rr.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("web search Cache-Control = %q, want private, no-store", got)
+	}
+	if got := rr.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("web search Referrer-Policy = %q, want no-referrer", got)
+	}
+}
+
+func TestRESTSearchHeadersProtectReceiptCapabilityOnEveryOutcome(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=payment", nil)
+	limiter := newMCPDiscoveryRateLimiter(1, time.Hour)
+	limiter.allow(submitHashIP(req)+":rest-search", time.Now())
+	h := &APIHandler{searchRateLimiter: limiter}
+	rr := httptest.NewRecorder()
+
+	h.Search(rr, req)
+
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want 429", rr.Code)
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("REST search Cache-Control = %q, want private, no-store", got)
+	}
+	if got := rr.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("REST search Referrer-Policy = %q, want no-referrer", got)
+	}
+}
+
+func TestReceiptBearingSitePageHeadersPrecedeLookup(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/site/?search_id=nhs_sr_example", nil)
+	rr := httptest.NewRecorder()
+	h := &WebHandler{}
+
+	h.SitePage(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rr.Code)
+	}
+	if got := rr.Header().Get("Cache-Control"); got != "private, no-store" {
+		t.Fatalf("site detail Cache-Control = %q, want private, no-store", got)
+	}
+	if got := rr.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("site detail Referrer-Policy = %q, want no-referrer", got)
+	}
+}
+
+func TestReceiptBearingRESTSiteHeadersPrecedeLookup(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/site/?search_id=nhs_sr_example", nil)
+	rr := httptest.NewRecorder()
+	h := &APIHandler{}
+
+	h.GetSite(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rr.Code)
+	}
+	for name, want := range map[string]string{
+		"Cache-Control":   "private, no-store",
+		"Pragma":          "no-cache",
+		"Referrer-Policy": "no-referrer",
+	} {
+		if got := rr.Header().Get(name); got != want {
+			t.Fatalf("REST site detail %s = %q, want %q", name, got, want)
+		}
+	}
 }
 
 func TestDiscoveryRateLimiterEvictsExpiredBuckets(t *testing.T) {
@@ -99,6 +178,27 @@ func TestDiscoveryRateLimiterEvictsExpiredBuckets(t *testing.T) {
 	limiter.allow("new", start.Add(6*time.Minute))
 	if _, exists := limiter.buckets["old"]; exists {
 		t.Fatal("expired abuse bucket was not evicted")
+	}
+}
+
+func TestDiscoveryRateLimiterFailsClosedAtBucketCapacity(t *testing.T) {
+	start := time.Unix(2_000, 0)
+	limiter := newMCPDiscoveryRateLimiter(2, time.Minute)
+	limiter.maxBuckets = 2
+	if _, _, ok := limiter.allow("first", start); !ok {
+		t.Fatal("first bucket was rejected")
+	}
+	if _, _, ok := limiter.allow("second", start); !ok {
+		t.Fatal("second bucket was rejected")
+	}
+	if _, retry, ok := limiter.allow("attacker-churn", start); ok || retry <= 0 {
+		t.Fatalf("new bucket at capacity ok=%t retry=%s, want fail-closed", ok, retry)
+	}
+	if len(limiter.buckets) != 2 {
+		t.Fatalf("bucket count = %d, want hard cap 2", len(limiter.buckets))
+	}
+	if _, _, ok := limiter.allow("after-expiry", start.Add(2*time.Minute)); !ok {
+		t.Fatal("expired buckets did not restore bounded capacity")
 	}
 }
 

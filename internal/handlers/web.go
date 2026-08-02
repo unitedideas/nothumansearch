@@ -153,6 +153,9 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	category := r.URL.Query().Get("category")
 	page := parsePositivePage(r.URL.Query().Get("page"))
+	if q != "" || category != "" {
+		protectReceiptBearingResponse(w)
+	}
 
 	params := models.SearchParams{
 		Query:    q,
@@ -643,6 +646,10 @@ func (h *WebHandler) TagPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
+	searchID := strings.TrimSpace(r.URL.Query().Get("search_id"))
+	if searchID != "" {
+		protectReceiptBearingResponse(w)
+	}
 	domain := r.URL.Path[len("/site/"):]
 	if domain == "" {
 		http.NotFound(w, r)
@@ -654,7 +661,7 @@ func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if searchID := strings.TrimSpace(r.URL.Query().Get("search_id")); searchID != "" {
+	if searchID != "" {
 		recorded, selectionErr := models.RecordDemandSelection(h.DB, searchID, site.Domain, "web")
 		if selectionErr != nil {
 			log.Printf("demand selection web detail: %v", selectionErr)

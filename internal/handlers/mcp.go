@@ -18,7 +18,10 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
-const mcpMaxRequestBodyBytes int64 = 64 << 10
+const (
+	mcpMaxRequestBodyBytes                int64 = 64 << 10
+	mcpDiscoveryRateLimiterMaximumBuckets       = 10_000
+)
 
 // MCPHandler exposes Not Human Search as a remote MCP (Model Context Protocol) server.
 // Agents can register this server via:
@@ -30,6 +33,7 @@ const mcpMaxRequestBodyBytes int64 = 64 << 10
 type MCPHandler struct {
 	DB                      *sql.DB
 	BaseURL                 string
+	ProviderExchange        *ProviderExchangeHandler
 	discoveryRateLimiter    *mcpDiscoveryRateLimiter
 	toolRateLimiter         *mcpDiscoveryRateLimiter
 	probeRateLimiter        *mcpDiscoveryRateLimiter
@@ -50,11 +54,12 @@ func NewMCPHandler(db *sql.DB, baseURL string) *MCPHandler {
 }
 
 type mcpDiscoveryRateLimiter struct {
-	mu        sync.Mutex
-	limit     int
-	window    time.Duration
-	buckets   map[string]mcpDiscoveryBucket
-	nextPrune time.Time
+	mu         sync.Mutex
+	limit      int
+	window     time.Duration
+	buckets    map[string]mcpDiscoveryBucket
+	maxBuckets int
+	nextPrune  time.Time
 }
 
 type mcpDiscoveryBucket struct {
@@ -70,9 +75,10 @@ func newMCPDiscoveryRateLimiter(limit int, window time.Duration) *mcpDiscoveryRa
 		window = time.Hour
 	}
 	return &mcpDiscoveryRateLimiter{
-		limit:   limit,
-		window:  window,
-		buckets: map[string]mcpDiscoveryBucket{},
+		limit:      limit,
+		window:     window,
+		buckets:    map[string]mcpDiscoveryBucket{},
+		maxBuckets: mcpDiscoveryRateLimiterMaximumBuckets,
 	}
 }
 
@@ -97,7 +103,16 @@ func (l *mcpDiscoveryRateLimiter) allow(key string, now time.Time) (remaining in
 	if key == "" {
 		key = "unknown"
 	}
-	b := l.buckets[key]
+	b, exists := l.buckets[key]
+	maxBuckets := l.maxBuckets
+	if maxBuckets < 1 {
+		maxBuckets = mcpDiscoveryRateLimiterMaximumBuckets
+	}
+	if !exists && len(l.buckets) >= maxBuckets {
+		// Never evict an active bucket to admit attacker-controlled churn. A new
+		// identity fails closed until normal expiry pruning creates capacity.
+		return 0, l.window, false
+	}
 	if b.resetAt.IsZero() || !now.Before(b.resetAt) {
 		b = mcpDiscoveryBucket{resetAt: now.Add(l.window)}
 	}
@@ -153,6 +168,10 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "POST or GET only", http.StatusMethodNotAllowed)
 		return
 	}
+	// MCP tool responses can mint or consume bearer search receipts and signed
+	// provider action URLs. Treat every POST response as private capability data
+	// so future tools cannot accidentally reopen a cache or referrer leak.
+	protectReceiptBearingResponse(w)
 
 	r.Body = http.MaxBytesReader(w, r.Body, mcpMaxRequestBodyBytes)
 	decoder := json.NewDecoder(r.Body)
@@ -474,6 +493,34 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 				},
 			},
 		},
+		{
+			"name":        "prepare_provider_action",
+			"title":       "Prepare an Authorization-Attested Provider Action",
+			"description": "Create a signed action handoff for a separately disclosed provider-funded offer returned by search_agents. Requires the search receipt and the caller's explicit principal-authorization attestation. Accepts controlled constraints only—no name, email, contact detail, raw prompt, agent identity, or principal identity fields. Search and direct provider access remain free; creating a ticket charges neither party. Exact v1 wording: " + h.BaseURL + "/privacy#consent-v1",
+			"inputSchema": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"offer_id":  map[string]any{"type": "string", "description": "Provider-funded offer ID returned separately by search_agents."},
+					"search_id": map[string]any{"type": "string", "description": "Search receipt proving the provider appeared organically."},
+					"demand_topic": map[string]any{
+						"type":        "string",
+						"enum":        []string{"payments", "commerce", "jobs", "data", "search", "weather", "maps", "email", "messaging", "image", "video", "audio", "documents", "security", "finance", "health", "education", "news", "analytics", "automation", "productivity", "identity", "storage", "ai-tools", "developer-tools", "other"},
+						"description": "One controlled topic already present on the referenced search receipt.",
+					},
+					"region_code": map[string]any{"type": "string", "description": "Optional uppercase ISO country or country-region code."},
+					"budget_band": map[string]any{"type": "string", "enum": []string{"unspecified", "under_100", "100_499", "500_1999", "2000_plus"}},
+					"urgency":     map[string]any{"type": "string", "enum": []string{"unspecified", "now", "7_days", "30_days", "researching"}},
+					"requirement_flags": map[string]any{
+						"type": "array", "maxItems": 8, "uniqueItems": true,
+						"items": map[string]any{"type": "string", "enum": []string{"api_access", "mcp", "sandbox", "self_serve", "enterprise", "compliance", "multilingual", "human_support"}},
+					},
+					"principal_consent": map[string]any{"type": "boolean", "const": true, "description": "Caller attests that the human/company principal authorized this handoff under the published versioned wording."},
+					"consent_version":   map[string]any{"type": "string", "enum": []string{models.ProviderPrincipalConsentV1}, "description": h.BaseURL + "/privacy#consent-v1"},
+				},
+				"required": []string{"offer_id", "search_id", "demand_topic", "principal_consent", "consent_version"},
+			},
+		},
 	}
 }
 
@@ -611,6 +658,8 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 		h.toolFindMCPServers(toolResponse, req.ID, params.Arguments, demandRequestIsSynthetic(r))
 	case "recent_additions":
 		h.toolRecentAdditions(toolResponse, req.ID, params.Arguments)
+	case "prepare_provider_action":
+		h.toolPrepareProviderAction(toolResponse, req.ID, params.Arguments, r)
 	default:
 		h.writeToolError(toolResponse, req.ID, "unknown tool: "+params.Name)
 	}
@@ -651,11 +700,118 @@ func isKnownMCPTool(name string) bool {
 	switch name {
 	case "search_agents", "search", "get_site_details", "get_stats", "submit_site",
 		"register_monitor", "check_url", "verify_mcp", "list_categories",
-		"get_top_sites", "find_mcp_servers", "recent_additions":
+		"get_top_sites", "find_mcp_servers", "recent_additions", "prepare_provider_action":
 		return true
 	default:
 		return false
 	}
+}
+
+func (h *MCPHandler) toolPrepareProviderAction(w http.ResponseWriter, id json.RawMessage, args map[string]any, r *http.Request) {
+	if h.ProviderExchange == nil || h.ProviderExchange.Signer == nil {
+		h.writeToolError(w, id, "signed provider actions are not configured")
+		return
+	}
+	if retry, ok := h.ProviderExchange.consumeActionTicketLimit(r, time.Now()); !ok {
+		retrySeconds := max(1, int(retry.Seconds()))
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retrySeconds))
+		h.writeToolError(w, id, "provider action ticket safety limit exceeded; retry after the indicated interval")
+		return
+	}
+	if err := validatePrepareProviderActionArguments(args); err != nil {
+		h.writeToolError(w, id, err.Error())
+		return
+	}
+	prepared, err := h.ProviderExchange.prepareActionTicket(actionTicketRequest{
+		OfferID:          asString(args["offer_id"]),
+		SearchID:         asString(args["search_id"]),
+		DemandTopic:      asString(args["demand_topic"]),
+		RegionCode:       asString(args["region_code"]),
+		BudgetBand:       asString(args["budget_band"]),
+		Urgency:          asString(args["urgency"]),
+		RequirementFlags: asStringList(args["requirement_flags"]),
+		PrincipalConsent: asBool(args["principal_consent"]),
+		ConsentVersion:   asString(args["consent_version"]),
+	})
+	if err != nil {
+		_, message := providerExchangeStatus(err)
+		h.writeToolError(w, id, message)
+		return
+	}
+	ticket, _ := prepared["ticket"].(*models.ActionTicket)
+	actionURL, _ := prepared["action_url"].(string)
+	text := "Prepared a consent-attested provider action. Creating this ticket charged neither the principal nor the provider."
+	if ticket != nil {
+		text += " Ticket: " + ticket.ID + "."
+		if ticket.Replayed {
+			text += " This was an exact idempotent replay; NHS reconstructed the same token from its non-secret nonce and retained signing key ID."
+		}
+	}
+	if actionURL != "" {
+		text += " Provider action URL: " + actionURL
+	}
+	h.writeResult(w, id, map[string]any{
+		"content":           []map[string]any{{"type": "text", "text": text}},
+		"structuredContent": prepared,
+	})
+}
+
+// validatePrepareProviderActionArguments makes the MCP privacy boundary
+// enforceable at runtime. Tool schemas are advisory to clients, and JSON-RPC
+// arguments arrive as a map, so a caller could otherwise add free-form contact,
+// prompt, or notes fields that the HTTP strict decoder would never see.
+func validatePrepareProviderActionArguments(args map[string]any) error {
+	allowed := map[string]struct{}{
+		"offer_id": {}, "search_id": {}, "demand_topic": {}, "region_code": {},
+		"budget_band": {}, "urgency": {}, "requirement_flags": {},
+		"principal_consent": {}, "consent_version": {},
+	}
+	for key := range args {
+		if _, ok := allowed[key]; !ok {
+			return errors.New("provider action arguments contain an unsupported field; contact details, raw prompts, notes, and identities are not accepted")
+		}
+	}
+	for _, key := range []string{"offer_id", "search_id", "demand_topic", "region_code", "budget_band", "urgency", "consent_version"} {
+		if value, exists := args[key]; exists {
+			if _, ok := value.(string); !ok {
+				return errors.New("provider action arguments have an invalid field type")
+			}
+		}
+	}
+	if value, exists := args["principal_consent"]; exists {
+		if _, ok := value.(bool); !ok {
+			return errors.New("provider action arguments have an invalid field type")
+		}
+	}
+	if value, exists := args["requirement_flags"]; exists {
+		items, ok := value.([]any)
+		if !ok {
+			return errors.New("provider action arguments have an invalid field type")
+		}
+		for _, item := range items {
+			if _, ok := item.(string); !ok {
+				return errors.New("provider action arguments have an invalid field type")
+			}
+		}
+	}
+	return nil
+}
+
+func asStringList(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		if strings, ok := value.([]string); ok {
+			return strings
+		}
+		return nil
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		if value, ok := item.(string); ok {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 // toolRegisterMonitor wraps the /api/v1/monitor/register REST handler so
@@ -791,6 +947,19 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 	}
 
 	searchID := h.recordMCPSearchReceipt(p, total, sites, synthetic)
+	paidOffers := []publicProviderOffer{}
+	paidOffersAvailable := false
+	if searchID != "" {
+		modelOffers, paidErr := models.ListPublicProviderOffersForOrganicResults(h.DB, sites)
+		if paidErr != nil {
+			log.Printf("provider offers MCP search: %v", paidErr)
+		} else if returnedErr := models.RecordProviderOffersReturned(h.DB, searchID, modelOffers); returnedErr != nil {
+			log.Printf("provider offers MCP return evidence: %v", returnedErr)
+		} else {
+			paidOffers = publicProviderOfferModelViews(modelOffers, h.BaseURL)
+			paidOffersAvailable = len(modelOffers) > 0
+		}
+	}
 
 	// Compact text view for agents (cheap tokens, still readable).
 	var b strings.Builder
@@ -831,14 +1000,26 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		}
 		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n\n", s.URL, h.BaseURL, s.Domain)
 	}
+	if len(paidOffers) > 0 {
+		b.WriteString("Provider-funded actions (separate from organic order; optional):\n")
+		for _, offer := range paidOffers {
+			fmt.Fprintf(&b, "- Organic result %d, %s: %s (%s). NHS may receive %d %s minor units if the provider reports %s. Use prepare_provider_action with offer_id %s and this search receipt.\n",
+				offer.OrganicPosition, offer.ProviderDomain, offer.Name, offer.ActionType,
+				offer.NHSCompensation.AmountMinor, offer.NHSCompensation.Currency,
+				offer.NHSCompensation.Event, offer.ID)
+		}
+		b.WriteString("\n")
+	}
 
 	// Return both human-readable text (content) and structured JSON (structuredContent).
 	// Per MCP spec, structuredContent lets agents parse without string-munging.
 	structured := map[string]any{
-		"access":           "free",
-		"receipt_recorded": searchID != "",
-		"total":            total,
-		"results":          sites,
+		"access":                "free",
+		"receipt_recorded":      searchID != "",
+		"total":                 total,
+		"results":               sites,
+		"paid_offers":           paidOffers,
+		"paid_offers_available": paidOffersAvailable,
 	}
 	if searchID != "" {
 		structured["search_id"] = searchID
@@ -902,8 +1083,38 @@ func mcpAnalyticsArguments(tool string, args map[string]any) map[string]any {
 		safe["target_supplied"] = strings.TrimSpace(asString(args["url"])) != ""
 	case "find_mcp_servers":
 		safe["demand_topics"] = models.ClassifyDemandTopics(asString(args["query"]), asString(args["category"]))
+	case "prepare_provider_action":
+		if value := asString(args["demand_topic"]); stringInSet(value, []string{"payments", "commerce", "jobs", "data", "search", "weather", "maps", "email", "messaging", "image", "video", "audio", "documents", "security", "finance", "health", "education", "news", "analytics", "automation", "productivity", "identity", "storage", "ai-tools", "developer-tools", "other"}) {
+			safe["demand_topic"] = value
+		}
+		if value := asString(args["budget_band"]); stringInSet(value, []string{"unspecified", "under_100", "100_499", "500_1999", "2000_plus"}) {
+			safe["budget_band"] = value
+		}
+		if value := asString(args["urgency"]); stringInSet(value, []string{"unspecified", "now", "7_days", "30_days", "researching"}) {
+			safe["urgency"] = value
+		}
+		copyBool("principal_consent")
+		flags := []string{}
+		for _, value := range asStringList(args["requirement_flags"]) {
+			if stringInSet(value, []string{"api_access", "mcp", "sandbox", "self_serve", "enterprise", "compliance", "multilingual", "human_support"}) {
+				flags = append(flags, value)
+			}
+			if len(flags) == 8 {
+				break
+			}
+		}
+		safe["requirement_flags"] = flags
 	}
 	return safe
+}
+
+func stringInSet(value string, allowed []string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessage, args map[string]any) {

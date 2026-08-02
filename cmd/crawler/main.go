@@ -59,7 +59,7 @@ func main() {
 			migrationsDir = root + "/migrations"
 		}
 		if err := database.RunMigrations(migrationsDir); err != nil {
-			log.Printf("WARNING: migration: %v", err)
+			log.Fatalf("migration: %v", err)
 		}
 		// Belt-and-braces: ensure favicon columns exist regardless of file-based migration state.
 		if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_favicon BOOLEAN DEFAULT FALSE`); err != nil {

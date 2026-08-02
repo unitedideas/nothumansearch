@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Privacy and Principal Authorization — Not Human Search</title>
+  <meta name="description" content="The exact data and consent boundary for free Not Human Search discovery and the provider-funded action exchange.">
+  <link rel="canonical" href="{{.BaseURL}}/privacy">
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+  <style>
+    :root{--bg:#0d0d0e;--surface:#151517;--surface-2:#101012;--border:#2b2b31;--text:#e9e9eb;--muted:#9b9ba4;--accent:#d97757;--accent-2:#f0a183;--green:#4ade80;--blue:#93c5fd}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.shell{width:min(1040px,calc(100% - 40px));margin:auto}a{color:var(--accent-2)}a:focus-visible{outline:3px solid var(--blue);outline-offset:3px}.nav{height:72px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}.brand{font-size:19px;font-weight:760;text-decoration:none;letter-spacing:-.03em;color:var(--text)}.brand span{color:var(--accent)}.nav-links{display:flex;gap:18px}.nav-links a{font-size:13px;color:var(--muted);text-decoration:none}.nav-links a:hover{color:var(--text)}
+    .hero{padding:86px 0 66px;max-width:840px}.eyebrow{color:var(--accent-2);font:650 12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.12em;margin-bottom:18px}h1{font-size:clamp(42px,7vw,70px);line-height:1;letter-spacing:-.055em;margin:0}.lede{font-size:19px;color:var(--muted);max-width:760px;margin:26px 0 0}.promise{display:inline-flex;max-width:100%;margin-top:28px;border:1px solid #365442;background:#102016;color:#b9f6cb;border-radius:999px;padding:7px 12px;font:650 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.05em;text-align:center;overflow-wrap:anywhere}
+    section{padding:64px 0;border-top:1px solid var(--border)}h2{font-size:clamp(28px,4vw,40px);letter-spacing:-.04em;line-height:1.1;margin:0 0 12px}.section-copy{color:var(--muted);max-width:730px;margin:0 0 28px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{border:1px solid var(--border);background:var(--surface);border-radius:11px;padding:22px}.card h3{font-size:17px;margin:0 0 12px}.card h4{font:650 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin:20px 0 7px}.card p,.card li{color:var(--muted);font-size:13px}.card p{margin:0}.card ul{margin:0;padding-left:18px}.card li+li{margin-top:6px}.retention{display:inline-block;margin-top:16px;border:1px solid var(--border);border-radius:999px;padding:5px 9px;color:var(--text);font:650 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.06em}
+    .boundary{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:11px;overflow:hidden}.boundary>div{padding:24px;background:var(--surface)}.boundary>div+div{border-left:1px solid var(--border);background:var(--surface-2)}.boundary h3{font-size:16px;margin:0 0 10px}.boundary ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px}.boundary li+li{margin-top:7px}.consent{border:1px solid #4f3b33;background:#17110f;border-radius:12px;padding:26px}.version{display:inline-flex;background:#261a16;color:var(--accent-2);border:1px solid #563b31;border-radius:999px;padding:6px 10px;font:650 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace}.consent h3{font-size:20px;margin:18px 0 10px}.consent p{color:#c7c2c0;margin:0}.consent code{color:var(--green)}.consent .limits{margin-top:18px;padding-top:18px;border-top:1px solid #4f3b33;color:var(--muted);font-size:13px}
+    .controls{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.control{border:1px solid var(--border);border-radius:10px;padding:19px;background:var(--surface)}.control strong{display:block;margin-bottom:5px}.control p{margin:0;color:var(--muted);font-size:13px}.contact{display:flex;justify-content:space-between;gap:30px;align-items:center}.contact p{color:var(--muted);max-width:680px}.button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 17px;border-radius:7px;background:var(--accent);color:#160f0d;text-decoration:none;font-weight:750;white-space:nowrap}footer{display:flex;justify-content:space-between;gap:20px;padding:36px 0 52px;border-top:1px solid var(--border);color:var(--muted);font-size:12px}
+    @media(max-width:760px){.grid,.controls{grid-template-columns:1fr}.boundary{grid-template-columns:1fr}.boundary>div+div{border-left:0;border-top:1px solid var(--border)}.contact{display:block}.button{margin-top:10px}.nav-links a:first-child{display:none}}
+    @media(max-width:520px){.shell{width:calc(100% - 28px)}.hero{padding:58px 0 50px}h1{font-size:43px}section{padding:50px 0}.nav-links{gap:12px}footer{flex-direction:column}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="/">Not Human <span>Search</span></a>
+      <div class="nav-links"><a href="/">Free search</a><a href="/providers">Provider exchange</a></div>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <div class="eyebrow">Privacy and authorization boundary</div>
+        <h1>The boundary is part of the product.</h1>
+        <p class="lede">Agents can search Not Human Search without an account or payment. Provider-funded actions add attribution only when a caller makes an explicit, versioned authorization attestation.</p>
+        <div class="promise">NO RAW QUERY SALES · NO AGENT IDENTITY SALES · NO PAID ORGANIC RANK</div>
+      </header>
+
+      <section aria-labelledby="discovery-title">
+        <h2 id="discovery-title">What free discovery records</h2>
+        <p class="section-copy">The exchange uses a query-free discovery receipt. Search text is classified in memory into no more than three controlled topics, then discarded from this receipt.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>Query-free search receipt</h3>
+            <h4>Stored</h4>
+            <ul>
+              <li>Surface: web, REST, or MCP.</li>
+              <li>Controlled topics and explicit category.</li>
+              <li>Boolean capability filters, result count, page, and page size.</li>
+              <li>Returned site IDs, domain snapshots, scores, and organic positions.</li>
+              <li>Any paid offer shown: its ID, version, name, action type, disclosed bounty/currency, charge event, and organic-result binding.</li>
+              <li>Whether the request was a marked deployment smoke test.</li>
+            </ul>
+            <span class="retention">30-day retention</span>
+          </article>
+          <article class="card">
+            <h3>Not in the discovery receipt</h3>
+            <h4>Excluded by schema</h4>
+            <ul>
+              <li>Raw search text or a hash/fingerprint of it.</li>
+              <li>Name, email, contact data, or principal identity.</li>
+              <li>Claimed agent identity or an agent-to-principal mapping.</li>
+              <li>IP address, IP hash, user agent, or referral trail.</li>
+              <li>A provider payment flag that could change organic score or order.</li>
+            </ul>
+            <span class="retention">Never sold as row-level data</span>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="ticket-title">
+        <h2 id="ticket-title">What a provider action ticket records</h2>
+        <p class="section-copy">A ticket exists only for an active provider-funded offer attached to a site already present in the referenced organic result set. Creating it charges neither party.</p>
+        <div class="boundary">
+          <div>
+            <h3>Controlled ticket fields</h3>
+            <ul>
+              <li>Provider offer and search-receipt IDs.</li>
+              <li>One topic already present on that receipt.</li>
+              <li>Optional region, USD budget band, urgency, and allowlisted requirement flags.</li>
+              <li>The authorization boolean and immutable consent-version label.</li>
+              <li>Immutable offer, price, bounty, action URL, and billing snapshots.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>What NHS does not transmit in the ticket</h3>
+            <ul>
+              <li>No name, email, phone number, or other direct contact field.</li>
+              <li>No raw prompt, notes, free-form requirements, or uploaded content.</li>
+              <li>No claimed agent identity or principal identity.</li>
+              <li>No card, bank, or provider-account credentials.</li>
+              <li>The provider may collect information on its own site under its own terms after the action URL is followed.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="section-copy" style="margin-top:20px">After 30 days, NHS removes the ticket’s controlled intent fields and search-receipt link. It retains the consent attestation, immutable commercial snapshot, opaque IDs, and signed outcome/accounting records needed for disputes and audit history.</p>
+      </section>
+
+      <section id="consent-v1" aria-labelledby="consent-title">
+        <h2 id="consent-title">Exact authorization attestation</h2>
+        <p class="section-copy">This wording is the complete contract represented by <code>nhs-principal-consent-v1</code>. A new meaning requires a new version label.</p>
+        <article class="consent">
+          <span class="version">nhs-principal-consent-v1</span>
+          <h3>The caller attests all of the following:</h3>
+          <p>The human or company principal authorized Not Human Search to create one action ticket for the named provider offer returned beside the referenced organic result; understands that NHS will store the controlled topic, optional region, USD budget band, urgency, and requirement flags for up to 30 days; understands that NHS places no name, email, contact detail, raw prompt, agent identity, or principal identity in the ticket; understands that the provider may collect information under its own terms after the provider action URL is followed; and understands that NHS may receive the disclosed provider-funded amount if the provider reports the configured outcome. Creating the ticket charges neither the principal nor the provider.</p>
+          <p class="limits">This is a caller attestation, not NHS verification of identity, agency, or legal authority. It does not revoke an action already completed on a provider’s site. Provider callbacks are authenticated assertions; NHS signatures prove what NHS recorded, not that NHS independently audited the underlying business event.</p>
+        </article>
+      </section>
+
+      <section aria-labelledby="operations-title">
+        <h2 id="operations-title">Operational and commercial records</h2>
+        <div class="grid">
+          <article class="card"><h3>Abuse and reliability telemetry</h3><p>Separate operational logs can contain a truncated IP hash, user agent, route, status, duration, and allowlisted MCP arguments. Page, MCP, and intent-event logs are pruned after 30 days; priority-throughput usage events after 35 days. New discovery analytics do not write raw query text.</p></article>
+          <article class="card"><h3>Provider and accounting records</h3><p>Provider accounts retain an email, DNS claim state, key hashes, offer terms, exact non-secret evidence references, append-only admin actions, budget entries, and signed outcome receipts. Callback secrets are returned to the provider and stored only as hashes.</p><h4>DNS ownership freshness</h4><p>The provider must keep its TXT value published. During initial verification and automatic rechecks, NHS compares DNS answers in memory and does not retain the raw answers or challenge token; it stores only the SHA-256 token hash, check timestamps, and failure count. Paid-action eligibility stops after {{.DNSFailureLimit}} consecutive failed checks or when the last successful check reaches {{.DNSVerificationFreshnessDays}} days old. Claim revocation pauses offers and revokes callback keys and outstanding action authorization.</p></article>
+          <article class="card"><h3>Demand reports</h3><p>Providers receive controlled-topic aggregates, not individual searches. A segmented topic is suppressed until at least 20 persisted, non-synthetic receipts qualify. Because NHS deliberately does not retain agent identity in these receipts, that threshold counts receipts—not distinct people or agents.</p></article>
+          <article class="card"><h3>Who charges whom</h3><p>Pilot terms require the provider to remain Merchant of Record for its product or service; NHS does not independently verify that status. NHS does not charge the principal for a ticket. NHS records a provider-funded debit or capped CPA receivable only on the disclosed provider-reported event. An authenticated invalid or duplicate report can credit an existing charge after ticket expiry or authorization revocation, but cannot create a new charge or positive outcome.</p></article>
+        </div>
+      </section>
+
+      <section aria-labelledby="controls-title">
+        <h2 id="controls-title">Controls that stay with each party</h2>
+        <div class="controls">
+          <article class="control"><strong>Agents and principals</strong><p>Use the canonical organic link without a ticket, decline provider-funded actions, or withhold the v1 attestation.</p></article>
+          <article class="control"><strong>Providers</strong><p>Pause an offer, rotate a callback key, or revoke a domain claim. Emergency operator action can invalidate outstanding authorization.</p></article>
+          <article class="control"><strong>NHS operator</strong><p>Can pause inventory and preserve append-only evidence, but cannot sell organic rank, readiness score, raw queries, or agent identities.</p></article>
+        </div>
+      </section>
+
+      <section aria-labelledby="contact-title">
+        <div class="contact">
+          <div><h2 id="contact-title">Access, deletion, or correction</h2><p>Email the address below with the provider domain and request type. NHS will verify authority before changing a provider account. Commercial, security, and accounting records may be retained where needed to preserve signed receipts, resolve disputes, or meet legal obligations.</p></div>
+          <a class="button" href="mailto:hello@nothumansearch.ai?subject=Privacy%20request">hello@nothumansearch.ai</a>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Effective August 1, 2026</span><span>Not Human Search · free discovery · provider-funded outcomes</span></footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "skill": "$design-director",
+  "reviewed_at": "2026-08-02T00:58:11-07:00",
+  "base_revision": "bfbd1ea9c573b9ac3eb95622ce80fb384b34ad3d",
+  "discover": [
+    "templates/providers.html",
+    "templates/privacy.html"
+  ],
+  "surfaces": [
+    {
+      "id": "provider-exchange-onboarding",
+      "source": "templates/providers.html",
+      "category": "paid product",
+      "audience": "verified service providers and the humans operating their NHS provider accounts",
+      "primary_conversion": "current DNS-verified indexed-domain claim followed by one accurate draft provider-funded action",
+      "quality_metric": "distinct commercially activated providers followed by accepted handoffs, activations, and meaningful replenishment",
+      "evidence_brief": "design/reviews/2026-08-01-provider-exchange.md",
+      "verdict": "approved",
+      "reviewed_source_sha256": "9891c0c18fb09e9acd0375ad9575d39dc4ae977d43c368d08ee1b73c6fd63c97",
+      "renders": {
+        "desktop": "design/reviews/evidence/2026-08-01-provider-desktop.png",
+        "mobile": "design/reviews/evidence/2026-08-01-provider-mobile.png"
+      },
+      "checks": {
+        "five_second": true,
+        "decision": true,
+        "trust": true,
+        "visual": true,
+        "accessibility": true,
+        "responsive": true
+      },
+      "blocking_issues": []
+    },
+    {
+      "id": "provider-exchange-privacy",
+      "source": "templates/privacy.html",
+      "category": "high-volume information",
+      "audience": "agent developers, principals, providers, and reviewers evaluating the discovery, consent, ownership, and accounting boundary",
+      "primary_conversion": "informed choice between the free organic link and the optional authorization-attested provider action",
+      "quality_metric": "privacy or authorization disputes plus abandonment attributable to unclear consent and ownership language",
+      "evidence_brief": "design/reviews/2026-08-01-provider-exchange.md",
+      "verdict": "approved",
+      "reviewed_source_sha256": "6fe9c9dc8f6d797a88481bf3ab129718880c4d9e74c48ba59f87a36dda6e376c",
+      "renders": {
+        "desktop": "design/reviews/evidence/2026-08-01-privacy-desktop.png",
+        "mobile": "design/reviews/evidence/2026-08-01-privacy-mobile.png"
+      },
+      "checks": {
+        "five_second": true,
+        "decision": true,
+        "trust": true,
+        "visual": true,
+        "accessibility": true,
+        "responsive": true
+      },
+      "blocking_issues": []
+    }
+  ],
+  "additional_render_evidence": [
+    {
+      "viewport": "desktop 1440x900",
+      "state": "provider first screen signed out",
+      "file": "design/reviews/evidence/2026-08-01-provider-desktop.png",
+      "sha256": "599dc3de4aa24972a3236e74655364bcd75d1669bda26d1eb1729e9753277362"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "provider first screen signed out",
+      "file": "design/reviews/evidence/2026-08-01-provider-mobile.png",
+      "sha256": "9d6f715e8d3253ba27de4af8961b3b9f40181d4268b740d920d6e69f0241dade"
+    },
+    {
+      "viewport": "desktop 1440x900",
+      "state": "signed-in provider setup with current DNS proof",
+      "file": "design/reviews/evidence/2026-08-01-provider-dashboard-desktop.png",
+      "sha256": "b107e338efcee6162d9096e6312c1d030ed1469331054734ab278c6bc227e331"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "signed-in provider setup with current DNS proof",
+      "file": "design/reviews/evidence/2026-08-01-provider-dashboard-mobile.png",
+      "sha256": "3ee55b9a93caaa968d1050a9959cee660071796bb7fd8a4c4443c8c108a1712a"
+    },
+    {
+      "viewport": "desktop 1440x900",
+      "state": "privacy first screen",
+      "file": "design/reviews/evidence/2026-08-01-privacy-desktop.png",
+      "sha256": "bf6677b6369ed14346a70fe194620e17a7ef14e242e0bf6fba9934d0e6f6c471"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "privacy first screen",
+      "file": "design/reviews/evidence/2026-08-01-privacy-mobile.png",
+      "sha256": "01b9537074564efcdb877c1cdd4e3ab15e2c99f9a0e385a255aec6a097946e4d"
+    },
+    {
+      "viewport": "desktop 1440x900",
+      "state": "privacy exact returned-offer disclosure",
+      "file": "design/reviews/evidence/2026-08-01-privacy-discovery-desktop.png",
+      "sha256": "22055de46dcedb780ebe7fdf1714cbcb0ae576c7f62b5f4685cae3402aaff9f2"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "privacy exact returned-offer disclosure",
+      "file": "design/reviews/evidence/2026-08-01-privacy-discovery-mobile.png",
+      "sha256": "3ec98b3d79afce6247929e4769ff50be0436a3d3287a37827ba56816a116e6ac"
+    },
+    {
+      "viewport": "desktop 1440x900",
+      "state": "privacy operational and DNS ownership disclosure",
+      "file": "design/reviews/evidence/2026-08-01-privacy-dns-desktop.png",
+      "sha256": "fc6b4d665975cd72a26f1a21b859585774df57ebd672260939c5baea90a2c3ae"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "privacy operational and DNS ownership disclosure",
+      "file": "design/reviews/evidence/2026-08-01-privacy-dns-mobile.png",
+      "sha256": "42c3ba0b1c21a5dc8c86cd85e67e8c430c2afad8278c0b8529a0698bb6beaced"
+    }
+  ],
+  "measured": {
+    "provider_review_desktop_widths": {
+      "inner": 1440,
+      "client": 1425,
+      "document": 1425,
+      "body": 1425
+    },
+    "provider_review_mobile_widths": {
+      "inner": 390,
+      "client": 375,
+      "document": 375,
+      "body": 375
+    },
+    "privacy_refresh_desktop_widths": {
+      "inner": 1440,
+      "client": 1440,
+      "document": 1440,
+      "body": 1440
+    },
+    "privacy_refresh_mobile_widths": {
+      "inner": 390,
+      "client": 390,
+      "document": 390,
+      "body": 390
+    },
+    "contrast_ratios": {
+      "primary_text_on_background": 15.88,
+      "muted_text_on_background": 6.62,
+      "accent_text_on_background": 8.93,
+      "button_text_on_accent": 6.07,
+      "green_signal_on_surface": 10.56,
+      "new_freshness_copy_minimum": 5.98
+    },
+    "browser_errors": 0,
+    "privacy_refresh_renderer": "Chromium headless shell 1217; unchanged template DOM positioned at viewport top for section-specific evidence"
+  },
+  "unresolved_release_findings": [
+    "Dedicated provider-exchange signing key reference is not provisioned.",
+    "Final security reread, owner-authorized deployment, and production smoke remain pending.",
+    "No real provider budget, handoff, activation, collection, replenishment, or renewal evidence exists yet."
+  ],
+  "status": "visual_approval_for_exact_hashes_preproduction"
+}

@@ -1,0 +1,22 @@
+{
+  "pass": true,
+  "contract": "/Users/shane/machine/nothumansearch/design/reviews/2026-08-01-provider-exchange.json",
+  "root": "/Users/shane/machine/nothumansearch",
+  "surface_count": 2,
+  "discovered_count": 2,
+  "approved_count": 2,
+  "issue_count": 0,
+  "issues": [],
+  "surfaces": [
+    {
+      "id": "provider-exchange-onboarding",
+      "verdict": "approved",
+      "issues": []
+    },
+    {
+      "id": "provider-exchange-privacy",
+      "verdict": "approved",
+      "issues": []
+    }
+  ]
+}

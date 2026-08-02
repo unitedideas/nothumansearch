@@ -2,22 +2,20 @@ package models
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"errors"
-	"strconv"
+	"fmt"
 	"strings"
-	"sync/atomic"
-	"time"
 	"unicode"
 
 	"github.com/lib/pq"
 )
 
-var demandSearchFallbackCounter uint64
+var readDemandSearchEntropy = rand.Read
 
 var ErrDemandStoreUnavailable = errors.New("demand receipt store unavailable")
+var ErrDemandEntropyUnavailable = errors.New("demand receipt entropy unavailable")
 
 // ProviderDemandPrivacyThreshold is a release gate for segmented reporting.
 // It counts persisted search receipts, not unique agents, people, or sessions.
@@ -89,14 +87,12 @@ var demandCategoryTopics = map[string]string{
 	"security":      "security",
 }
 
-func GenerateDemandSearchID() string {
+func GenerateDemandSearchID() (string, error) {
 	var raw [12]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		counter := atomic.AddUint64(&demandSearchFallbackCounter, 1)
-		fallback := sha256.Sum256([]byte(strconv.FormatInt(time.Now().UnixNano(), 10) + ":" + strconv.FormatUint(counter, 10)))
-		copy(raw[:], fallback[:12])
+	if _, err := readDemandSearchEntropy(raw[:]); err != nil {
+		return "", fmt.Errorf("%w: %v", ErrDemandEntropyUnavailable, err)
 	}
-	return "nhs_sr_" + base64.RawURLEncoding.EncodeToString(raw[:])
+	return "nhs_sr_" + base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
 
 func normalizeDemandSurface(surface string) string {
@@ -158,7 +154,11 @@ func RecordDemandSearch(db *sql.DB, receipt DemandSearchReceipt, sites []Site) e
 		return ErrDemandStoreUnavailable
 	}
 	if receipt.PublicID == "" {
-		receipt.PublicID = GenerateDemandSearchID()
+		publicID, err := GenerateDemandSearchID()
+		if err != nil {
+			return err
+		}
+		receipt.PublicID = publicID
 	}
 	if receipt.ResultCount < 0 {
 		receipt.ResultCount = 0

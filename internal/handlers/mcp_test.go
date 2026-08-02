@@ -124,3 +124,21 @@ func TestMCPRejectsMultipleJSONValuesBeforeExecuting(t *testing.T) {
 		t.Fatalf("valid call after rejected multiple values status = %d, want 200; body=%s", valid.Code, valid.Body.String())
 	}
 }
+
+func TestMCPPostResponsesArePrivateCapabilityData(t *testing.T) {
+	h := NewMCPHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"unknown"}`))
+	rr := httptest.NewRecorder()
+
+	h.ServeHTTP(rr, req)
+
+	for name, want := range map[string]string{
+		"Cache-Control":   "private, no-store",
+		"Pragma":          "no-cache",
+		"Referrer-Policy": "no-referrer",
+	} {
+		if got := rr.Header().Get(name); got != want {
+			t.Fatalf("MCP POST %s = %q, want %q", name, got, want)
+		}
+	}
+}

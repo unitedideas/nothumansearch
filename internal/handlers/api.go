@@ -21,6 +21,7 @@ import (
 
 type APIHandler struct {
 	DB                        *sql.DB
+	BaseURL                   string
 	Auth                      *AuthService
 	searchRateLimiter         *mcpDiscoveryRateLimiter
 	probeRateLimiter          *mcpDiscoveryRateLimiter
@@ -94,8 +95,15 @@ func demandRequestIsSynthetic(r *http.Request) bool {
 // returned-result transaction commits. Callers must not advertise attribution
 // when the demand schema is unavailable or a database write fails.
 func recordDemandSearchReceipt(db *sql.DB, receipt models.DemandSearchReceipt, sites []models.Site) (string, error) {
+	if db == nil {
+		return "", models.ErrDemandStoreUnavailable
+	}
 	if receipt.PublicID == "" {
-		receipt.PublicID = models.GenerateDemandSearchID()
+		publicID, err := models.GenerateDemandSearchID()
+		if err != nil {
+			return "", err
+		}
+		receipt.PublicID = publicID
 	}
 	if err := models.RecordDemandSearch(db, receipt, sites); err != nil {
 		return "", err
@@ -106,6 +114,7 @@ func recordDemandSearchReceipt(db *sql.DB, receipt models.DemandSearchReceipt, s
 func NewAPIHandler(db *sql.DB) *APIHandler {
 	return &APIHandler{
 		DB:                        db,
+		BaseURL:                   "https://nothumansearch.ai",
 		searchRateLimiter:         newMCPDiscoveryRateLimiter(freeSearchHourlyLimit, time.Hour),
 		probeRateLimiter:          newMCPDiscoveryRateLimiter(freeActiveProbeHourlyLimit, time.Hour),
 		prioritySearchRateLimiter: newMCPDiscoveryRateLimiter(prioritySearchHourlyLimit, time.Hour),
@@ -131,7 +140,7 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, 200, map[string]any{
 		"$schema":            "https://schema.org/WebAPI",
 		"name":               "Not Human Search API v1",
-		"description":        "Search engine for agent-ready sites ranked by agentic readiness score (0-100).",
+		"description":        "Free, neutral search for agent-ready sites. Separately disclosed provider-funded actions may be attached only after an organic search receipt and never change rank or score.",
 		"version":            "1.0.0",
 		"base_url":           "https://nothumansearch.ai/api/v1",
 		"openapi_spec":       "https://nothumansearch.ai/openapi.yaml",
@@ -153,14 +162,30 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 			"api_key_subscribe": "POST /api/v1/api-keys/subscribe",
 			"api_key_activate":  "GET /api/v1/api-keys/activate?session_id=",
 			"monitor_register":  "POST /api/v1/monitor/register",
+			"provider_claims":   "GET|POST /api/v1/provider/claims (human session; DNS verification)",
+			"provider_offers":   "GET|POST /api/v1/provider/offers (human session; drafts require NHS commercial activation)",
+			"action_tickets":    "POST /api/v1/action-tickets (public; exact consent v1; controlled fields only)",
+			"provider_outcomes": "POST /api/v1/provider/outcomes (X-NHS-Provider-Key + Idempotency-Key)",
+			"receipt_verify":    "POST /api/v1/action-receipts/verify (public signature, freshness, and current-state verification)",
 		},
-		"auth":       "none for discovery; an active API key is optional and only raises throughput ceilings",
+		"auth":       "none for discovery, action-ticket preparation, or receipt verification; provider setup uses a human session; outcome callbacks use a claim-scoped provider key; an optional API key only raises discovery throughput ceilings",
 		"rate_limit": "free: search 240/hour/client and live verification 20/hour/client; priority API key: search 5000/hour/key and live verification 100/hour/key while monthly priority allocation remains",
+		"provider_exchange": map[string]any{
+			"setup_url":                      "https://nothumansearch.ai/providers",
+			"privacy_url":                    "https://nothumansearch.ai/privacy",
+			"consent_contract_url":           "https://nothumansearch.ai/privacy#consent-v1",
+			"organic_rank_sold":              false,
+			"raw_queries_sold":               false,
+			"agent_identities_sold":          false,
+			"direct_provider_access_free":    true,
+			"provider_mor_contract_required": true,
+		},
 	})
 }
 
 // GET /api/v1/search?q=...&category=...&min_score=...&page=...
 func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
+	protectReceiptBearingResponse(w)
 	// Discovery is a public utility. Protect it with a temporary abuse throttle,
 	// never a payment wall. Provider-funded products are monetized downstream of
 	// search, so agents must be able to form demand and evaluate the index freely.
@@ -269,16 +294,27 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"access":           "free",
-		"receipt_recorded": searchID != "",
-		"results":          sites,
-		"total":            total,
-		"page":             page,
-		"per_page":         perPage,
-		"has_next":         page*perPage < total,
+		"access":                "free",
+		"receipt_recorded":      searchID != "",
+		"results":               sites,
+		"total":                 total,
+		"page":                  page,
+		"per_page":              perPage,
+		"has_next":              page*perPage < total,
+		"paid_offers":           []publicProviderOffer{},
+		"paid_offers_available": false,
 	}
 	if searchID != "" {
 		response["search_id"] = searchID
+		paidOffers, paidErr := models.ListPublicProviderOffersForOrganicResults(h.DB, sites)
+		if paidErr != nil {
+			log.Printf("provider offers REST search: %v", paidErr)
+		} else if returnedErr := models.RecordProviderOffersReturned(h.DB, searchID, paidOffers); returnedErr != nil {
+			log.Printf("provider offers REST return evidence: %v", returnedErr)
+		} else {
+			response["paid_offers"] = publicProviderOfferModelViews(paidOffers, h.BaseURL)
+			response["paid_offers_available"] = len(paidOffers) > 0
+		}
 	}
 	h.writeJSON(w, 200, response)
 }
@@ -292,6 +328,10 @@ func parsePositivePage(raw string) int {
 
 // GET /api/v1/site/:domain
 func (h *APIHandler) GetSite(w http.ResponseWriter, r *http.Request) {
+	searchID := strings.TrimSpace(r.URL.Query().Get("search_id"))
+	if searchID != "" {
+		protectReceiptBearingResponse(w)
+	}
 	domain := strings.TrimPrefix(r.URL.Path, "/api/v1/site/")
 	domain = strings.TrimPrefix(domain, "sites/")
 	domain = strings.TrimPrefix(domain, "/api/v1/sites/")
@@ -305,7 +345,7 @@ func (h *APIHandler) GetSite(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, 404, map[string]string{"error": "site not found"})
 		return
 	}
-	if searchID := strings.TrimSpace(r.URL.Query().Get("search_id")); searchID != "" {
+	if searchID != "" {
 		recorded, selectionErr := models.RecordDemandSelection(h.DB, searchID, site.Domain, "rest")
 		if selectionErr != nil {
 			log.Printf("demand selection REST detail: %v", selectionErr)

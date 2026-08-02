@@ -2,6 +2,7 @@ package main
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/unitedideas/nothumansearch/internal/database"
 	"github.com/unitedideas/nothumansearch/internal/handlers"
+	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 func main() {
@@ -36,6 +38,12 @@ func main() {
 			projectRoot = "."
 		}
 	}
+	// Fail before touching the database when the dedicated exchange signer is
+	// absent or malformed. NewProviderExchangeHandler later verifies retained
+	// persisted proof material after migrations are known current.
+	if err := handlers.ValidateProviderExchangeSigningConfiguration(); err != nil {
+		log.Fatalf("provider exchange signing preflight: %v", err)
+	}
 
 	if err := database.Connect(); err != nil {
 		log.Fatalf("database: %v", err)
@@ -43,7 +51,7 @@ func main() {
 	log.Println("connected to database")
 
 	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations")); err != nil {
-		log.Printf("WARNING: migration: %v", err)
+		log.Fatalf("migration: %v", err)
 	}
 
 	// Retention prune for page_views + mcp_requests. Runs hourly, deletes rows
@@ -85,6 +93,14 @@ func main() {
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("usage_events prune: deleted %d rows", n)
 			}
+			// Redact controlled action-ticket intent before deleting search receipts.
+			// Commercial IDs, consent attestations, terms snapshots, and signed
+			// accounting proof remain; the controlled discovery constraints do not.
+			if n, err := models.RedactExpiredActionTicketIntent(database.DB); err != nil {
+				log.Printf("action ticket intent redaction: %v", err)
+			} else if n > 0 {
+				log.Printf("action ticket intent redaction: redacted %d rows", n)
+			}
 			// Search receipts cascade-delete returned-result and selection rows.
 			// Provider products use thresholded controlled-topic aggregates rather
 			// than exporting individual searches.
@@ -97,6 +113,21 @@ func main() {
 				log.Printf("submissions prune: %v", err)
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("submissions prune: deleted %d rows", n)
+			}
+			// Magic links are single-use credentials, not an analytics record. Remove
+			// consumed or expired rows promptly so provider onboarding cannot create
+			// an unbounded token table even under bounded email abuse.
+			if res, err := database.DB.Exec(`DELETE FROM magic_links WHERE used_at IS NOT NULL OR expires_at <= NOW()`); err != nil {
+				log.Printf("magic_links prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("magic_links prune: deleted %d rows", n)
+			}
+			// Sessions are bearer credentials. Remove expired rows on the same hourly
+			// retention pass so stale credentials do not accumulate indefinitely.
+			if res, err := database.DB.Exec(`DELETE FROM sessions WHERE expires_at <= NOW()`); err != nil {
+				log.Printf("sessions prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("sessions prune: deleted %d rows", n)
 			}
 		}
 		// Run once on boot after a short delay, then hourly
@@ -125,6 +156,7 @@ func main() {
 		log.Fatalf("templates: %v", err)
 	}
 	apiHandler := handlers.NewAPIHandler(database.DB)
+	apiHandler.BaseURL = baseURL
 	seoHandler := handlers.NewSEOHandler(database.DB, baseURL)
 	monitorHandler := handlers.NewMonitorHandler(database.DB, baseURL)
 	mcpHandler := handlers.NewMCPHandler(database.DB, baseURL)
@@ -143,6 +175,36 @@ func main() {
 	apiHandler.Auth = authSvc
 	apiKeyHandler.Auth = authSvc
 	webHandler.Auth = authSvc
+	providerExchangeHandler, err := handlers.NewProviderExchangeHandler(database.DB, baseURL, authSvc, templatesDir)
+	if err != nil {
+		log.Fatalf("provider exchange init: %v", err)
+	}
+	mcpHandler.ProviderExchange = providerExchangeHandler
+	// Provider DNS ownership is a renewable proof, not a one-time badge. Each
+	// instance may run this worker because PostgreSQL leases due rows with
+	// SKIP LOCKED and per-acquisition lease IDs.
+	go func() {
+		run := func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			stats, err := providerExchangeHandler.ReverifyDueProviderClaims(ctx, 10)
+			if err != nil {
+				log.Printf("provider DNS reverification: %v (leased=%d matched=%d failed=%d revoked=%d completion_errors=%d)",
+					err, stats.Leased, stats.Matched, stats.Failed, stats.Revoked, stats.CompletionErrors)
+				return
+			}
+			if stats.Leased > 0 {
+				log.Printf("provider DNS reverification: leased=%d matched=%d failed=%d revoked=%d",
+					stats.Leased, stats.Matched, stats.Failed, stats.Revoked)
+			}
+		}
+		run()
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			run()
+		}
+	}()
 
 	mux := http.NewServeMux()
 
@@ -306,10 +368,20 @@ func main() {
 	mux.HandleFunc("/api/v1/checkout", fixHandler.AgenticCheckout)
 	mux.HandleFunc("/api/v1/api-keys/subscribe", apiKeyHandler.Subscribe)
 	mux.HandleFunc("/api/v1/api-keys/activate", apiKeyHandler.Activate)
+	mux.HandleFunc("/api/v1/provider/claims", providerExchangeHandler.Claims)
+	mux.HandleFunc("/api/v1/provider/claims/", providerExchangeHandler.ClaimAction)
+	mux.HandleFunc("/api/v1/provider/offers", providerExchangeHandler.Offers)
+	mux.HandleFunc("/api/v1/provider/offers/", providerExchangeHandler.OfferAction)
+	mux.HandleFunc("/api/v1/provider/outcomes", providerExchangeHandler.ProviderOutcomes)
+	mux.HandleFunc("/api/v1/provider/receipts/", providerExchangeHandler.ProviderReceipt)
+	mux.HandleFunc("/api/v1/action-tickets", providerExchangeHandler.ActionTickets)
+	mux.HandleFunc("/api/v1/action-receipts/verify", providerExchangeHandler.VerifyOutcomeReceipt)
+	mux.HandleFunc("/providers", providerExchangeHandler.ProvidersPage)
+	mux.HandleFunc("/privacy", providerExchangeHandler.PrivacyPage)
 
 	// Human auth (magic-link login + session) and the subscribe entry point.
-	mux.HandleFunc("/login", authSvc.Login)
-	mux.HandleFunc("/auth/verify", authSvc.Verify)
+	mux.HandleFunc("/login", authSvc.FailClosedLogin)
+	mux.HandleFunc("/auth/verify", authSvc.VerifyNoStore)
 	mux.HandleFunc("/logout", authSvc.Logout)
 	mux.HandleFunc("/subscribe", authSvc.SubscribePage)
 
@@ -327,6 +399,8 @@ func main() {
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
 	mux.HandleFunc("/api/v1/admin/demand", apiHandler.ProviderDemandAnalytics)
+	mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeHandler.AdminOfferAction)
+	mux.HandleFunc("/api/v1/admin/provider-proof", providerExchangeHandler.AdminProof)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
 	mux.HandleFunc("/api/v1/admin/geo-jobs/action", fixHandler.AdminAction)
 
@@ -354,8 +428,10 @@ func main() {
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", mcpHandler)
 
-	// Middleware chain: logging → domain redirect → security → CORS → gzip → handler
-	handler := loggingMiddleware(domainRedirectMiddleware(securityHeadersMiddleware(corsMiddleware(gzipMiddleware(mux)))))
+	// Middleware chain: logging → security → domain redirect → CORS → gzip → handler
+	// Security runs before canonical-host handling so even redirects and rejected
+	// noncanonical capability URLs receive the response-hardening contract.
+	handler := loggingMiddleware(securityHeadersMiddleware(domainRedirectMiddleware(corsMiddleware(gzipMiddleware(mux)))))
 
 	log.Printf("Not Human Search starting on :%s", *port)
 	srv := &http.Server{
@@ -545,20 +621,57 @@ func domainRedirectMiddleware(next http.Handler) http.Handler {
 		if idx := strings.LastIndex(host, ":"); idx != -1 {
 			host = host[:idx]
 		}
-		// Redirect nothumansearch.com → nothumansearch.ai (canonical)
-		// Redirect www variants → apex
+		// Redirect nothumansearch.com → nothumansearch.ai (canonical) and www
+		// variants → apex. Capability-bearing URLs fail closed instead of copying
+		// their token into a Location header or permanent redirect cache.
 		switch host {
 		case "nothumansearch.com", "www.nothumansearch.com":
-			target := "https://nothumansearch.ai" + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
-			return
 		case "www.nothumansearch.ai":
-			target := "https://nothumansearch.ai" + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
+		default:
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r)
+		if redirectRequestCarriesCapability(r) {
+			setPrivateRedirectHeaders(w)
+			http.Error(w, "use the canonical nothumansearch.ai host for this private link", http.StatusMisdirectedRequest)
+			return
+		}
+		target := "https://nothumansearch.ai" + r.URL.RequestURI()
+		status := http.StatusPermanentRedirect
+		if r.URL.RawQuery != "" || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+			setPrivateRedirectHeaders(w)
+			status = http.StatusTemporaryRedirect
+		}
+		http.Redirect(w, r, target, status)
 	})
+}
+
+func redirectRequestCarriesCapability(r *http.Request) bool {
+	if r == nil {
+		return true
+	}
+	path := r.URL.Path
+	if path == "/auth/verify" || strings.HasPrefix(path, "/monitor/unsubscribe/") ||
+		path == "/fix/success" {
+		return true
+	}
+	if r.URL.RawQuery != "" && (strings.HasPrefix(path, "/site/") ||
+		strings.HasPrefix(path, "/api/v1/site/")) {
+		return true
+	}
+	query := r.URL.Query()
+	for _, key := range []string{"token", "search_id", "session_id", "nhs_attribution"} {
+		if query.Has(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func setPrivateRedirectHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 }
 
 const statusHTML = `<!DOCTYPE html>
@@ -707,8 +820,8 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key, X-NHS-Provider-Key, X-API-Key")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(204)
 			return
@@ -725,9 +838,9 @@ const installScript = `#!/bin/sh
 # copy-paste snippets for Cursor, Cline, and Continue.
 #
 # NHS endpoint: https://nothumansearch.ai/mcp (streamable-http, no auth)
-# 11 tools: search_agents, get_site_details, get_stats, list_categories,
+# 12 tools: search_agents, get_site_details, get_stats, list_categories,
 # get_top_sites, submit_site, register_monitor, verify_mcp,
-# check_url, find_mcp_servers, recent_additions
+# check_url, find_mcp_servers, recent_additions, prepare_provider_action
 
 set -eu
 ENDPOINT="https://nothumansearch.ai/mcp"

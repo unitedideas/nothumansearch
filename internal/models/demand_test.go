@@ -33,13 +33,35 @@ func TestClassifyDemandTopicsDoesNotEchoUnknownText(t *testing.T) {
 }
 
 func TestGenerateDemandSearchIDUsesPublicPrefixAndVaries(t *testing.T) {
-	first := GenerateDemandSearchID()
-	second := GenerateDemandSearchID()
+	first, err := GenerateDemandSearchID()
+	if err != nil {
+		t.Fatalf("first GenerateDemandSearchID: %v", err)
+	}
+	second, err := GenerateDemandSearchID()
+	if err != nil {
+		t.Fatalf("second GenerateDemandSearchID: %v", err)
+	}
 	if !strings.HasPrefix(first, "nhs_sr_") {
 		t.Fatalf("GenerateDemandSearchID = %q, missing prefix", first)
 	}
 	if first == second {
 		t.Fatal("GenerateDemandSearchID returned a duplicate")
+	}
+}
+
+func TestGenerateDemandSearchIDFailsClosedWithoutEntropy(t *testing.T) {
+	original := readDemandSearchEntropy
+	readDemandSearchEntropy = func([]byte) (int, error) {
+		return 0, errors.New("entropy unavailable")
+	}
+	t.Cleanup(func() { readDemandSearchEntropy = original })
+
+	searchID, err := GenerateDemandSearchID()
+	if !errors.Is(err, ErrDemandEntropyUnavailable) {
+		t.Fatalf("GenerateDemandSearchID error = %v, want ErrDemandEntropyUnavailable", err)
+	}
+	if searchID != "" {
+		t.Fatalf("GenerateDemandSearchID returned capability %q after entropy failure", searchID)
 	}
 }
 
@@ -154,6 +176,9 @@ func TestRetentionAndSmokeTelemetryGuards(t *testing.T) {
 		"DELETE FROM search_queries WHERE created_at < now() - interval '30 days'",
 		"DELETE FROM usage_events WHERE created_at < now() - interval '35 days'",
 		"DELETE FROM search_receipts WHERE created_at < now() - interval '30 days'",
+		"models.RedactExpiredActionTicketIntent(database.DB)",
+		"DELETE FROM magic_links WHERE used_at IS NOT NULL OR expires_at <= NOW()",
+		"DELETE FROM sessions WHERE expires_at <= NOW()",
 	} {
 		if !strings.Contains(string(serverSource), required) {
 			t.Fatalf("server retention missing %q", required)

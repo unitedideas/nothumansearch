@@ -134,16 +134,20 @@ func (a *AuthService) requestLogin(w http.ResponseWriter, r *http.Request) {
 		a.renderLogin(w, "Could not create a login link. Try again.", "")
 		return
 	}
-	a.sendMagicLink(em, a.BaseURL+"/auth/verify?token="+raw)
+	if err := a.sendMagicLink(em, a.BaseURL+"/auth/verify?token="+raw); err != nil {
+		// Do not log the recipient or the credential-bearing link. The preflight
+		// catches missing configuration; this also fails closed on provider errors.
+		log.Printf("auth: sign-in email delivery failed")
+		a.renderLogin(w, "Sign-in email is temporarily unavailable. Try again.", "")
+		return
+	}
 	a.renderLogin(w, "", em)
 }
 
-func (a *AuthService) sendMagicLink(to, link string) {
+func (a *AuthService) sendMagicLink(to, link string) error {
 	client, err := email.NewClientFromEnv()
 	if err != nil {
-		// No email transport configured (e.g. local dev) — log so the link is usable.
-		log.Printf("auth: email unavailable; magic link for %s: %s", to, link)
-		return
+		return err
 	}
 	subject := "Your Not Human Search sign-in link"
 	body := fmt.Sprintf(`<p>Click to sign in to Not Human Search:</p>`+
@@ -151,9 +155,8 @@ func (a *AuthService) sendMagicLink(to, link string) {
 		`<p style="color:#888;font-size:13px;">This link expires in 20 minutes. If you didn't request it, ignore this email.</p>`,
 		html.EscapeString(link))
 	text := "Sign in to Not Human Search:\n" + link + "\n\nThis link expires in 20 minutes."
-	if _, err := client.Send(to, subject, body, text); err != nil {
-		log.Printf("auth: send magic link to %s failed: %v", to, err)
-	}
+	_, err = client.Send(to, subject, body, text)
+	return err
 }
 
 // Verify consumes a magic link and starts a session (GET /auth/verify?token=).

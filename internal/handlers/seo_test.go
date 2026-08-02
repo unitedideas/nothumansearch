@@ -2,10 +2,14 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 func TestMCPManifestAdvertisesCanonicalMCPTools(t *testing.T) {
@@ -113,14 +117,56 @@ func TestOpenAPIDescribesFreeFallbackAndOptionalPriorityThroughput(t *testing.T)
 		"is_featured:",
 		"deprecated: true",
 		"never affects organic score or ordering",
+		"paid_offers_available",
+		"#/components/schemas/PublicProviderOffer",
+		"/provider/claims:",
+		"/provider/offers:",
+		"/action-tickets:",
+		"/provider/outcomes:",
+		"/action-receipts/verify:",
+		"signature_valid",
+		"within_validity_window",
+		"nhs-principal-consent-v1",
+		"organic_rank_paid",
+		"Update an owned draft offer",
 	} {
 		if !strings.Contains(body, required) {
 			t.Fatalf("OpenAPI priority/free contract missing %q", required)
 		}
 	}
-	for _, forbidden := range []string{"Free search abuse limit exceeded", "nhs_api_starter", "nhs_api_pro", "nhs_api_scale"} {
+	for _, forbidden := range []string{"Free search abuse limit exceeded", "nhs_api_starter", "nhs_api_pro", "nhs_api_scale", "draft or paused"} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("OpenAPI retained obsolete contract %q", forbidden)
 		}
+	}
+}
+
+func TestOpenAPIDescribesPersistentDNSOwnershipFreshness(t *testing.T) {
+	t.Parallel()
+	seo := NewSEOHandler(nil, "https://nothumansearch.ai")
+	rr := httptest.NewRecorder()
+	seo.OpenAPISpec(rr, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
+	body := rr.Body.String()
+
+	for _, required := range []string{
+		"ProviderClaim:",
+		"OwnershipFreshness:",
+		"ProviderClaimChallengeResponse:",
+		"ProviderClaimVerifyResponse:",
+		"record_must_remain_published:",
+		"stored_challenge_material:",
+		"raw_dns_answers_retained:",
+		"verification_last_succeeded_at:",
+		"verification_next_check_at:",
+		fmt.Sprintf("recheck_interval_seconds: { type: integer, enum: [%d]", int64(models.ProviderClaimDNSRecheckInterval/time.Second)),
+		fmt.Sprintf("paid_actions_stop_after_consecutive_failures: { type: integer, enum: [%d]", models.ProviderClaimDNSFailureLimit),
+		fmt.Sprintf("paid_actions_stop_when_last_success_age_reaches_seconds: { type: integer, enum: [%d]", int64(models.ProviderClaimVerificationFreshness/time.Second)),
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("OpenAPI persistent DNS contract missing %q", required)
+		}
+	}
+	if strings.Contains(body, "%!") {
+		t.Fatalf("OpenAPI contains a formatting error: %s", body)
 	}
 }

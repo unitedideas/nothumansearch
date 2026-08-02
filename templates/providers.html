@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Provider Exchange — Not Human Search</title>
+  <meta name="description" content="Claim your indexed domain, publish a machine-readable action, and pay Not Human Search only when a consented action reaches the verified outcome you chose.">
+  <link rel="canonical" href="{{.BaseURL}}/providers">
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg">
+  <style>
+    :root{--bg:#0d0d0e;--surface:#141416;--surface-2:#19191c;--border:#2a2a30;--text:#e8e8ea;--muted:#96969f;--accent:#d97757;--accent-2:#ef9b7c;--green:#4ade80;--yellow:#facc15;--red:#f87171;--focus:#93c5fd}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    a{color:inherit}.shell{width:min(1120px,calc(100% - 40px));margin:auto}.nav{height:72px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+    .brand{font-size:19px;font-weight:750;text-decoration:none;letter-spacing:-.03em}.brand span{color:var(--accent)}.nav-links{display:flex;align-items:center;gap:18px}.nav-links a{font-size:13px;color:var(--muted);text-decoration:none}.nav-links a:hover{color:var(--text)}
+    .pilot{display:inline-flex;align-items:center;gap:7px;border:1px solid #5c4a22;background:#241f13;color:#f5d86c;border-radius:999px;padding:5px 10px;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em}.pilot:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--yellow)}
+    .hero{display:grid;grid-template-columns:1.35fr .65fr;gap:64px;padding:88px 0 68px;align-items:center}.eyebrow{color:var(--accent-2);font:600 12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.12em;margin-bottom:18px}
+    h1{font-size:clamp(42px,6vw,72px);line-height:.98;letter-spacing:-.055em;margin:0;max-width:800px}h1 em{font-style:normal;color:var(--accent)}.hero-copy{color:var(--muted);font-size:18px;max-width:680px;margin:26px 0 30px}
+    .actions{display:flex;gap:12px;flex-wrap:wrap}.button{display:inline-flex;min-height:46px;padding:0 18px;align-items:center;justify-content:center;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-weight:700;text-decoration:none;cursor:pointer}.button.primary{background:var(--accent);border-color:var(--accent);color:#160f0d}.button:hover{filter:brightness(1.08)}.button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+    .value-card{border:1px solid var(--border);border-radius:14px;background:linear-gradient(145deg,#171719,#111113);padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.value-card .label{color:var(--muted);font:500 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em}.value-card .price{font-size:36px;font-weight:800;letter-spacing:-.04em;margin:8px 0 3px}.value-card .price span{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}.value-card ul{padding:18px 0 0;margin:18px 0 0;border-top:1px solid var(--border);list-style:none}.value-card li{display:flex;gap:9px;margin:9px 0;color:var(--muted);font-size:13px}.value-card li:before{content:"✓";color:var(--green);font-weight:800}
+    .trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:84px}.trust-card,.step,.panel{border:1px solid var(--border);background:var(--surface);border-radius:10px}.trust-card{padding:20px}.trust-card strong{display:block;font-size:15px;margin-bottom:6px}.trust-card p{margin:0;color:var(--muted);font-size:13px}.trust-card code{color:var(--green);font-size:12px}
+    section{padding:70px 0;border-top:1px solid var(--border)}h2{font-size:clamp(28px,4vw,42px);letter-spacing:-.04em;margin:0 0 12px}.section-copy{color:var(--muted);max-width:680px;margin:0 0 30px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.step{padding:20px;min-height:190px}.step-num{color:var(--accent);font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace}.step h3{font-size:16px;margin:25px 0 8px}.step p{font-size:13px;color:var(--muted);margin:0}
+    .dashboard{display:grid;grid-template-columns:.8fr 1.2fr;gap:16px;align-items:start}.panel{padding:24px}.panel h3{font-size:17px;margin:0 0 4px}.panel>p{color:var(--muted);font-size:13px;margin:0 0 20px}.field{margin:14px 0}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:6px}.field small{display:block;color:var(--muted);font-size:11px;margin-top:5px}.field input,.field select,.field textarea{width:100%;border:1px solid var(--border);background:#0f0f11;color:var(--text);border-radius:6px;padding:11px 12px;font:inherit}.field textarea{min-height:86px;resize:vertical}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.status{min-height:22px;color:var(--muted);font-size:12px;margin-top:12px}.status.error{color:var(--red)}.status.good{color:var(--green)}
+    .claim-list,.offer-list{display:grid;gap:10px;margin-top:18px}.item{border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--surface-2)}.item-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.item-title{font-weight:700;overflow-wrap:anywhere}.tag{border-radius:999px;padding:4px 8px;background:#222228;color:var(--muted);font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase}.tag.verified,.tag.active{background:#13261a;color:var(--green)}.tag.pending,.tag.draft{background:#29230f;color:var(--yellow)}.item-meta{color:var(--muted);font-size:11px;margin-top:8px}.item-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.mini{border:1px solid var(--border);background:#101012;color:var(--text);border-radius:5px;padding:7px 9px;font-size:11px;font-weight:650;cursor:pointer}.mini.danger{color:var(--red)}
+    .secret{display:none;margin-top:14px;border:1px solid #37543f;background:#102016;border-radius:8px;padding:14px}.secret.show{display:block}.secret strong{color:var(--green);display:block;margin-bottom:7px}.secret code{display:block;color:#c7f9d5;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}.secret p{font-size:11px;color:var(--muted);margin:8px 0 0}.signed-in{color:var(--muted);font-size:12px;margin-bottom:16px}.signed-in strong{color:var(--text)}
+    .contract{background:#0a0a0b;border:1px solid var(--border);border-radius:10px;padding:20px;overflow:auto;color:#bfc2cb;font:12px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace}.contract .green{color:var(--green)}.contract .orange{color:var(--accent-2)}
+    .not-signed{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center}.not-signed p{color:var(--muted);margin:5px 0 0}.fine-print{color:var(--muted);font-size:12px;margin-top:24px}.fine-print a{color:var(--accent-2)}footer{padding:36px 0 56px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:20px}
+    [hidden]{display:none!important}
+    @media(max-width:850px){.hero{grid-template-columns:1fr;gap:32px;padding-top:64px}.trust-grid,.steps{grid-template-columns:1fr 1fr}.dashboard{grid-template-columns:1fr}.nav-links a:not(.pilot){display:none}}
+    @media(max-width:560px){.shell{width:min(100% - 28px,1120px)}.hero{padding:50px 0}h1{font-size:44px}.trust-grid,.steps,.field-row{grid-template-columns:1fr}.not-signed{grid-template-columns:1fr}.value-card{padding:20px}section{padding:54px 0}footer{flex-direction:column}.button{width:100%}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="/">Not Human <span>Search</span></a>
+      <div class="nav-links"><a href="/">Search</a><a href="/guide">Agent-readiness guide</a><span class="pilot">Controlled pilot</span></div>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <div>
+          <div class="eyebrow">Provider-funded agent actions</div>
+          <h1>Get chosen by agents. <em>Pay for outcomes.</em></h1>
+          <p class="hero-copy">Claim your indexed domain, publish one machine-readable action, and fund the event that matters—an accepted handoff, activation, or conversion. Search stays free. Organic rank stays neutral.</p>
+          <div class="actions">
+            {{if .SignedIn}}<a class="button primary" href="#dashboard">Open provider setup</a>{{else}}<a class="button primary" href="/login">Sign in to claim a domain</a>{{end}}
+            <a class="button" href="#contract">See the machine contract</a>
+          </div>
+        </div>
+        <aside class="value-card" aria-label="Provider pricing model">
+          <div class="label">What NHS charges for</div>
+          <div class="price">$0 <span>for search, rank, views, and clicks</span></div>
+          <ul>
+            <li>You choose the billable outcome and bounty.</li>
+            <li>Prepaid budget or capped exact CPA terms are required.</li>
+            <li>Duplicate or invalid charged actions are credited.</li>
+            <li>Pilot terms require your company to remain Merchant of Record.</li>
+          </ul>
+        </aside>
+      </header>
+
+      <div class="trust-grid" aria-label="Exchange guarantees">
+        <article class="trust-card"><code>FREE_DISCOVERY</code><strong>Agents never pay to search.</strong><p>Organic results and canonical provider links remain available without an action ticket.</p></article>
+        <article class="trust-card"><code>NEUTRAL_RANK</code><strong>Money cannot buy score or order.</strong><p>Provider-funded actions appear in a separate, disclosed object beside an already-returned organic result.</p></article>
+        <article class="trust-card"><code>OUTCOME_ONLY</code><strong>No fee for machine traffic.</strong><p>NHS records a charge only after your authenticated callback reports the configured outcome.</p></article>
+      </div>
+
+      <section aria-labelledby="how-title">
+        <h2 id="how-title">The layer between discovery and action</h2>
+        <p class="section-copy">NHS makes the handoff more useful than a raw click: verified provider ownership, structured commercial terms, a caller’s versioned principal-authorization attestation, signed attribution, and an idempotent outcome receipt.</p>
+        <div class="steps">
+          <article class="step"><div class="step-num">01 / VERIFY</div><h3>Keep DNS ownership verified</h3><p>Publish the DNS TXT value and keep it in place. NHS stores only a SHA-256 hash of the challenge token, rechecks ownership every {{.DNSRecheckHours}} hours, and stops paid actions after {{.DNSFailureLimit}} consecutive failed checks or {{.DNSVerificationFreshnessDays}} days without a successful check.</p></article>
+          <article class="step"><div class="step-num">02 / DECLARE</div><h3>Publish a draft action</h3><p>Specify the action, principal price, NHS bounty, and accepted outcome in machine-readable fields.</p></article>
+          <article class="step"><div class="step-num">03 / AUTHORIZE</div><h3>The caller attests authorization</h3><p>The caller must attest it is authorized by the principal. A ticket accepts only controlled fields after your site appeared organically—no direct identity, contact, or raw-prompt fields.</p></article>
+          <article class="step"><div class="step-num">04 / RECORD</div><h3>You report the result</h3><p>Your callback records the disclosed accounting effect and receives a signed, replay-safe receipt.</p></article>
+        </div>
+      </section>
+
+      <section id="dashboard" aria-labelledby="dashboard-title">
+        <h2 id="dashboard-title">Provider setup</h2>
+        {{if .SignedIn}}
+        <p class="signed-in">Signed in as <strong>{{.Email}}</strong>. Domain claims are free; paid actions remain drafts until real commercial evidence is recorded.</p>
+        <div class="dashboard">
+          <div class="panel">
+            <h3>1. Claim an indexed domain</h3>
+            <p>Keep the TXT record published after verification. NHS compares DNS answers in memory, stores only the challenge-token hash, and rechecks ownership automatically. Paid actions stop after {{.DNSFailureLimit}} consecutive failures or when the last successful check reaches {{.DNSVerificationFreshnessDays}} days old.</p>
+            <form id="claim-form">
+              <div class="field"><label for="claim-domain">Domain</label><input id="claim-domain" name="domain" placeholder="example.com" autocomplete="url" required><small>The domain must already appear in Not Human Search.</small></div>
+              <button class="button primary" type="submit">Create DNS challenge</button>
+            </form>
+            <div id="claim-status" class="status" role="status" aria-live="polite"></div>
+            <div id="claim-secret" class="secret" aria-live="polite"></div>
+            <div id="claims" class="claim-list"></div>
+          </div>
+
+          <div class="panel">
+            <h3>2. Draft a provider-funded action</h3>
+            <p>This does not make the offer live. NHS activates it only after recording prepaid funding or exact, hard-capped CPA terms.</p>
+            <form id="offer-form">
+              <div class="field"><label for="offer-claim">Verified domain</label><select id="offer-claim" required><option value="">Verify a claim first</option></select></div>
+              <div class="field"><label for="offer-name">Offer name</label><input id="offer-name" maxlength="80" placeholder="Start a supported API trial" required></div>
+              <div class="field"><label for="offer-summary">Summary</label><textarea id="offer-summary" maxlength="280" placeholder="What the principal receives and what happens next." required></textarea></div>
+              <div class="field"><label for="action-url">Same-domain HTTPS action URL</label><input id="action-url" type="url" placeholder="https://example.com/agent-trial" required><small>No credentials, fragments, or provider query parameters.</small></div>
+              <div class="field-row">
+                <div class="field"><label for="action-type">Action</label><select id="action-type"><option value="trial">Trial</option><option value="quote">Quote</option><option value="demo">Demo</option><option value="signup">Signup</option><option value="purchase">Purchase</option><option value="lead">Lead</option><option value="application">Application</option><option value="booking">Booking</option></select></div>
+                <div class="field"><label for="charge-event">NHS earns on</label><select id="charge-event"><option value="activated">Activated</option><option value="accepted">Accepted</option><option value="converted">Converted</option></select></div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label for="bounty">NHS fee (USD)</label><input id="bounty" type="number" min="0.01" max="10000" step="0.01" value="25.00" required></div>
+                <div class="field"><label for="billing-mode">Provider funding</label><select id="billing-mode"><option value="prepaid">Prepaid budget</option><option value="terms">Capped exact CPA terms</option></select></div>
+              </div>
+              <div class="field-row" id="terms-wrap" hidden>
+                <div class="field"><label for="terms-limit">CPA credit cap (USD)</label><input id="terms-limit" type="number" min="1" max="100000" step="0.01"><small>Maximum receivable allowed in each term period.</small></div>
+                <div class="field"><label for="terms-days">Term period (days)</label><input id="terms-days" type="number" min="1" max="90" step="1" value="30"></div>
+              </div>
+              <div class="field-row">
+                <div class="field"><label for="price-mode">Principal price</label><select id="price-mode"><option value="free">Free</option><option value="fixed">Fixed</option><option value="quote">Quoted later</option><option value="provider_pricing">Provider pricing page</option></select></div>
+                <div class="field" id="principal-amount-wrap" hidden><label for="principal-amount">Principal price (USD)</label><input id="principal-amount" type="number" min="0.01" max="1000000" step="0.01"></div>
+              </div>
+              <button class="button primary" type="submit">Save draft action</button>
+            </form>
+            <div id="offer-status" class="status" role="status" aria-live="polite"></div>
+            <div id="offers" class="offer-list"></div>
+          </div>
+        </div>
+        {{else}}
+        <div class="panel not-signed"><div><h3>Sign in before proving domain control</h3><p>Magic-link authentication keeps domain ownership attached to a human-controlled provider account. Search agents never need an account.</p></div><a class="button primary" href="/login">Email me a sign-in link</a></div>
+        {{end}}
+      </section>
+
+      <section id="contract" aria-labelledby="contract-title">
+        <h2 id="contract-title">What an agent receives</h2>
+        <p class="section-copy">Paid action inventory is structurally separate from organic results. The ticket carries controlled constraints and a caller attestation—no direct identity, contact, raw-prompt, IP-address, user-agent, or claimed agent/principal identity fields.</p>
+        <pre class="contract" aria-label="Provider action response example"><span class="green">"organic_results"</span>: [ ... unchanged neutral results ... ],
+<span class="orange">"paid_offers"</span>: [{
+  "disclosure": "Provider-funded action",
+  "organic_rank_paid": false,
+  "provider_domain": "example.com",
+  "action_type": "trial",
+  "principal_price": { "mode": "free" },
+  "nhs_compensation": { "event": "activated", "amount_minor": 2500, "currency": "usd" }
+}]
+
+prepare_provider_action({
+  "offer_id": "...", "search_id": "nhs_sr_...",
+  "demand_topic": "developer-tools",
+  "principal_consent": true,
+  "consent_version": "nhs-principal-consent-v1"
+})</pre>
+        <p class="fine-print">The exact <a href="/privacy#consent-v1">v1 authorization wording</a> is public and immutable. Provider callbacks are authenticated and idempotent. Signed receipts prove what NHS recorded and the recorded accounting effect; they do not independently audit the provider-reported business event. See the <a href="/privacy">privacy boundary</a>.</p>
+      </section>
+    </main>
+
+    <footer><span>© Not Human Search</span><span>Free discovery · neutral organic rank · provider-funded outcomes</span></footer>
+  </div>
+
+  {{if .SignedIn}}<script>
+  (() => {
+    const state = {claims: [], offers: []};
+    const ownershipFailureLimit = {{.DNSFailureLimit}};
+    const $ = (id) => document.getElementById(id);
+    const text = (node, value) => { node.textContent = value == null ? '' : String(value); return node; };
+    const moneyToCents = (value) => Math.round(Number(value) * 100);
+    const claimTime = (value, fallback) => { const date=new Date(value||''); return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString(); };
+    const setStatus = (id, message, kind='') => { const el=$(id); el.className='status '+kind; el.textContent=message; };
+    async function api(url, options={}) {
+      const response = await fetch(url, {credentials:'same-origin', ...options, headers:{'Content-Type':'application/json', ...(options.headers||{})}});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      return data;
+    }
+    function button(label, action, danger=false) {
+      const b=document.createElement('button'); b.type='button'; b.className='mini'+(danger?' danger':''); b.textContent=label; b.addEventListener('click',action); return b;
+    }
+    function showReturnedOnce(title, value, note) {
+      const box=$('claim-secret'); box.replaceChildren(); box.classList.add('show');
+      const strong=document.createElement('strong'); strong.textContent=title; const code=document.createElement('code'); code.textContent=value;
+      const p=document.createElement('p'); p.textContent=note; box.append(strong,code,p);
+    }
+    async function loadClaims() {
+      const data=await api('/api/v1/provider/claims'); state.claims=data.claims||[]; renderClaims(); renderClaimSelect();
+    }
+    function renderClaims() {
+      const root=$('claims'); root.replaceChildren();
+      state.claims.filter(c=>c.status!=='revoked').forEach(claim=>{
+        const item=document.createElement('article'); item.className='item';
+        const head=document.createElement('div'); head.className='item-head';
+        const title=text(document.createElement('div'),claim.domain); title.className='item-title';
+        const tag=text(document.createElement('span'),claim.status); tag.className='tag '+claim.status; head.append(title,tag); item.append(head);
+        const metadata=claim.status==='pending'
+          ? `TXT ${claim.verification_record_name} · Keep this record published after verification.`
+          : `Keep TXT published · Last successful check: ${claimTime(claim.verification_last_succeeded_at,'not yet')} · Next automatic check: ${claimTime(claim.verification_next_check_at,'not scheduled')} · Failed checks: ${Math.max(0,Number(claim.verification_consecutive_failures)||0)}/${ownershipFailureLimit}`;
+        const meta=text(document.createElement('div'),metadata); meta.className='item-meta'; item.append(meta);
+        const actions=document.createElement('div'); actions.className='item-actions';
+        if(claim.status==='pending'){
+          actions.append(button('Check DNS',()=>verifyClaim(claim.id)),button('New challenge',()=>rotateChallenge(claim.id)));
+        } else if(claim.status==='verified'){
+          actions.append(button('Rotate callback key',()=>rotateKey(claim.id)));
+        }
+        actions.append(button('Revoke',()=>revokeClaim(claim.id),true)); item.append(actions); root.append(item);
+      });
+      if(!root.children.length){ const empty=text(document.createElement('p'),'No active claims yet.'); empty.className='status'; root.append(empty); }
+    }
+    function renderClaimSelect(){
+      const select=$('offer-claim'); const current=select.value; select.replaceChildren();
+      const first=document.createElement('option'); first.value=''; first.textContent='Choose a verified domain'; select.append(first);
+      state.claims.filter(c=>c.status==='verified').forEach(c=>{ const o=document.createElement('option'); o.value=c.id; o.textContent=c.domain; select.append(o); });
+      if([...select.options].some(o=>o.value===current)) select.value=current;
+      if(select.value) loadOffers(select.value); else $('offers').replaceChildren();
+    }
+    async function verifyClaim(id){
+      setStatus('claim-status','Checking DNS…');
+      try{ const data=await api(`/api/v1/provider/claims/${id}/verify`,{method:'POST'}); setStatus('claim-status','Domain verified.','good');
+        if(data.provider_key) showReturnedOnce('Save this callback key now',data.provider_key,'NHS stores only its hash. Rotating the key revokes the previous one.'); await loadClaims();
+      }catch(error){setStatus('claim-status',error.message,'error')}
+    }
+    async function rotateChallenge(id){
+      try{ const data=await api(`/api/v1/provider/claims/${id}/challenge`,{method:'POST'}); showReturnedOnce('Replace the DNS TXT value',data.dns_challenge.record_value,`Record: ${data.dns_challenge.record_name}. This value is returned once; keep it published after verification so NHS can recheck ownership.`); await loadClaims(); }
+      catch(error){setStatus('claim-status',error.message,'error')}
+    }
+    async function rotateKey(id){
+      if(!confirm('Rotate the callback key? The current key will stop working immediately.')) return;
+      try{ const data=await api(`/api/v1/provider/claims/${id}/keys/rotate`,{method:'POST'}); showReturnedOnce('Save the new callback key now',data.provider_key,'The previous callback key has been revoked.'); }
+      catch(error){setStatus('claim-status',error.message,'error')}
+    }
+    async function revokeClaim(id){
+      if(!confirm('Revoke this domain claim? Active provider-funded actions will be paused.')) return;
+      try{await api(`/api/v1/provider/claims/${id}/revoke`,{method:'POST'}); setStatus('claim-status','Claim revoked.','good'); await loadClaims();}
+      catch(error){setStatus('claim-status',error.message,'error')}
+    }
+    $('claim-form').addEventListener('submit',async(event)=>{
+      event.preventDefault(); setStatus('claim-status','Creating challenge…');
+      try{const data=await api('/api/v1/provider/claims',{method:'POST',body:JSON.stringify({domain:$('claim-domain').value})});
+        showReturnedOnce('Add this DNS TXT value',data.dns_challenge.record_value,`Record: ${data.dns_challenge.record_name}. The challenge expires at ${new Date(data.dns_challenge.expires_at).toLocaleString()}. Keep the record published after verification so NHS can recheck ownership.`);
+        setStatus('claim-status','Challenge created. Add the record, then check DNS.','good'); await loadClaims();
+      }catch(error){setStatus('claim-status',error.message,'error')}
+    });
+    $('offer-claim').addEventListener('change',event=>loadOffers(event.target.value));
+    $('price-mode').addEventListener('change',event=>{$('principal-amount-wrap').hidden=event.target.value!=='fixed'});
+    $('billing-mode').addEventListener('change',event=>{
+      const terms=event.target.value==='terms';$('terms-wrap').hidden=!terms;$('terms-limit').required=terms;$('terms-days').required=terms;
+    });
+    $('offer-form').addEventListener('submit',async(event)=>{
+      event.preventDefault(); const mode=$('price-mode').value; let principal=null; if(mode==='free')principal=0; if(mode==='fixed')principal=moneyToCents($('principal-amount').value);
+      const body={claim_id:$('offer-claim').value,name:$('offer-name').value,summary:$('offer-summary').value,action_type:$('action-type').value,action_url:$('action-url').value,charge_event:$('charge-event').value,bounty_cents:moneyToCents($('bounty').value),currency:'usd',principal_price_mode:mode,principal_currency:'usd',billing_mode:$('billing-mode').value};
+      if(principal!==null)body.principal_price_cents=principal;
+      if(body.billing_mode==='terms'){body.terms_credit_limit_cents=moneyToCents($('terms-limit').value);body.terms_period_days=Number($('terms-days').value)}
+      setStatus('offer-status','Saving draft…');
+      try{await api('/api/v1/provider/offers',{method:'POST',body:JSON.stringify(body)});setStatus('offer-status','Draft saved. It is not live or billable until NHS records commercial evidence.','good');event.target.reset();$('bounty').value='25.00';$('principal-amount-wrap').hidden=true;$('terms-wrap').hidden=true;$('terms-limit').required=false;$('terms-days').required=false;await loadOffers(body.claim_id);}
+      catch(error){setStatus('offer-status',error.message,'error')}
+    });
+    async function loadOffers(claimID){
+      if(!claimID)return; try{const data=await api(`/api/v1/provider/offers?claim_id=${encodeURIComponent(claimID)}`);state.offers=data.offers||[];renderOffers();}catch(error){setStatus('offer-status',error.message,'error')}
+    }
+    function renderOffers(){
+      const root=$('offers');root.replaceChildren();state.offers.forEach(offer=>{
+        const item=document.createElement('article');item.className='item';const head=document.createElement('div');head.className='item-head';const title=text(document.createElement('div'),offer.name);title.className='item-title';const tag=text(document.createElement('span'),offer.status);tag.className='tag '+offer.status;head.append(title,tag);item.append(head);
+        const fee=(offer.bounty_cents/100).toLocaleString(undefined,{style:'currency',currency:offer.currency.toUpperCase()});const meta=text(document.createElement('div'),`${offer.action_type} · NHS earns ${fee} on ${offer.charge_event} · balance ${(offer.budget_balance_cents/100).toLocaleString(undefined,{style:'currency',currency:offer.currency.toUpperCase()})}`);meta.className='item-meta';item.append(meta);
+        if(offer.status==='active'){const actions=document.createElement('div');actions.className='item-actions';actions.append(button('Pause',async()=>{try{await api(`/api/v1/provider/offers/${offer.id}/pause`,{method:'POST'});await loadOffers(offer.provider_claim_id)}catch(error){setStatus('offer-status',error.message,'error')}}));item.append(actions)}root.append(item);
+      });if(!root.children.length){const empty=text(document.createElement('p'),'No draft actions for this domain.');empty.className='status';root.append(empty)}
+    }
+    loadClaims().catch(error=>setStatus('claim-status',error.message,'error'));
+  })();
+  </script>{{end}}
+</body>
+</html>
