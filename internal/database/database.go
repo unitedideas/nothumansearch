@@ -63,8 +63,10 @@ type protectedMigrationSpec struct {
 // complete application. A new protected migration without a contract fails
 // before any older migration is replayed. This prevents an unrecorded partial
 // schema from being adopted merely because its DDL uses IF NOT EXISTS.
-var protectedMigrationSpecs = map[string]protectedMigrationSpec{
-	"019_provider_exchange.sql": {
+var protectedMigrationSpecs = buildProtectedMigrationSpecs()
+
+func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
+	providerExchange := protectedMigrationSpec{
 		allObjectsAreFootprint: true,
 		relations: []migrationRelation{
 			{name: "provider_claims", relkind: "r"},
@@ -108,7 +110,38 @@ var protectedMigrationSpecs = map[string]protectedMigrationSpec{
 			{relation: "provider_admin_audit_events", name: "provider_admin_audit_no_delete"},
 			{relation: "search_receipts", name: "redact_action_ticket_intent_on_receipt_delete"},
 		},
-	},
+	}
+
+	actionInterests := protectedMigrationSpec{
+		// Later contracts are cumulative so the latest receipt fingerprints every
+		// protected invariant. Only objects first introduced by 020 count as its
+		// ambiguity footprint on a database that legitimately already has 019.
+		relations: append(append([]migrationRelation(nil), providerExchange.relations...),
+			migrationRelation{name: "idx_search_receipts_id_synthetic", relkind: "i", parent: "search_receipts"},
+			migrationRelation{name: "action_interest_receipts", relkind: "r"},
+			migrationRelation{name: "idx_action_interest_receipts_domain_created", relkind: "i", parent: "action_interest_receipts"},
+			migrationRelation{name: "idx_action_interest_receipts_action_created", relkind: "i", parent: "action_interest_receipts"},
+			migrationRelation{name: "idx_action_interest_receipts_expires", relkind: "i", parent: "action_interest_receipts"},
+		),
+		rules: append(append([]migrationRule(nil), providerExchange.rules...),
+			migrationRule{relation: "action_interest_receipts", name: "action_interest_receipts_no_update"},
+		),
+		footprintRelations: map[string]bool{
+			"idx_search_receipts_id_synthetic":            true,
+			"action_interest_receipts":                    true,
+			"idx_action_interest_receipts_domain_created": true,
+			"idx_action_interest_receipts_action_created": true,
+			"idx_action_interest_receipts_expires":        true,
+		},
+		footprintRules: map[string]bool{
+			"action_interest_receipts_no_update": true,
+		},
+	}
+
+	return map[string]protectedMigrationSpec{
+		"019_provider_exchange.sql":        providerExchange,
+		"020_action_interest_receipts.sql": actionInterests,
+	}
 }
 
 func Connect() error {
@@ -304,6 +337,9 @@ func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 		if !ok {
 			return fmt.Errorf("protected migration %s has no schema-footprint contract", migration.name)
 		}
+		if first && !spec.allObjectsAreFootprint {
+			return fmt.Errorf("first protected migration %s must treat all declared objects as its footprint", migration.name)
+		}
 		if !first && spec.allObjectsAreFootprint {
 			return fmt.Errorf("protected migration %s cannot treat cumulative prior objects as a new footprint", migration.name)
 		}
@@ -341,6 +377,28 @@ func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 		for name := range spec.footprintRules {
 			if _, ok := currentRules[name]; !ok {
 				return fmt.Errorf("protected migration %s names unknown footprint rule %s", migration.name, name)
+			}
+		}
+		if !first {
+			for name := range currentRelations {
+				_, inherited := priorRelations[name]
+				marked := spec.footprintRelations[name]
+				switch {
+				case inherited && marked:
+					return fmt.Errorf("protected migration %s marks inherited relation %s as a new footprint", migration.name, name)
+				case !inherited && !marked:
+					return fmt.Errorf("protected migration %s omits new relation %s from its footprint", migration.name, name)
+				}
+			}
+			for name := range currentRules {
+				_, inherited := priorRules[name]
+				marked := spec.footprintRules[name]
+				switch {
+				case inherited && marked:
+					return fmt.Errorf("protected migration %s marks inherited rule %s as a new footprint", migration.name, name)
+				case !inherited && !marked:
+					return fmt.Errorf("protected migration %s omits new rule %s from its footprint", migration.name, name)
+				}
 			}
 		}
 		priorRelations = currentRelations
@@ -584,7 +642,8 @@ func validateProtectedMigrationState(migration migrationFile, state protectedMig
 		return nil
 	}
 	if state.anyFootprint {
-		return fmt.Errorf("protected migration %s: ambiguous_prior_019; schema footprint exists without an exact receipt", migration.name)
+		prefix := strings.SplitN(migration.name, "_", 2)[0]
+		return fmt.Errorf("protected migration %s: ambiguous_prior_%s; schema footprint exists without an exact receipt", migration.name, prefix)
 	}
 	// The ledger and 019 receipt are born in the same transaction. A ledger
 	// without the first protected receipt is therefore anomalous. For 020+

@@ -137,6 +137,102 @@ func TestProviderExchangeProtectedContractCoversDeclaredObjects(t *testing.T) {
 	}
 }
 
+func TestActionInterestProtectedContractCoversDeclaredDelta(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "020_action_interest_receipts.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prior := protectedMigrationSpecs["019_provider_exchange.sql"]
+	current, ok := protectedMigrationSpecs["020_action_interest_receipts.sql"]
+	if !ok {
+		t.Fatal("action-interest migration has no protected schema contract")
+	}
+
+	priorRelations := map[string]bool{}
+	for _, relation := range prior.relations {
+		priorRelations[relation.name] = true
+	}
+	deltaRelations := map[string]migrationRelation{}
+	for _, relation := range current.relations {
+		if !priorRelations[relation.name] {
+			deltaRelations[relation.name] = relation
+		}
+	}
+	declaredRelations := map[string]string{}
+	relationPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?(TABLE|INDEX) IF NOT EXISTS ([a-z0-9_]+)`)
+	for _, match := range relationPattern.FindAllStringSubmatch(string(data), -1) {
+		kind := "i"
+		if match[1] == "TABLE" {
+			kind = "r"
+		}
+		declaredRelations[match[2]] = kind
+	}
+	declaredIndexParents := map[string]string{}
+	indexPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS ([a-z0-9_]+)\s+ON ([a-z0-9_]+)`)
+	for _, match := range indexPattern.FindAllStringSubmatch(string(data), -1) {
+		declaredIndexParents[match[1]] = match[2]
+	}
+	if len(deltaRelations) != len(declaredRelations) {
+		t.Fatalf("020 relation delta has %d entries, migration declares %d", len(deltaRelations), len(declaredRelations))
+	}
+	for name, relation := range deltaRelations {
+		if want, ok := declaredRelations[name]; !ok || relation.relkind != want {
+			t.Fatalf("020 relation delta mismatch for %s: kind=%q declared=%q present=%t", name, relation.relkind, want, ok)
+		}
+		if relation.relkind == "i" && relation.parent != declaredIndexParents[name] {
+			t.Fatalf("020 index %s parent=%q, migration declares %q", name, relation.parent, declaredIndexParents[name])
+		}
+		if !current.footprintRelations[name] {
+			t.Fatalf("020 relation delta %s is not marked as its new footprint", name)
+		}
+	}
+	for name := range current.footprintRelations {
+		if _, ok := deltaRelations[name]; !ok {
+			t.Fatalf("020 marks inherited/unknown relation %s as a new footprint", name)
+		}
+	}
+
+	priorRules := map[string]bool{}
+	for _, rule := range prior.rules {
+		priorRules[rule.name] = true
+	}
+	deltaRules := map[string]migrationRule{}
+	for _, rule := range current.rules {
+		if !priorRules[rule.name] {
+			deltaRules[rule.name] = rule
+		}
+	}
+	declaredRules := map[string]string{}
+	rulePattern := regexp.MustCompile(`(?m)^CREATE OR REPLACE RULE ([a-z0-9_]+) AS\s+ON (?:UPDATE|DELETE) TO ([a-z0-9_]+)`)
+	for _, match := range rulePattern.FindAllStringSubmatch(string(data), -1) {
+		declaredRules[match[1]] = match[2]
+	}
+	if len(deltaRules) != len(declaredRules) {
+		t.Fatalf("020 rule delta has %d entries, migration declares %d", len(deltaRules), len(declaredRules))
+	}
+	for name, rule := range deltaRules {
+		if want, ok := declaredRules[name]; !ok || rule.relation != want {
+			t.Fatalf("020 rule delta mismatch for %s: relation=%q declared=%q present=%t", name, rule.relation, want, ok)
+		}
+		if !current.footprintRules[name] {
+			t.Fatalf("020 rule delta %s is not marked as its new footprint", name)
+		}
+	}
+	for name := range current.footprintRules {
+		if _, ok := deltaRules[name]; !ok {
+			t.Fatalf("020 marks inherited/unknown rule %s as a new footprint", name)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
 func TestProtectedMigrationStateFailsClosed(t *testing.T) {
 	migration := migrationFile{name: "019_provider_exchange.sql", sha256: strings.Repeat("a", 64)}
 	for _, test := range []struct {
@@ -173,6 +269,9 @@ func TestProtectedMigrationStateFailsClosed(t *testing.T) {
 	if err := validateProtectedMigrationState(migration, superseded, false); err != nil {
 		t.Fatalf("superseded protected receipt still owned latest schema fingerprint: %v", err)
 	}
+	if err := validateProtectedMigrationState(future, protectedMigrationState{anyFootprint: true}, false); err == nil || !strings.Contains(err.Error(), "ambiguous_prior_020") {
+		t.Fatalf("future ambiguous footprint error = %v", err)
+	}
 }
 
 func TestProtectedMigrationRequiresExactReleaseRevision(t *testing.T) {
@@ -207,5 +306,44 @@ func TestProtectedMigrationSpecsMustBeCumulative(t *testing.T) {
 	protectedMigrationSpecs["020_future.sql"] = future
 	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "does not carry forward relation contract") {
 		t.Fatalf("non-cumulative future migration contract error = %v", err)
+	}
+}
+
+func TestProtectedMigrationFootprintsAreExactNewDelta(t *testing.T) {
+	base := protectedMigrationSpecs["020_action_interest_receipts.sql"]
+	migrations := []migrationFile{
+		{name: "019_provider_exchange.sql"},
+		{name: "020_action_interest_receipts.sql"},
+		{name: "021_future.sql"},
+	}
+
+	valid := protectedMigrationSpec{
+		relations: append(append([]migrationRelation(nil), base.relations...),
+			migrationRelation{name: "future_table", relkind: "r"}),
+		rules:              append([]migrationRule(nil), base.rules...),
+		footprintRelations: map[string]bool{"future_table": true},
+		footprintRules:     map[string]bool{},
+	}
+	protectedMigrationSpecs["021_future.sql"] = valid
+	t.Cleanup(func() { delete(protectedMigrationSpecs, "021_future.sql") })
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("exact future delta rejected: %v", err)
+	}
+
+	markedInherited := valid
+	markedInherited.footprintRelations = map[string]bool{
+		"future_table":             true,
+		"action_interest_receipts": true,
+	}
+	protectedMigrationSpecs["021_future.sql"] = markedInherited
+	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "marks inherited relation") {
+		t.Fatalf("inherited footprint marker error = %v", err)
+	}
+
+	omittedNew := valid
+	omittedNew.footprintRelations = map[string]bool{}
+	protectedMigrationSpecs["021_future.sql"] = omittedNew
+	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "omits new relation") {
+		t.Fatalf("omitted new footprint error = %v", err)
 	}
 }

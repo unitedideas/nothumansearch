@@ -164,11 +164,12 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 			"monitor_register":  "POST /api/v1/monitor/register",
 			"provider_claims":   "GET|POST /api/v1/provider/claims (human session; DNS verification)",
 			"provider_offers":   "GET|POST /api/v1/provider/offers (human session; drafts require NHS commercial activation)",
+			"action_interests":  "POST /api/v1/action-interests (public; exact organic result + caller-attested principal interest; no provider contact)",
 			"action_tickets":    "POST /api/v1/action-tickets (public; exact consent v1; controlled fields only)",
 			"provider_outcomes": "POST /api/v1/provider/outcomes (X-NHS-Provider-Key + Idempotency-Key)",
 			"receipt_verify":    "POST /api/v1/action-receipts/verify (public signature, freshness, and current-state verification)",
 		},
-		"auth":       "none for discovery, action-ticket preparation, or receipt verification; provider setup uses a human session; outcome callbacks use a claim-scoped provider key; an optional API key only raises discovery throughput ceilings",
+		"auth":       "none for discovery, action-interest receipts, action-ticket preparation, or receipt verification; provider setup uses a human session; outcome callbacks use a claim-scoped provider key; an optional API key only raises discovery throughput ceilings",
 		"rate_limit": "free: search 240/hour/client and live verification 20/hour/client; priority API key: search 5000/hour/key and live verification 100/hour/key while monthly priority allocation remains",
 		"provider_exchange": map[string]any{
 			"setup_url":                      "https://nothumansearch.ai/providers",
@@ -276,6 +277,7 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		sites = []models.Site{}
 	}
 
+	synthetic := demandRequestIsSynthetic(r)
 	searchID, receiptErr := recordDemandSearchReceipt(h.DB, models.DemandSearchReceipt{
 		Surface:     "rest",
 		Query:       params.Query,
@@ -287,7 +289,7 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		ResultCount: total,
 		Page:        page,
 		PageSize:    perPage,
-		Synthetic:   demandRequestIsSynthetic(r),
+		Synthetic:   synthetic,
 	}, sites)
 	if receiptErr != nil {
 		log.Printf("demand receipt REST search: %v", receiptErr)
@@ -303,6 +305,14 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		"has_next":              page*perPage < total,
 		"paid_offers":           []publicProviderOffer{},
 		"paid_offers_available": false,
+		"action_interest": map[string]any{
+			"available":             searchID != "" && len(sites) > 0 && !synthetic,
+			"endpoint":              h.BaseURL + "/api/v1/action-interests",
+			"confirmation_version":  models.ActionInterestConfirmationV1,
+			"provider_contacted":    false,
+			"commercial_proof":      false,
+			"organic_rank_affected": false,
+		},
 	}
 	if searchID != "" {
 		response["search_id"] = searchID

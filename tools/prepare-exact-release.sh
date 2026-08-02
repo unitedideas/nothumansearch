@@ -29,7 +29,8 @@ if ! grep -Fxq "$COMMIT" "$CONTEXT/release-source-revision"; then
 fi
 
 ARCHIVE_SHA=$(/usr/bin/shasum -a 256 "$ARCHIVE" | /usr/bin/awk '{print $1}')
-MIGRATION_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/019_provider_exchange.sql" | /usr/bin/awk '{print $1}')
+MIGRATION_019_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/019_provider_exchange.sql" | /usr/bin/awk '{print $1}')
+MIGRATION_020_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/020_action_interest_receipts.sql" | /usr/bin/awk '{print $1}')
 
 GO_BINARY="${NHS_GO_BINARY:-/Users/shane/.local/bin/go}"
 if [ ! -x "$GO_BINARY" ]; then
@@ -49,7 +50,8 @@ fi
 {
     echo "release_commit=$COMMIT"
     echo "release_tree=$TREE"
-    echo "migration_019_sha256=$MIGRATION_SHA"
+    echo "migration_019_sha256=$MIGRATION_019_SHA"
+    echo "migration_020_sha256=$MIGRATION_020_SHA"
     echo "source_archive_sha256=$ARCHIVE_SHA"
     echo "source_context=$CONTEXT"
 } > "$MANIFEST"

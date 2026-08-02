@@ -91,6 +91,9 @@ func TestLLMsTxtCategoryCopyUsesExpectedArguments(t *testing.T) {
 	body := rr.Body.String()
 	for _, want := range []string{
 		"Base URL: https://nothumansearch.ai/api/v1",
+		"Tools (13):",
+		"record_action_interest",
+		"It does not contact the",
 		"Public categories: ai-tools, developer, data, finance, ecommerce, jobs, security, health, education, communication, productivity, news.",
 		"Live scorer: https://nothumansearch.ai/score",
 	} {
@@ -121,12 +124,20 @@ func TestOpenAPIDescribesFreeFallbackAndOptionalPriorityThroughput(t *testing.T)
 		"#/components/schemas/PublicProviderOffer",
 		"/provider/claims:",
 		"/provider/offers:",
+		"/action-interests:",
 		"/action-tickets:",
 		"/provider/outcomes:",
 		"/action-receipts/verify:",
 		"signature_valid",
 		"within_validity_window",
 		"nhs-principal-consent-v1",
+		"nhs-action-interest-v1",
+		"ActionInterestRequest:",
+		"ActionInterestResponse:",
+		"It expires with the source search, no later than 30 days after that search.",
+		"caller_attests_principal_interest",
+		`schema: { $ref: "#/components/schemas/ActionInterestResponse" }`,
+		"commercial proof",
 		"organic_rank_paid",
 		"Update an owned draft offer",
 	} {

@@ -26,7 +26,7 @@ the release and each applicable external action. In particular, owner authority
 is required before:
 
 1. creating and storing the dedicated production signing secret and key ID;
-2. deploying migration 019 and the provider exchange revision;
+2. deploying migrations 019 and 020 and the provider exchange revision;
 3. sending provider outreach or invitations;
 4. accepting a contract, affiliate term, CPA term, funding representation, or
    Merchant-of-Record representation;
@@ -51,25 +51,31 @@ referenced material is absent or replaced under a reused ID.
       the build argument, so a normal working-tree context fails closed.
 - [ ] Full Go tests, race tests, vet, build, formatting, OpenAPI parse, and
       secret scan pass on the exact candidate revision.
-- [ ] Migrations 001 through 019 and immediate replay pass on disposable real
+- [ ] Migrations 001 through 020 and immediate replay pass on disposable real
       PostgreSQL from an empty database.
-- [ ] The target database has neither an unreceipted migration-019 footprint
+- [ ] The target database has neither an unreceipted migration-019/020 footprint
       nor a newer protected receipt. Migration 019 must atomically create its
       schema and `nhs_schema_migrations` receipt with the raw-file SHA-256 and
-      embedded release commit. A checksum mismatch, missing required object,
-      unreceipted footprint, or database-ahead state is a hard stop. Never
-      adopt an unrecorded schema because it looks current.
+      embedded release commit; migration 020 must do the same for the
+      provider-independent action-interest schema and cumulative protected
+      fingerprint. A checksum mismatch, missing required object, unreceipted
+      footprint, or database-ahead state is a hard stop. Never adopt an
+      unrecorded schema because it looks current.
 - [ ] The server is the sole schema-migration owner. Crawler and recrawl jobs
       connect to the already-current schema and contain no migration or direct
       schema-repair path.
 - [ ] Migration 019 constraints, append-only rules, redaction rule, composite
       tenant keys, one-charge/one-credit invariants, and cap failures pass.
+- [ ] Migration 020 exact-organic-result and non-synthetic composite foreign
+      keys, action allowlist, immutable confirmation, idempotency, expiry, and
+      30-day cascade pass. The table has no query, contact, identity, free-form,
+      provider-offer, ticket, budget, or outcome field.
 - [ ] Dedicated signing references resolve without displaying their values.
 - [ ] Startup reconstructs or verifies a persisted proof sample for every key ID and signing domain; the process fails closed if material was removed or replaced under a reused ID.
 - [ ] The controlled pilot runs on one application machine. Before horizontal
-      scaling, replace the process-local provider and magic-link rate limits
-      with a shared limiter; PostgreSQL DNS leases are already multi-instance
-      safe, but the request limiters are not distributed.
+      scaling, replace the process-local provider, action-interest, and
+      magic-link rate limits with a shared limiter; PostgreSQL DNS leases are
+      already multi-instance safe, but the request limiters are not distributed.
 - [ ] DNS ownership is current. The persistent TXT proof is automatically
       rechecked; stale ownership cannot publish offers, create tickets, rotate
       keys, or report a positive outcome.
@@ -78,16 +84,20 @@ referenced material is absent or replaced under a reused ID.
 - [ ] The safe live smoke uses synthetic receipts only and proves health,
       release revision, free REST/MCP search, neutral organic order, an empty
       paid-offer sidecar for synthetic demand, selection, tool discovery, and
-      fail-closed invalid-receipt verification. It must not mint a real ticket
-      or submit `accepted`, `activated`, or `converted` callbacks.
+      fail-closed invalid-receipt verification. A synthetic search must also be
+      rejected by `record_action_interest`. The live smoke proves that rejection;
+      the disposable PostgreSQL regression proves that rejection inserts no
+      action-interest row and creates zero commercial-proof delta. The live
+      smoke must not mint a real ticket or submit `accepted`, `activated`, or
+      `converted` callbacks.
 - [ ] The full paid-flow smoke runs only against disposable PostgreSQL and a
       loopback server. It proves separate offers, consent rejection, exact
       ticket idempotency, nonfinancial terminal rejection, receipt replay and
       tamper detection, and zero commercial-proof delta before destroying the
       fixture.
 - [ ] After an owner-authorized deploy, `/health.release_revision`, the image
-      `org.opencontainers.image.revision` label, and migration 019's
-      `applied_by_commit` all equal the authorized commit.
+      `org.opencontainers.image.revision` label, and migrations 019 and 020
+      `applied_by_commit` values all equal the authorized commit.
 
 ## Stage 1: observe free discovery
 
@@ -98,11 +108,18 @@ size, `initialize`, `tools/list`, denied calls, or raw prompts.
 Decision evidence:
 
 - at least 100 non-synthetic meaningful search receipts;
-- at least 20 detail, verification, or result-selection actions; and
-- at least 10 voluntary requests for a quote, trial, demo, booking, application,
-  or equivalent provider action.
+- at least 20 persisted result selections on distinct non-synthetic search
+  receipts; and
+- at least 10 explicit `nhs-action-interest-v1` receipts on distinct
+  non-synthetic search receipts for a quote, trial, demo, booking, application,
+  signup, or purchase.
 
-These are demand signals, not revenue or commercial proof.
+These are receipt counts, not unique agents, principals, provider contacts,
+accepted handoffs, revenue, or commercial proof. An action-interest receipt
+does not contact the provider; it only proves that NHS recorded the caller's
+versioned attestation of principal interest against an exact organic result.
+The owner-only Stage 1 report must show a 14-day observation span and all three
+distinct-receipt targets before `stage1_ready` can be true.
 
 ## Stage 2: bounded provider pilot
 

@@ -85,6 +85,67 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 		}
 	})
 
+	through019 := copyMigrationFixture(t, repositoryMigrations, func(name string, data []byte) ([]byte, bool) {
+		return data, name <= "019_provider_exchange.sql"
+	})
+	if err := RunMigrations(through019, revision); err != nil {
+		t.Fatalf("establish exact 019 baseline: %v", err)
+	}
+
+	t.Run("020 atomic rollback preserves 019", func(t *testing.T) {
+		broken := copyMigrationFixture(t, repositoryMigrations, func(name string, data []byte) ([]byte, bool) {
+			if name == "020_action_interest_receipts.sql" {
+				data = append(data, []byte("\nSELECT * FROM nhs_intentional_missing_action_interest_relation;\n")...)
+			}
+			return data, true
+		})
+		if err := RunMigrations(broken, revision); err == nil || !strings.Contains(err.Error(), "nhs_intentional_missing_action_interest_relation") {
+			t.Fatalf("broken 020 migration error = %v", err)
+		}
+		for _, relation := range []string{
+			"action_interest_receipts",
+			"idx_search_receipts_id_synthetic",
+			"idx_action_interest_receipts_domain_created",
+			"idx_action_interest_receipts_action_created",
+			"idx_action_interest_receipts_expires",
+		} {
+			assertPostgresRelationAbsent(t, relation)
+		}
+		var rule020Exists bool
+		if err := DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM pg_rewrite WHERE rulename='action_interest_receipts_no_update')`).Scan(&rule020Exists); err != nil {
+			t.Fatal(err)
+		}
+		if rule020Exists {
+			t.Fatal("020 no-update rule survived failed protected migration")
+		}
+		var receipt020Exists bool
+		if err := DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM nhs_schema_migrations WHERE name='020_action_interest_receipts.sql')`).Scan(&receipt020Exists); err != nil {
+			t.Fatal(err)
+		}
+		if receipt020Exists {
+			t.Fatal("020 receipt survived failed protected migration")
+		}
+		var receipt019Exists bool
+		if err := DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM nhs_schema_migrations WHERE name='019_provider_exchange.sql')`).Scan(&receipt019Exists); err != nil {
+			t.Fatal(err)
+		}
+		if !receipt019Exists {
+			t.Fatal("valid 019 receipt was lost during failed 020 migration")
+		}
+	})
+
+	t.Run("ambiguous prior 020 footprint", func(t *testing.T) {
+		if _, err := DB.Exec(`CREATE TABLE action_interest_receipts (id INTEGER PRIMARY KEY)`); err != nil {
+			t.Fatal(err)
+		}
+		if err := RunMigrations(repositoryMigrations, revision); err == nil || !strings.Contains(err.Error(), "ambiguous_prior_020") {
+			t.Fatalf("ambiguous 020 footprint error = %v", err)
+		}
+		if _, err := DB.Exec(`DROP TABLE action_interest_receipts`); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("concurrent exact apply and replay", func(t *testing.T) {
 		var wait sync.WaitGroup
 		errorsByRunner := make([]error, 2)
@@ -120,6 +181,23 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 	if gotSHA != wantSHA || len(gotSchemaSHA) != 64 || gotRevision != revision {
 		t.Fatalf("protected receipt sha=%q schema_sha_length=%d revision=%q", gotSHA, len(gotSchemaSHA), gotRevision)
 	}
+	migration020Data, err := os.ReadFile(filepath.Join(repositoryMigrations, "020_action_interest_receipts.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest020 := sha256.Sum256(migration020Data)
+	want020SHA := hex.EncodeToString(digest020[:])
+	var got020SHA, got020SchemaSHA, got020Revision string
+	var applied020At time.Time
+	if err := DB.QueryRow(`
+		SELECT sha256, schema_sha256, applied_by_commit, applied_at
+		FROM nhs_schema_migrations
+		WHERE name = '020_action_interest_receipts.sql'`).Scan(&got020SHA, &got020SchemaSHA, &got020Revision, &applied020At); err != nil {
+		t.Fatal(err)
+	}
+	if got020SHA != want020SHA || len(got020SchemaSHA) != 64 || got020Revision != revision {
+		t.Fatalf("020 receipt sha=%q schema_sha_length=%d revision=%q", got020SHA, len(got020SchemaSHA), got020Revision)
+	}
 	if err := RunMigrations(repositoryMigrations, "development"); err != nil {
 		t.Fatalf("exact receipt replay should not require a new release identity: %v", err)
 	}
@@ -129,6 +207,13 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 	}
 	if !replayedAt.Equal(appliedAt) {
 		t.Fatalf("exact replay changed applied_at from %s to %s", appliedAt, replayedAt)
+	}
+	var replayed020At time.Time
+	if err := DB.QueryRow(`SELECT applied_at FROM nhs_schema_migrations WHERE name = '020_action_interest_receipts.sql'`).Scan(&replayed020At); err != nil {
+		t.Fatal(err)
+	}
+	if !replayed020At.Equal(applied020At) {
+		t.Fatalf("exact replay changed 020 applied_at from %s to %s", applied020At, replayed020At)
 	}
 
 	t.Run("checksum mismatch", func(t *testing.T) {
@@ -146,13 +231,31 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 	t.Run("database ahead", func(t *testing.T) {
 		if _, err := DB.Exec(`
 			INSERT INTO nhs_schema_migrations (name, sha256, schema_sha256, applied_by_commit)
-			VALUES ('020_future.sql', $1, $2, $3)`, strings.Repeat("f", 64), strings.Repeat("e", 64), revision); err != nil {
+			VALUES ('021_future.sql', $1, $2, $3)`, strings.Repeat("f", 64), strings.Repeat("e", 64), revision); err != nil {
 			t.Fatal(err)
 		}
 		if err := RunMigrations(repositoryMigrations, revision); err == nil || !strings.Contains(err.Error(), "database_ahead_of_binary") {
 			t.Fatalf("database-ahead error = %v", err)
 		}
-		if _, err := DB.Exec(`DELETE FROM nhs_schema_migrations WHERE name = '020_future.sql'`); err != nil {
+		if _, err := DB.Exec(`DELETE FROM nhs_schema_migrations WHERE name = '021_future.sql'`); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("same-name 020 index definition drift", func(t *testing.T) {
+		if _, err := DB.Exec(`DROP INDEX idx_action_interest_receipts_domain_created`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := DB.Exec(`CREATE INDEX idx_action_interest_receipts_domain_created ON action_interest_receipts(expires_at)`); err != nil {
+			t.Fatal(err)
+		}
+		if err := RunMigrations(repositoryMigrations, revision); err == nil || !strings.Contains(err.Error(), "schema fingerprint drift") {
+			t.Fatalf("020 index definition drift error = %v", err)
+		}
+		if _, err := DB.Exec(`DROP INDEX idx_action_interest_receipts_domain_created`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := DB.Exec(`CREATE INDEX idx_action_interest_receipts_domain_created ON action_interest_receipts(site_domain_snapshot, created_at DESC)`); err != nil {
 			t.Fatal(err)
 		}
 	})

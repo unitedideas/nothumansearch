@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "skill": "$design-director",
-  "reviewed_at": "2026-08-02T00:58:11-07:00",
-  "base_revision": "bfbd1ea9c573b9ac3eb95622ce80fb384b34ad3d",
+  "reviewed_at": "2026-08-02T03:28:14-07:00",
+  "base_revision": "122b5293e286148ed73b64930fd6978a38ca5edb",
   "discover": [
     "templates/providers.html",
     "templates/privacy.html"
@@ -37,14 +37,14 @@
       "source": "templates/privacy.html",
       "category": "high-volume information",
       "audience": "agent developers, principals, providers, and reviewers evaluating the discovery, consent, ownership, and accounting boundary",
-      "primary_conversion": "informed choice between the free organic link and the optional authorization-attested provider action",
-      "quality_metric": "privacy or authorization disputes plus abandonment attributable to unclear consent and ownership language",
+      "primary_conversion": "informed choice among the free organic link, a noncontacting Stage 1 action-interest receipt, and the separately authorized provider-funded action",
+      "quality_metric": "privacy or authorization disputes, invalid or conflicting receipt attempts, and later consented provider-action conversion rather than raw action-interest volume",
       "evidence_brief": "design/reviews/2026-08-01-provider-exchange.md",
       "verdict": "approved",
-      "reviewed_source_sha256": "6fe9c9dc8f6d797a88481bf3ab129718880c4d9e74c48ba59f87a36dda6e376c",
+      "reviewed_source_sha256": "bb67874cf4ae66a960f04dd638f660db597b9ded02f621c132ed49e742a37c79",
       "renders": {
-        "desktop": "design/reviews/evidence/2026-08-01-privacy-desktop.png",
-        "mobile": "design/reviews/evidence/2026-08-01-privacy-mobile.png"
+        "desktop": "design/reviews/evidence/2026-08-02-privacy-desktop.png",
+        "mobile": "design/reviews/evidence/2026-08-02-privacy-mobile.png"
       },
       "checks": {
         "five_second": true,
@@ -117,6 +117,48 @@
       "state": "privacy operational and DNS ownership disclosure",
       "file": "design/reviews/evidence/2026-08-01-privacy-dns-mobile.png",
       "sha256": "42c3ba0b1c21a5dc8c86cd85e67e8c430c2afad8278c0b8529a0698bb6beaced"
+    },
+    {
+      "viewport": "desktop 1440x900",
+      "state": "privacy first screen with the three-stage discovery and authorization boundary",
+      "file": "design/reviews/evidence/2026-08-02-privacy-desktop.png",
+      "sha256": "78a1836a57d5515cd898c00ec770924ac5ab19167175d74618e5cc1d2dc50d0d"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "privacy first screen with the three-stage discovery and authorization boundary",
+      "file": "design/reviews/evidence/2026-08-02-privacy-mobile.png",
+      "sha256": "29f5872cb1d29635d2e412de3b5189385bcab9200c58a70d4b4a06a558c3f905"
+    },
+    {
+      "viewport": "desktop 1440x900",
+      "state": "complete noncontacting action-interest contract and attestation",
+      "file": "design/reviews/evidence/2026-08-02-privacy-action-interest-desktop.png",
+      "sha256": "d6033a2f948c20932fd6edebabdb61ee2a4ad13052776f65a96d1f6f782e4c88"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "noncontacting action-interest receipt boundary",
+      "file": "design/reviews/evidence/2026-08-02-privacy-action-interest-mobile.png",
+      "sha256": "b86a26cce32a07fb0207a240afd038e9913c650fe65ee74edd4ab45962841194"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "action-interest attestation opening and retention boundary",
+      "file": "design/reviews/evidence/2026-08-02-privacy-action-interest-consent-mobile.png",
+      "sha256": "87f501f3d3559dfa4fa62d991656aa1961e344729340567cfd9bae76d8b02a70"
+    },
+    {
+      "viewport": "desktop 1440 CSS pixels full page",
+      "state": "complete privacy and authorization surface",
+      "file": "design/reviews/evidence/2026-08-02-privacy-full-desktop.png",
+      "sha256": "a97a0d30877d1f81f96dcd93a71f5f0d6521c288ec83d6589ffd4e7e6ae03084"
+    },
+    {
+      "viewport": "mobile 390 CSS pixels full page",
+      "state": "complete privacy and authorization surface",
+      "file": "design/reviews/evidence/2026-08-02-privacy-full-mobile.png",
+      "sha256": "23b1590b93b85469b13265db4bba8fc72a38a8527bff441ee5e21d17ad93054f"
     }
   ],
   "measured": {
@@ -144,16 +186,22 @@
       "document": 390,
       "body": 390
     },
+    "privacy_full_page_css_heights": {
+      "desktop": 5023,
+      "mobile": 8535
+    },
     "contrast_ratios": {
-      "primary_text_on_background": 15.88,
-      "muted_text_on_background": 6.62,
-      "accent_text_on_background": 8.93,
+      "primary_text_on_background": 16.02,
+      "muted_text_on_background": 7.05,
+      "muted_text_on_surface": 6.62,
+      "accent_text_on_background": 9.37,
       "button_text_on_accent": 6.07,
-      "green_signal_on_surface": 10.56,
-      "new_freshness_copy_minimum": 5.98
+      "green_signal_on_surface": 10.47,
+      "action_interest_consent_text": 10.60,
+      "action_interest_version_label": 8.16
     },
     "browser_errors": 0,
-    "privacy_refresh_renderer": "Chromium headless shell 1217; unchanged template DOM positioned at viewport top for section-specific evidence"
+    "privacy_refresh_renderer": "Chromium headless shell 1217 through the Chrome DevTools Protocol; exact rendered template captured at realistic viewports, with unchanged DOM scrolled to section-specific evidence"
   },
   "unresolved_release_findings": [
     "Dedicated provider-exchange signing key reference is not provisioned.",

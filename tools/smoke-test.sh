@@ -56,6 +56,29 @@ check_search_selection() {
     fi
 }
 
+check_synthetic_action_interest_rejected() {
+    TOTAL=$((TOTAL + 1))
+    local payload search_id domain code
+    payload=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" "$BASE/api/v1/search?q=payment&per_page=1")
+    search_id=$(printf '%s' "$payload" | /usr/bin/jq -r '.search_id // empty')
+    domain=$(printf '%s' "$payload" | /usr/bin/jq -r '.results[0].domain // empty')
+    if [[ "$search_id" != nhs_sr_* ]] || [ -z "$domain" ]; then
+        printf "  \033[31m✗\033[0m %-45s missing synthetic search source\n" "Synthetic action interest rejected"
+        FAILED=$((FAILED + 1))
+        return
+    fi
+    code=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" -H "Content-Type: application/json" \
+        -o /dev/null -w '%{http_code}' -X POST \
+        --data "{\"search_id\":\"$search_id\",\"domain\":\"$domain\",\"action_type\":\"quote\",\"caller_attests_principal_interest\":true,\"confirmation_version\":\"nhs-action-interest-v1\"}" \
+        "$BASE/api/v1/action-interests")
+    if [ "$code" = "404" ]; then
+        printf "  \033[32m✓\033[0m %-45s %s\n" "Synthetic action interest rejected" "$code"
+    else
+        printf "  \033[31m✗\033[0m %-45s expected 404, got %s\n" "Synthetic action interest rejected" "$code"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
 echo "NHS smoke test: $BASE"
 echo ""
 echo "Core API"
@@ -63,6 +86,7 @@ check "GET /api/v1/search is free" 200 "$BASE/api/v1/search?q=payment&per_page=1
 check_contains "Search free-access contract" '"access":"free"' "$BASE/api/v1/search?q=payment&per_page=1"
 check_contains "Search receipt contract" '"search_id":"nhs_sr_' "$BASE/api/v1/search?q=payment&per_page=1"
 check_search_selection
+check_synthetic_action_interest_rejected
 check "GET /api/v1/site/{domain} is free" 200 "$BASE/api/v1/site/openai.com"
 check "GET /api/v1/sites/{domain} free alias" 200 "$BASE/api/v1/sites/openai.com"
 check "GET /api/v1/stats" 200 "$BASE/api/v1/stats"
@@ -74,6 +98,7 @@ echo ""
 echo "MCP"
 check "GET /.well-known/mcp.json" 200 "$BASE/.well-known/mcp.json"
 check_contains "MCP manifest name" "nothumansearch" "$BASE/.well-known/mcp.json"
+check_contains "MCP action-interest tool" "record_action_interest" "$BASE/.well-known/mcp.json"
 
 echo ""
 echo "Landing pages"

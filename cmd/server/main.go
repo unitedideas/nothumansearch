@@ -130,6 +130,14 @@ func main() {
 			} else if n > 0 {
 				log.Printf("action ticket intent redaction: redacted %d rows", n)
 			}
+			// Provider-independent action interests become ineligible for replay and
+			// reporting at their explicit expiry. This hourly prune performs the
+			// subsequent physical deletion before the source-receipt cascade runs.
+			if res, err := database.DB.Exec(`DELETE FROM action_interest_receipts WHERE expires_at <= now()`); err != nil {
+				log.Printf("action_interest_receipts prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("action_interest_receipts prune: deleted %d rows", n)
+			}
 			// Search receipts cascade-delete returned-result and selection rows.
 			// Provider products use thresholded controlled-topic aggregates rather
 			// than exporting individual searches.
@@ -189,6 +197,8 @@ func main() {
 	seoHandler := handlers.NewSEOHandler(database.DB, baseURL)
 	monitorHandler := handlers.NewMonitorHandler(database.DB, baseURL)
 	mcpHandler := handlers.NewMCPHandler(database.DB, baseURL)
+	actionInterestHandler := handlers.NewActionInterestHandler(database.DB, baseURL)
+	mcpHandler.ActionInterests = actionInterestHandler
 	checkHandler := handlers.NewCheckHandler(database.DB)
 	badgeHandler := handlers.NewBadgeHandler(database.DB)
 	digestHandler, err := handlers.NewDigestHandler(database.DB, baseURL, templatesDir)
@@ -392,6 +402,7 @@ func main() {
 	mux.HandleFunc("/api/v1/provider/receipts/", providerExchangeHandler.ProviderReceipt)
 	mux.HandleFunc("/api/v1/action-tickets", providerExchangeHandler.ActionTickets)
 	mux.HandleFunc("/api/v1/action-receipts/verify", providerExchangeHandler.VerifyOutcomeReceipt)
+	mux.HandleFunc("/api/v1/action-interests", actionInterestHandler.Record)
 	mux.HandleFunc("/providers", providerExchangeHandler.ProvidersPage)
 	mux.HandleFunc("/privacy", providerExchangeHandler.PrivacyPage)
 
@@ -415,6 +426,7 @@ func main() {
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
 	mux.HandleFunc("/api/v1/admin/demand", apiHandler.ProviderDemandAnalytics)
+	mux.HandleFunc("/api/v1/admin/demand-stage1", actionInterestHandler.Stage1DemandProof)
 	mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeHandler.AdminOfferAction)
 	mux.HandleFunc("/api/v1/admin/provider-proof", providerExchangeHandler.AdminProof)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
@@ -492,10 +504,11 @@ var botPatterns = []string{
 // /mcp gets its own table (mcp_requests). /health is internal infra noise.
 // These exclusions keep page_views focused on human/organic traffic.
 var noLogPathPrefixes = []string{
-	"/mcp",            // JSON-RPC endpoint — logged to mcp_requests table
-	"/health",         // internal Consul/Fly health checks
-	"/metrics",        // Prometheus scrapers
-	"/webhook/stripe", // Stripe retries/probes are monitored separately
+	"/mcp",                     // JSON-RPC endpoint — logged to mcp_requests table, except privacy-bypassed tools
+	"/api/v1/action-interests", // receipt table only; never bind interest invocation to IP/UA telemetry
+	"/health",                  // internal Consul/Fly health checks
+	"/metrics",                 // Prometheus scrapers
+	"/webhook/stripe",          // Stripe retries/probes are monitored separately
 }
 
 // shouldLogPageView returns false for paths we explicitly exclude.
@@ -506,6 +519,10 @@ func shouldLogPageView(p string) bool {
 		}
 	}
 	return true
+}
+
+func suppressRequestLineIdentityTelemetry(p string) bool {
+	return p == "/api/v1/action-interests" || p == "/mcp" || strings.HasPrefix(p, "/mcp/")
 }
 
 func isBotUA(ua string) bool {
@@ -610,7 +627,9 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
 		dur := time.Since(start)
-		log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.status, r.UserAgent(), dur.Round(time.Millisecond))
+		if !suppressRequestLineIdentityTelemetry(r.URL.Path) {
+			log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.status, r.UserAgent(), dur.Round(time.Millisecond))
+		}
 
 		if database.DB != nil && shouldLogPageView(r.URL.Path) {
 			ip := r.RemoteAddr
@@ -854,9 +873,10 @@ const installScript = `#!/bin/sh
 # copy-paste snippets for Cursor, Cline, and Continue.
 #
 # NHS endpoint: https://nothumansearch.ai/mcp (streamable-http, no auth)
-# 12 tools: search_agents, get_site_details, get_stats, list_categories,
+# 13 tools: search_agents, get_site_details, get_stats, list_categories,
 # get_top_sites, submit_site, register_monitor, verify_mcp,
-# check_url, find_mcp_servers, recent_additions, prepare_provider_action
+# check_url, find_mcp_servers, recent_additions, record_action_interest,
+# prepare_provider_action
 
 set -eu
 ENDPOINT="https://nothumansearch.ai/mcp"

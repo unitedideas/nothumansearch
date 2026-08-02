@@ -114,17 +114,52 @@ func TestProviderDemandReportsExcludeSyntheticReceiptsAndUseReceiptTerms(t *test
 		t.Fatal("GetProviderDemandAnalytics not found")
 	}
 	reportSource := text[start:]
-	if got := strings.Count(reportSource, "AND NOT sr.is_synthetic"); got != 3 {
-		t.Fatalf("provider report synthetic exclusions = %d, want 3 (summary, surfaces, topics)", got)
+	if got := strings.Count(reportSource, "AND NOT sr.is_synthetic"); got != 4 {
+		t.Fatalf("provider report synthetic exclusions = %d, want 4 (summary, surfaces, topics, action types)", got)
 	}
 	for _, forbidden := range []string{`"search_sessions"`, `"detail_requests"`, `"detail_request_rate"`} {
 		if strings.Contains(reportSource, forbidden) {
 			t.Fatalf("provider report retained misleading metric %s", forbidden)
 		}
 	}
-	for _, required := range []string{`"search_receipts"`, `"result_selections"`, `"result_selection_rate"`} {
+	for _, required := range []string{`"search_receipts"`, `"result_selections"`, `"result_selection_rate"`, `"action_interest_receipts"`, `"action_interest_rate"`, `"action_types"`} {
 		if !strings.Contains(reportSource, required) {
 			t.Fatalf("provider report missing receipt-accurate metric %s", required)
+		}
+	}
+	if got := strings.Count(reportSource, "interest.expires_at > $3::timestamptz"); got != 4 {
+		t.Fatalf("provider report live action-interest filters = %d, want 4 (summary, surfaces, topics, action types)", got)
+	}
+	if got := strings.Count(reportSource, "interest.created_at <= $3::timestamptz"); got != 4 {
+		t.Fatalf("provider report action-interest upper cohort bounds = %d, want 4", got)
+	}
+	if got := strings.Count(reportSource, "returned.returned_at >= $3::timestamptz - $2::int * INTERVAL '1 day'"); got != 4 {
+		t.Fatalf("provider report source-cohort filters = %d, want 4 (summary, surfaces, topics, action types)", got)
+	}
+	if got := strings.Count(reportSource, "returned.returned_at <= $3::timestamptz"); got != 4 {
+		t.Fatalf("provider report source-cohort upper bounds = %d, want 4", got)
+	}
+	if !strings.Contains(reportSource, "SELECT clock_timestamp()") {
+		t.Fatal("provider report does not capture one database cohort timestamp")
+	}
+	for _, required := range []string{"sql.LevelRepeatableRead", "ReadOnly:  true", "tx.QueryRow", "tx.Query", "tx.Commit"} {
+		if !strings.Contains(reportSource, required) {
+			t.Fatalf("provider report does not hold one repeatable-read cohort: missing %q", required)
+		}
+	}
+	if !strings.Contains(reportSource, `"action_interest_cohort":`) || !strings.Contains(reportSource, `"organic_result_returned_at"`) {
+		t.Fatal("provider report does not declare its action-interest cohort")
+	}
+	if got := strings.Count(reportSource, `"action_interest_suppressed"`); got < 3 {
+		t.Fatalf("provider report action-interest suppression branches = %d, want summary, surface, and topic protection", got)
+	}
+	for _, required := range []string{
+		`if actionInterests >= ProviderDemandPrivacyThreshold`,
+		`if interests >= ProviderDemandPrivacyThreshold`,
+		`"action_interest_receipt_threshold"`,
+	} {
+		if !strings.Contains(reportSource, required) {
+			t.Fatalf("provider report missing privacy suppression contract %s", required)
 		}
 	}
 	for _, required := range []string{`days > 30`, `"retention_days":`} {

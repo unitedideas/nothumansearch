@@ -1,12 +1,14 @@
 package models
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/lib/pq"
@@ -287,89 +289,150 @@ func NormalizeProviderDomain(domain string) string {
 // controlled topics. It never returns raw searches, fingerprints, network
 // identifiers, user agents, individual receipts, or alleged agent identities.
 func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string]any, error) {
+	if db == nil {
+		return nil, ErrDemandStoreUnavailable
+	}
 	domain = NormalizeProviderDomain(domain)
 	if days <= 0 || days > 30 {
 		days = 30
 	}
+	// Keep every metric on one repeatable-read snapshot and one database wall-
+	// clock boundary. Both are required: the timestamp excludes later writes,
+	// while the snapshot prevents cleanup/cascade deletes between statements from
+	// changing membership in the same report.
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var cohortAsOf time.Time
+	if err := tx.QueryRow(`SELECT clock_timestamp()`).Scan(&cohortAsOf); err != nil {
+		return nil, err
+	}
 	result := map[string]any{
-		"domain":                  domain,
-		"days":                    days,
-		"retention_days":          30,
-		"topic_receipt_threshold": ProviderDemandPrivacyThreshold,
-		"synthetic_excluded":      true,
+		"domain":                            domain,
+		"days":                              days,
+		"retention_days":                    30,
+		"action_interest_cohort":            "organic_result_returned_at",
+		"topic_receipt_threshold":           ProviderDemandPrivacyThreshold,
+		"action_interest_receipt_threshold": ProviderDemandPrivacyThreshold,
+		"synthetic_excluded":                true,
 	}
 
-	var resultsReturned, searchReceipts, resultSelections int
+	var resultsReturned, searchReceipts, resultSelections, actionInterests int
 	var averagePosition float64
-	err := db.QueryRow(`
+	err = tx.QueryRow(`
 		SELECT COUNT(*)::int,
 		       COUNT(DISTINCT sr.id)::int,
 		       COUNT(DISTINCT selected.search_receipt_id)::int,
+		       COUNT(DISTINCT interest.search_receipt_id)::int,
 		       COALESCE(AVG(returned.organic_position), 0)::float
 		FROM organic_results_returned returned
 		JOIN search_receipts sr ON sr.id = returned.search_receipt_id
 		LEFT JOIN result_selections selected
 		  ON selected.search_receipt_id = returned.search_receipt_id
 		 AND selected.site_domain_snapshot = returned.site_domain_snapshot
+		 AND selected.selected_at <= $3::timestamptz
+		LEFT JOIN action_interest_receipts interest
+		  ON interest.search_receipt_id = returned.search_receipt_id
+		 AND interest.site_domain_snapshot = returned.site_domain_snapshot
+		 AND interest.created_at <= $3::timestamptz
+		 AND interest.expires_at > $3::timestamptz
 		WHERE returned.site_domain_snapshot = $1
 		  AND NOT sr.is_synthetic
-		  AND returned.returned_at >= NOW() - $2::int * INTERVAL '1 day'`, domain, days).
-		Scan(&resultsReturned, &searchReceipts, &resultSelections, &averagePosition)
+		  AND returned.returned_at >= $3::timestamptz - $2::int * INTERVAL '1 day'
+		  AND returned.returned_at <= $3::timestamptz`, domain, days, cohortAsOf).
+		Scan(&resultsReturned, &searchReceipts, &resultSelections, &actionInterests, &averagePosition)
 	if err != nil {
 		return nil, err
 	}
 	selectionRate := 0.0
+	actionInterestRate := 0.0
 	if searchReceipts > 0 {
 		selectionRate = float64(resultSelections) / float64(searchReceipts)
+		actionInterestRate = float64(actionInterests) / float64(searchReceipts)
 	}
-	result["summary"] = map[string]any{
+	summary := map[string]any{
 		"organic_results_returned": resultsReturned,
 		"search_receipts":          searchReceipts,
 		"result_selections":        resultSelections,
 		"result_selection_rate":    selectionRate,
 		"average_organic_position": averagePosition,
 	}
+	if actionInterests >= ProviderDemandPrivacyThreshold {
+		summary["action_interest_receipts"] = actionInterests
+		summary["action_interest_rate"] = actionInterestRate
+		summary["action_interest_suppressed"] = false
+	} else {
+		summary["action_interest_receipts"] = nil
+		summary["action_interest_rate"] = nil
+		summary["action_interest_suppressed"] = true
+	}
+	result["summary"] = summary
 
-	rows, err := db.Query(`
+	rows, err := tx.Query(`
 		SELECT sr.surface,
 		       COUNT(*)::int,
-		       COUNT(DISTINCT selected.search_receipt_id)::int
+		       COUNT(DISTINCT selected.search_receipt_id)::int,
+		       COUNT(DISTINCT interest.search_receipt_id)::int
 		FROM organic_results_returned returned
 		JOIN search_receipts sr ON sr.id = returned.search_receipt_id
 		LEFT JOIN result_selections selected
 		  ON selected.search_receipt_id = returned.search_receipt_id
 		 AND selected.site_domain_snapshot = returned.site_domain_snapshot
+		 AND selected.selected_at <= $3::timestamptz
+		LEFT JOIN action_interest_receipts interest
+		  ON interest.search_receipt_id = returned.search_receipt_id
+		 AND interest.site_domain_snapshot = returned.site_domain_snapshot
+		 AND interest.created_at <= $3::timestamptz
+		 AND interest.expires_at > $3::timestamptz
 		WHERE returned.site_domain_snapshot = $1
 		  AND NOT sr.is_synthetic
-		  AND returned.returned_at >= NOW() - $2::int * INTERVAL '1 day'
+		  AND returned.returned_at >= $3::timestamptz - $2::int * INTERVAL '1 day'
+		  AND returned.returned_at <= $3::timestamptz
 		GROUP BY sr.surface
-		ORDER BY COUNT(*) DESC`, domain, days)
+		ORDER BY COUNT(*) DESC`, domain, days, cohortAsOf)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	surfaces := []map[string]any{}
 	for rows.Next() {
 		var surface string
-		var returned, selections int
-		if err := rows.Scan(&surface, &returned, &selections); err != nil {
+		var returned, selections, interests int
+		if err := rows.Scan(&surface, &returned, &selections, &interests); err != nil {
 			return nil, err
 		}
-		surfaces = append(surfaces, map[string]any{
+		entry := map[string]any{
 			"surface":                  surface,
 			"organic_results_returned": returned,
 			"result_selections":        selections,
-		})
+		}
+		if interests >= ProviderDemandPrivacyThreshold {
+			entry["action_interest_receipts"] = interests
+			entry["action_interest_suppressed"] = false
+		} else {
+			entry["action_interest_receipts"] = nil
+			entry["action_interest_suppressed"] = true
+		}
+		surfaces = append(surfaces, entry)
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 	result["surfaces"] = surfaces
 
-	rows2, err := db.Query(`
+	rows2, err := tx.Query(`
 		SELECT topic,
 		       COUNT(DISTINCT sr.id)::int,
 		       COUNT(DISTINCT selected.search_receipt_id)::int,
+		       COUNT(DISTINCT interest.search_receipt_id)::int,
 		       COALESCE(AVG(returned.organic_position), 0)::float
 		FROM organic_results_returned returned
 		JOIN search_receipts sr ON sr.id = returned.search_receipt_id
@@ -377,35 +440,98 @@ func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string
 		LEFT JOIN result_selections selected
 		  ON selected.search_receipt_id = returned.search_receipt_id
 		 AND selected.site_domain_snapshot = returned.site_domain_snapshot
+		 AND selected.selected_at <= $3::timestamptz
+		LEFT JOIN action_interest_receipts interest
+		  ON interest.search_receipt_id = returned.search_receipt_id
+		 AND interest.site_domain_snapshot = returned.site_domain_snapshot
+		 AND interest.created_at <= $3::timestamptz
+		 AND interest.expires_at > $3::timestamptz
 		WHERE returned.site_domain_snapshot = $1
 		  AND NOT sr.is_synthetic
-		  AND returned.returned_at >= NOW() - $2::int * INTERVAL '1 day'
+		  AND returned.returned_at >= $3::timestamptz - $2::int * INTERVAL '1 day'
+		  AND returned.returned_at <= $3::timestamptz
 		GROUP BY topic
-		HAVING COUNT(DISTINCT sr.id) >= $3
+		HAVING COUNT(DISTINCT sr.id) >= $4
 		ORDER BY COUNT(DISTINCT sr.id) DESC, topic ASC
-		LIMIT 20`, domain, days, ProviderDemandPrivacyThreshold)
+		LIMIT 20`, domain, days, cohortAsOf, ProviderDemandPrivacyThreshold)
 	if err != nil {
 		return nil, err
 	}
-	defer rows2.Close()
 	topics := []map[string]any{}
 	for rows2.Next() {
 		var topic string
-		var receipts, selections int
+		var receipts, selections, interests int
 		var avgPosition float64
-		if err := rows2.Scan(&topic, &receipts, &selections, &avgPosition); err != nil {
+		if err := rows2.Scan(&topic, &receipts, &selections, &interests, &avgPosition); err != nil {
 			return nil, err
 		}
-		topics = append(topics, map[string]any{
+		entry := map[string]any{
 			"topic":                    topic,
 			"search_receipts":          receipts,
 			"result_selections":        selections,
 			"average_organic_position": avgPosition,
-		})
+		}
+		if interests >= ProviderDemandPrivacyThreshold {
+			entry["action_interest_receipts"] = interests
+			entry["action_interest_suppressed"] = false
+		} else {
+			entry["action_interest_receipts"] = nil
+			entry["action_interest_suppressed"] = true
+		}
+		topics = append(topics, entry)
 	}
 	if err := rows2.Err(); err != nil {
+		_ = rows2.Close()
+		return nil, err
+	}
+	if err := rows2.Close(); err != nil {
 		return nil, err
 	}
 	result["demand_topics"] = topics
+
+	rows3, err := tx.Query(`
+		SELECT interest.action_type,
+		       COUNT(DISTINCT interest.search_receipt_id)::int
+		FROM action_interest_receipts interest
+		JOIN search_receipts sr ON sr.id=interest.search_receipt_id
+		JOIN organic_results_returned returned
+		  ON returned.search_receipt_id=interest.search_receipt_id
+		 AND returned.site_domain_snapshot=interest.site_domain_snapshot
+		WHERE interest.site_domain_snapshot=$1
+		  AND NOT sr.is_synthetic
+		  AND returned.returned_at >= $3::timestamptz - $2::int * INTERVAL '1 day'
+		  AND returned.returned_at <= $3::timestamptz
+		  AND interest.created_at <= $3::timestamptz
+		  AND interest.expires_at > $3::timestamptz
+		GROUP BY interest.action_type
+		HAVING COUNT(DISTINCT interest.search_receipt_id) >= $4
+		ORDER BY COUNT(DISTINCT interest.search_receipt_id) DESC,
+		         interest.action_type`, domain, days, cohortAsOf, ProviderDemandPrivacyThreshold)
+	if err != nil {
+		return nil, err
+	}
+	actionTypes := []map[string]any{}
+	for rows3.Next() {
+		var actionType string
+		var receipts int
+		if err := rows3.Scan(&actionType, &receipts); err != nil {
+			return nil, err
+		}
+		actionTypes = append(actionTypes, map[string]any{
+			"action_type":   actionType,
+			"receipt_count": receipts,
+		})
+	}
+	if err := rows3.Err(); err != nil {
+		_ = rows3.Close()
+		return nil, err
+	}
+	if err := rows3.Close(); err != nil {
+		return nil, err
+	}
+	result["action_types"] = actionTypes
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }

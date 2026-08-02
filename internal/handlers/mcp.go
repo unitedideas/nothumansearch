@@ -34,6 +34,7 @@ type MCPHandler struct {
 	DB                      *sql.DB
 	BaseURL                 string
 	ProviderExchange        *ProviderExchangeHandler
+	ActionInterests         *ActionInterestHandler
 	discoveryRateLimiter    *mcpDiscoveryRateLimiter
 	toolRateLimiter         *mcpDiscoveryRateLimiter
 	probeRateLimiter        *mcpDiscoveryRateLimiter
@@ -494,6 +495,27 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 			},
 		},
 		{
+			"name":        "record_action_interest",
+			"title":       "Record Caller-Attested Action Interest",
+			"description": "Record the caller's attestation that its human or company principal currently wants one controlled next step with a site returned organically by search_agents. This creates a private Stage 1 demand receipt that expires with the source search, no later than 30 days after that search. It does not contact the provider, create an action ticket or charge, change rank or score, or count as commercial proof. No query, contact data, free-form text, or agent/principal identity is accepted. Exact v1 wording: " + h.BaseURL + "/privacy#action-interest-v1",
+			"inputSchema": map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"search_id": map[string]any{"type": "string", "description": "Committed query-free receipt returned by search_agents."},
+					"domain":    map[string]any{"type": "string", "description": "Bare domain that appeared in the referenced organic results; no scheme or path."},
+					"action_type": map[string]any{
+						"type":        "string",
+						"enum":        models.ActionInterestTypes(),
+						"description": "The one next step the principal currently wants.",
+					},
+					"caller_attests_principal_interest": map[string]any{"type": "boolean", "const": true, "description": "Caller attests current principal interest under the exact published v1 wording; this is not authority to contact the provider."},
+					"confirmation_version":              map[string]any{"type": "string", "enum": []string{models.ActionInterestConfirmationV1}, "description": h.BaseURL + "/privacy#action-interest-v1"},
+				},
+				"required": []string{"search_id", "domain", "action_type", "caller_attests_principal_interest", "confirmation_version"},
+			},
+		},
+		{
 			"name":        "prepare_provider_action",
 			"title":       "Prepare an Authorization-Attested Provider Action",
 			"description": "Create a signed action handoff for a separately disclosed provider-funded offer returned by search_agents. Requires the search receipt and the caller's explicit principal-authorization attestation. Accepts controlled constraints only—no name, email, contact detail, raw prompt, agent identity, or principal identity fields. Search and direct provider access remain free; creating a ticket charges neither party. Exact v1 wording: " + h.BaseURL + "/privacy#consent-v1",
@@ -537,6 +559,26 @@ func (h *MCPHandler) toolNames() []string {
 }
 
 func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req rpcRequest, start time.Time, ua, ipHash string) {
+	var route struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}
+	if err := json.Unmarshal(req.Params, &route); err != nil {
+		h.writeError(w, req.ID, -32602, "invalid params")
+		return
+	}
+	// Route this privacy-sensitive mutation by name before requiring arguments
+	// to decode as an object. Otherwise a caller can send an array or scalar and
+	// bypass the only transient limiter through the generic invalid-params path.
+	if route.Name == "record_action_interest" {
+		toolResponse := &mcpToolResponseBuffer{header: w.Header()}
+		h.toolRecordActionInterestRaw(toolResponse, req.ID, route.Arguments, r)
+		if err := toolResponse.flushTo(w); err != nil {
+			log.Printf("MCP response write record_action_interest: %v", err)
+		}
+		return
+	}
+
 	var params struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
@@ -700,11 +742,111 @@ func isKnownMCPTool(name string) bool {
 	switch name {
 	case "search_agents", "search", "get_site_details", "get_stats", "submit_site",
 		"register_monitor", "check_url", "verify_mcp", "list_categories",
-		"get_top_sites", "find_mcp_servers", "recent_additions", "prepare_provider_action":
+		"get_top_sites", "find_mcp_servers", "recent_additions", "record_action_interest",
+		"prepare_provider_action":
 		return true
 	default:
 		return false
 	}
+}
+
+func (h *MCPHandler) beginRecordActionInterest(w http.ResponseWriter, id json.RawMessage, r *http.Request) bool {
+	protectReceiptBearingResponse(w)
+	if h.ActionInterests == nil {
+		h.writeToolError(w, id, "action-interest receipts are not configured")
+		return false
+	}
+	remaining, retryAfter, gateErr := h.ActionInterests.gate(r)
+	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(actionInterestHourlyLimit))
+	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(retryAfter).Unix(), 10))
+	if gateErr != nil {
+		status, message := actionInterestStatus(gateErr)
+		if status == http.StatusForbidden {
+			w.Header().Del("Access-Control-Allow-Origin")
+		}
+		if status == http.StatusTooManyRequests {
+			w.Header().Set("Retry-After", strconv.Itoa(max(1, int(retryAfter.Seconds()))))
+		}
+		h.writeToolError(w, id, message)
+		return false
+	}
+	return true
+}
+
+func (h *MCPHandler) toolRecordActionInterestRaw(w http.ResponseWriter, id json.RawMessage, raw json.RawMessage, r *http.Request) {
+	if !h.beginRecordActionInterest(w, id, r) {
+		return
+	}
+	var args map[string]any
+	if len(raw) == 0 || json.Unmarshal(raw, &args) != nil || args == nil {
+		h.writeToolError(w, id, "action-interest arguments must be an object")
+		return
+	}
+	h.recordActionInterestAfterGate(w, id, args, r)
+}
+
+func (h *MCPHandler) toolRecordActionInterest(w http.ResponseWriter, id json.RawMessage, args map[string]any, r *http.Request) {
+	if !h.beginRecordActionInterest(w, id, r) {
+		return
+	}
+	h.recordActionInterestAfterGate(w, id, args, r)
+}
+
+func (h *MCPHandler) recordActionInterestAfterGate(w http.ResponseWriter, id json.RawMessage, args map[string]any, r *http.Request) {
+	if err := validateRecordActionInterestArguments(args); err != nil {
+		h.writeToolError(w, id, err.Error())
+		return
+	}
+	receipt, err := h.ActionInterests.recordAfterGate(r, actionInterestRequest{
+		SearchID:                       asString(args["search_id"]),
+		Domain:                         asString(args["domain"]),
+		ActionType:                     asString(args["action_type"]),
+		CallerAttestsPrincipalInterest: asBool(args["caller_attests_principal_interest"]),
+		ConfirmationVersion:            asString(args["confirmation_version"]),
+	}, "mcp")
+	if err != nil {
+		_, message := actionInterestStatus(err)
+		h.writeToolError(w, id, message)
+		return
+	}
+	text := "Recorded caller-attested principal interest for aggregate Stage 1 demand. No provider was contacted; no ticket, charge, rank change, or commercial proof was created."
+	if receipt.Replayed {
+		text += " This was an exact idempotent replay of the existing receipt."
+	}
+	h.writeResult(w, id, map[string]any{
+		"content":           []map[string]any{{"type": "text", "text": text}},
+		"structuredContent": actionInterestResponse(receipt),
+	})
+}
+
+func validateRecordActionInterestArguments(args map[string]any) error {
+	allowed := map[string]struct{}{
+		"search_id": {}, "domain": {}, "action_type": {},
+		"caller_attests_principal_interest": {}, "confirmation_version": {},
+	}
+	for key := range args {
+		if _, ok := allowed[key]; !ok {
+			return errors.New("action-interest arguments contain an unsupported field; queries, contact details, raw prompts, notes, and identities are not accepted")
+		}
+	}
+	for _, key := range []string{"search_id", "domain", "action_type", "confirmation_version"} {
+		value, exists := args[key]
+		if !exists {
+			return errors.New("action-interest arguments are incomplete")
+		}
+		if _, ok := value.(string); !ok {
+			return errors.New("action-interest arguments have an invalid field type")
+		}
+	}
+	value, exists := args["caller_attests_principal_interest"]
+	if !exists {
+		return errors.New("action-interest arguments are incomplete")
+	}
+	if _, ok := value.(bool); !ok {
+		return errors.New("action-interest arguments have an invalid field type")
+	}
+	return nil
 }
 
 func (h *MCPHandler) toolPrepareProviderAction(w http.ResponseWriter, id json.RawMessage, args map[string]any, r *http.Request) {
@@ -1010,6 +1152,9 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		}
 		b.WriteString("\n")
 	}
+	if searchID != "" && len(sites) > 0 && !synthetic {
+		b.WriteString("If the principal already wants a quote, trial, demo, booking, application, signup, or purchase from one returned domain, record_action_interest can create an aggregate-demand receipt that expires with the source search, no later than 30 days after that search. It does not contact the provider or create a ticket, charge, rank change, or commercial proof.\n")
+	}
 
 	// Return both human-readable text (content) and structured JSON (structuredContent).
 	// Per MCP spec, structuredContent lets agents parse without string-munging.
@@ -1020,6 +1165,14 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		"results":               sites,
 		"paid_offers":           paidOffers,
 		"paid_offers_available": paidOffersAvailable,
+		"action_interest": map[string]any{
+			"available":             searchID != "" && len(sites) > 0 && !synthetic,
+			"tool":                  "record_action_interest",
+			"confirmation_version":  models.ActionInterestConfirmationV1,
+			"provider_contacted":    false,
+			"commercial_proof":      false,
+			"organic_rank_affected": false,
+		},
 	}
 	if searchID != "" {
 		structured["search_id"] = searchID

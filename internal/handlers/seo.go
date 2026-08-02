@@ -163,7 +163,7 @@ Not Human Search is itself an MCP server. Wire it into your agent once and get l
 
 Endpoint: %s/mcp
 Transport: streamable-http
-Tools (12): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions, check_url, prepare_provider_action
+Tools (13): search_agents, get_site_details, get_stats, list_categories, get_top_sites, submit_site, register_monitor, verify_mcp, find_mcp_servers, recent_additions, check_url, record_action_interest, prepare_provider_action
 
 Claude Code setup:
   claude mcp add --transport http nothumansearch %s/mcp
@@ -194,6 +194,16 @@ authorization attestation. Creating a ticket charges neither party.
 
 Consent wording: /privacy#consent-v1
 Provider setup: /providers
+
+### Caller-Attested Action Interest (No Provider Contact)
+POST /api/v1/action-interests
+After an organic search, a caller can record that its human or company principal
+currently wants one controlled next step with an exact returned domain: quote,
+trial, demo, booking, application, signup, or purchase. This private receipt
+expires with the source search, no later than 30 days after that search, and is
+used only for aggregate Stage 1 demand. It does not contact the
+provider, create a provider action ticket or charge, affect rank or score, or
+count as commercial proof. Exact wording: /privacy#action-interest-v1
 
 ### Site Details
 GET /site/{domain}
@@ -405,6 +415,12 @@ func (h *SEOHandler) MCPManifest(w http.ResponseWriter, r *http.Request) {
 				"description": "Agent-first sites added to the index within the last N days (default 7, max 90). For tracking ecosystem momentum and weekly digests.",
 			},
 			{
+				"name":        "record_action_interest",
+				"description": "Record caller-attested principal interest in one controlled next step for an exact returned organic domain. This private demand receipt expires with the source search, no later than 30 days after that search; it does not contact the provider, create a ticket or charge, affect rank, or count as commercial proof.",
+				"endpoint":    h.BaseURL + "/api/v1/action-interests",
+				"method":      "POST",
+			},
+			{
 				"name":        "prepare_provider_action",
 				"description": "Create a signed, authorization-attested action ticket for a separately disclosed provider-funded offer. Requires an organic search receipt; accepts controlled fields only. Exact wording is published at /privacy#consent-v1.",
 				"endpoint":    h.BaseURL + "/api/v1/action-tickets",
@@ -433,7 +449,7 @@ func (h *SEOHandler) AIPluginManifest(w http.ResponseWriter, r *http.Request) {
 		"name_for_human":        "Not Human Search",
 		"name_for_model":        "nothumansearch",
 		"description_for_human": "Search engine that finds websites AI agents can actually use, ranked by agentic readiness score.",
-		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/top (top-scored sites, filterable by signal), GET /api/v1/site/{domain}, GET /api/v1/verify-mcp?url=, and POST /api/v1/check. Organic search is free and neutral. Separately disclosed provider-funded actions may appear only beside an already-returned organic result. For richer capabilities connect via MCP at /mcp — 12 tools including prepare_provider_action.",
+		"description_for_model": "Search for websites and APIs that are agent-ready. Returns sites scored 0-100 on agentic readiness based on 7 signals (llms.txt, OpenAPI, ai-plugin.json, structured APIs, MCP server, robots.txt AI rules, Schema.org). Key REST endpoints: GET /api/v1/search (with filters has_mcp, has_openapi, has_llms_txt), GET /api/v1/top (top-scored sites, filterable by signal), GET /api/v1/site/{domain}, GET /api/v1/verify-mcp?url=, and POST /api/v1/check. Organic search is free and neutral. Caller-attested principal interest can be recorded without provider contact, payment, or rank effects. Separately disclosed provider-funded actions may appear only beside an already-returned organic result. For richer capabilities connect via MCP at /mcp — 13 tools including record_action_interest and prepare_provider_action.",
 		"auth":                  map[string]string{"type": "none"},
 		"api": map[string]string{
 			"type": "openapi",
@@ -677,6 +693,16 @@ paths:
                     type: array
                     description: Separate optional actions; never included in results, score, total, or organic ordering
                     items: { $ref: "#/components/schemas/PublicProviderOffer" }
+                  action_interest:
+                    type: object
+                    description: Provider-independent way to record caller-attested principal interest against an exact returned organic result
+                    properties:
+                      available: { type: boolean }
+                      endpoint: { type: string, format: uri }
+                      confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
+                      provider_contacted: { type: boolean, enum: [false] }
+                      commercial_proof: { type: boolean, enum: [false] }
+                      organic_rank_affected: { type: boolean, enum: [false] }
                   total: { type: integer }
                   page: { type: integer }
                   per_page: { type: integer }
@@ -826,6 +852,31 @@ paths:
         - { name: offer_id, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
         "200": { description: Offer paused }
+  /action-interests:
+    post:
+      summary: Record caller-attested principal interest in one controlled next step
+      operationId: recordActionInterest
+      description: Creates a private, query-free Stage 1 demand receipt bound to an exact returned organic domain. It expires with the source search, no later than 30 days after that search. It does not contact the provider, create an action ticket or charge, affect organic rank or readiness score, or count as commercial proof. The caller attests current principal interest under the exact wording at https://nothumansearch.ai/privacy#action-interest-v1; NHS does not verify identity, agency, or legal authority.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionInterestRequest" }
+      responses:
+        "201":
+          description: New provider-independent action-interest receipt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionInterestResponse" }
+        "200":
+          description: Exact idempotent replay of the existing receipt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActionInterestResponse" }
+        "403": { description: Cross-origin browser mutation rejected; native agents without browser-origin headers remain supported }
+        "404": { description: Missing, stale, synthetic, or non-returned organic source; intentionally indistinguishable }
+        "409": { description: This search result already recorded a different controlled action }
+        "429": { description: Temporary free abuse limit exceeded }
   /action-tickets:
     post:
       summary: Prepare an authorization-attested action for a disclosed paid offer
@@ -1165,6 +1216,47 @@ components:
             amount_minor: { type: integer, minimum: 1 }
             currency: { type: string, enum: [usd] }
         prepare_action_endpoint: { type: string, format: uri }
+    ActionInterestRequest:
+      type: object
+      additionalProperties: false
+      required: [search_id, domain, action_type, caller_attests_principal_interest, confirmation_version]
+      properties:
+        search_id: { type: string, pattern: "^nhs_sr_[A-Za-z0-9_-]{16}$", description: Committed query-free organic search receipt }
+        domain: { type: string, description: Bare domain present in the referenced organic results; schemes, paths, queries, and fragments are rejected }
+        action_type: { type: string, enum: [quote, trial, demo, booking, application, signup, purchase] }
+        caller_attests_principal_interest: { type: boolean, enum: [true], description: Caller attests current human/company principal interest; this is not authority to contact the provider }
+        confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
+    ActionInterestReceipt:
+      type: object
+      description: Provider-independent Stage 1 demand receipt; not a provider request, action ticket, charge, outcome, or commercial proof
+      properties:
+        id: { type: string, pattern: "^nhs_air_[A-Za-z0-9_-]{16}$" }
+        search_id: { type: string }
+        domain: { type: string }
+        action_type: { type: string, enum: [quote, trial, demo, booking, application, signup, purchase] }
+        surface: { type: string, enum: [rest, mcp, web, unknown] }
+        caller_attests_principal_interest: { type: boolean, enum: [true] }
+        confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        idempotent_replay: { type: boolean }
+    ActionInterestResponse:
+      type: object
+      required: [receipt, created, idempotent_replay, provider_contacted, row_level_shared_with_provider, action_ticket_created, charge_created, provider_or_principal_charged, commercial_proof, organic_rank_affected, rank_or_score_input, retention_days, evidence_scope]
+      properties:
+        receipt: { $ref: "#/components/schemas/ActionInterestReceipt" }
+        created: { type: boolean }
+        idempotent_replay: { type: boolean }
+        provider_contacted: { type: boolean, enum: [false] }
+        row_level_shared_with_provider: { type: boolean, enum: [false] }
+        action_ticket_created: { type: boolean, enum: [false] }
+        charge_created: { type: boolean, enum: [false] }
+        provider_or_principal_charged: { type: boolean, enum: [false] }
+        commercial_proof: { type: boolean, enum: [false] }
+        organic_rank_affected: { type: boolean, enum: [false] }
+        rank_or_score_input: { type: boolean, enum: [false] }
+        retention_days: { type: integer, enum: [30] }
+        evidence_scope: { type: string }
     ActionTicketRequest:
       type: object
       additionalProperties: false

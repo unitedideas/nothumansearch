@@ -208,6 +208,10 @@ func (h *ProviderExchangeHandler) requireProviderKey(w http.ResponseWriter, r *h
 }
 
 func (h *ProviderExchangeHandler) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	return requireAdminAPIKey(w, r)
+}
+
+func requireAdminAPIKey(w http.ResponseWriter, r *http.Request) bool {
 	configured := os.Getenv("ADMIN_API_KEY")
 	if configured == "" {
 		providerWriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "admin endpoint not configured"})

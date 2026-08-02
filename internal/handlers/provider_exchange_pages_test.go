@@ -73,3 +73,23 @@ func TestPrivacyPageDisclosesExactReturnedOfferEvidence(t *testing.T) {
 		}
 	}
 }
+
+func TestPrivacyPagePublishesExactNonContactingActionInterestBoundary(t *testing.T) {
+	t.Parallel()
+	body := renderProviderExchangePage(t, "privacy.html", newProviderPageData("https://nothumansearch.ai"))
+	for _, required := range []string{
+		`id="action-interest-v1"`, "nhs-action-interest-v1",
+		"Record interest without contacting a provider",
+		"caller can attest that its principal currently wants a controlled next step",
+		"does not contact or identify the caller to the provider",
+		"does not create an action ticket, redirect, charge, lead, activation, or conversion",
+		"creates no persisted IP/user-agent, page-view, MCP-request, intent-event, or API-key quota row",
+		"cannot count toward NHS commercial proof",
+		"Aggregate counts are receipts, not unique people, principals, or agents",
+		"requires a separate action", "nhs-principal-consent-v1",
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("privacy page missing action-interest boundary %q", required)
+		}
+	}
+}
