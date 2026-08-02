@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -529,7 +530,8 @@ func TestProviderExchangeSourceKeepsOrganicRankAndMoneyAtomic(t *testing.T) {
 		"pg_advisory_xact_lock", "FOR UPDATE OF ticket, offer",
 		"entry_type, amount_cents", "'charge'", "'credit'",
 		"ticket.charge_event_snapshot", "ticket.bounty_cents_snapshot",
-		"ProviderBountyMaximumCents", "ensureTermsCreditCapacity",
+		"ProviderBountyMaximumCents", "settleProviderTicketCapacity",
+		"Terms capacity was reserved atomically",
 		"balance < -ProviderMoneyMaximumCents+bountyCents",
 		"SignOutcomeReceipt", "tx.Commit()",
 	} {
@@ -591,6 +593,124 @@ func TestActionTicketCreationSnapshotsTermsAndSupportsSafeRetry(t *testing.T) {
 	redactStart := strings.Index(text, "func RedactExpiredActionTicketIntent")
 	if redactStart < 0 || !strings.Contains(text[redactStart:], "ActionTicketIntentRetention") {
 		t.Fatal("action ticket intent has no explicit bounded redaction method")
+	}
+}
+
+func TestProviderTicketCapacityIsReservedConsumedAndReleasedWithoutIdentityData(t *testing.T) {
+	source, err := os.ReadFile("provider_exchange.go")
+	if err != nil {
+		t.Fatalf("read provider exchange model: %v", err)
+	}
+	text := string(source)
+	createStart := strings.Index(text, "func CreateActionTicket")
+	createEnd := strings.Index(text[createStart:], "func ResolveActionTicket")
+	outcomeStart := strings.Index(text, "func RecordProviderOutcome")
+	outcomeEnd := strings.Index(text[outcomeStart:], "func GetOutcomeReceipt")
+	listStart := strings.Index(text, "func ListPublicProviderOffersForOrganicResults")
+	listEnd := strings.Index(text[listStart:], "func RecordProviderOffersReturned")
+	if createStart < 0 || createEnd < 0 || outcomeStart < 0 || outcomeEnd < 0 || listStart < 0 || listEnd < 0 {
+		t.Fatal("could not isolate provider capacity boundaries")
+	}
+	createSource := text[createStart : createStart+createEnd]
+	for _, required := range []string{
+		"providerActiveReservedCapacity", "balance-offer.BountyCents",
+		"reserveProviderTicketCapacity", "provider_capacity_events",
+	} {
+		if !strings.Contains(createSource, required) {
+			t.Fatalf("ticket reservation boundary missing %q", required)
+		}
+	}
+	outcomeSource := text[outcomeStart : outcomeStart+outcomeEnd]
+	for _, required := range []string{
+		"settleProviderTicketCapacity", `"consume"`, `"release"`,
+		"terminal_without_charge", "Terms capacity was reserved atomically",
+	} {
+		if !strings.Contains(outcomeSource, required) && !strings.Contains(text, required) {
+			t.Fatalf("ticket settlement boundary missing %q", required)
+		}
+	}
+	listSource := text[listStart : listStart+listEnd]
+	for _, required := range []string{
+		"LEFT JOIN LATERAL", "capacity.reserved_cents",
+		"terminal.event_type IN ('consume','release')",
+	} {
+		if !strings.Contains(listSource, required) {
+			t.Fatalf("public offer capacity filter missing %q", required)
+		}
+	}
+
+	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "021_provider_capacity_reservations.sql"))
+	if err != nil {
+		t.Fatalf("read provider capacity migration: %v", err)
+	}
+	migrationText := string(migration)
+	tableStart := strings.Index(migrationText, "CREATE TABLE IF NOT EXISTS provider_capacity_events")
+	tableEnd := strings.Index(migrationText[tableStart:], "\n);")
+	if tableStart < 0 || tableEnd < 0 {
+		t.Fatal("could not isolate provider capacity table")
+	}
+	tableContract := migrationText[tableStart : tableStart+tableEnd]
+	for _, forbidden := range []string{"query", "email", "contact", "agent_identity", "principal_identity", "ip_address", "user_agent", "payload"} {
+		if strings.Contains(strings.ToLower(tableContract), forbidden) {
+			t.Fatalf("provider capacity table includes forbidden identity/free-form field %q", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"provider_capacity_events_no_update", "provider_capacity_events_no_delete",
+		"idx_provider_capacity_one_terminal_per_ticket",
+	} {
+		if !strings.Contains(migrationText, required) {
+			t.Fatalf("provider capacity migration missing append-only contract %q", required)
+		}
+	}
+}
+
+func TestProviderCapacityUsesOnlyPostLockDatabaseTime(t *testing.T) {
+	source, err := os.ReadFile("provider_exchange.go")
+	if err != nil {
+		t.Fatalf("read provider exchange model: %v", err)
+	}
+	text := string(source)
+	isolate := func(startMarker, endMarker string) string {
+		t.Helper()
+		start := strings.Index(text, startMarker)
+		if start < 0 {
+			t.Fatalf("missing source boundary %q", startMarker)
+		}
+		end := strings.Index(text[start:], endMarker)
+		if end < 0 {
+			t.Fatalf("missing source boundary %q after %q", endMarker, startMarker)
+		}
+		return text[start : start+end]
+	}
+
+	clockSource := isolate("func providerDatabaseClock", "func lockVerifiedProviderOfferClaim")
+	if !strings.Contains(clockSource, "SELECT clock_timestamp()") {
+		t.Fatal("provider capacity clock is not sourced from PostgreSQL")
+	}
+	activeSource := isolate("func providerActiveReservedCapacity", "func reserveProviderTicketCapacity")
+	if strings.Contains(activeSource, "now time.Time") || !strings.Contains(activeSource, "providerDatabaseClock(tx)") {
+		t.Fatal("active reservations still accept a caller clock")
+	}
+	termsSource := isolate("func ensureTermsCreditCapacity", "func ActivateProviderOffer")
+	if strings.Contains(termsSource, "now time.Time") || !strings.Contains(termsSource, "providerDatabaseClock(tx)") {
+		t.Fatal("terms capacity still accepts a caller clock")
+	}
+	budgetSource := isolate("func recordProviderBudgetEntry", "func FundProviderOffer")
+	if strings.Contains(budgetSource, "time.Now(") || !strings.Contains(budgetSource, "providerActiveReservedCapacity(tx, offerID)") {
+		t.Fatal("budget mutation does not use the database-clock reservation boundary")
+	}
+	createSource := isolate("func CreateActionTicket", "func ResolveActionTicket")
+	lockAt := strings.Index(createSource, "lockProviderOffer(tx")
+	rowLockAt := strings.Index(createSource, "FOR UPDATE OF offer")
+	clockAt := strings.Index(createSource, "providerDatabaseClock(tx)")
+	if strings.Contains(createSource, "time.Now(") || lockAt < 0 || rowLockAt <= lockAt || clockAt <= rowLockAt ||
+		!strings.Contains(createSource, "existing.ExpiresAt.After(authorizationAt)") {
+		t.Fatal("ticket issuance/expiry is not authorized by the post-advisory/post-row-lock database clock")
+	}
+	outcomeSource := isolate("func RecordProviderOutcome", "func GetOutcomeReceipt")
+	if strings.Contains(outcomeSource, "time.Now(") || !strings.Contains(outcomeSource, "providerDatabaseClock(tx)") {
+		t.Fatal("provider outcome authorization does not share the database clock")
 	}
 }
 
@@ -778,8 +898,8 @@ func TestProviderBudgetMutationsAreBoundedAndPrepaidCannotGoNegative(t *testing.
 	for _, required := range []string{
 		"ProviderMoneyMaximumCents", "proposedBalance := balance + amountCents",
 		"providerOutstandingCreditExposure", "creditExposure > ProviderMoneyMaximumCents-proposedBalance",
-		"billingMode == \"prepaid\" && proposedBalance < 0", "ErrInsufficientProviderFunds",
-		"proposedBalance < -termsCreditLimit.Int64", "ErrProviderTermsCreditLimit",
+		"providerActiveReservedCapacity", "reserved > proposedBalance", "ErrInsufficientProviderFunds",
+		"outstanding > termsCreditLimit.Int64-reserved", "ErrProviderTermsCreditLimit",
 		"entry.Replayed = true",
 	} {
 		if !strings.Contains(budgetSource, required) {

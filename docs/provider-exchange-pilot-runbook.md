@@ -26,7 +26,7 @@ the release and each applicable external action. In particular, owner authority
 is required before:
 
 1. creating and storing the dedicated production signing secret and key ID;
-2. deploying migrations 019 and 020 and the provider exchange revision;
+2. deploying migrations 019 through 021 and the provider exchange revision;
 3. sending provider outreach or invitations;
 4. accepting a contract, affiliate term, CPA term, funding representation, or
    Merchant-of-Record representation;
@@ -51,16 +51,17 @@ referenced material is absent or replaced under a reused ID.
       the build argument, so a normal working-tree context fails closed.
 - [ ] Full Go tests, race tests, vet, build, formatting, OpenAPI parse, and
       secret scan pass on the exact candidate revision.
-- [ ] Migrations 001 through 020 and immediate replay pass on disposable real
+- [ ] Migrations 001 through 021 and immediate replay pass on disposable real
       PostgreSQL from an empty database.
-- [ ] The target database has neither an unreceipted migration-019/020 footprint
+- [ ] The target database has neither an unreceipted migration-019/020/021 footprint
       nor a newer protected receipt. Migration 019 must atomically create its
       schema and `nhs_schema_migrations` receipt with the raw-file SHA-256 and
       embedded release commit; migration 020 must do the same for the
       provider-independent action-interest schema and cumulative protected
-      fingerprint. A checksum mismatch, missing required object, unreceipted
-      footprint, or database-ahead state is a hard stop. Never adopt an
-      unrecorded schema because it looks current.
+      fingerprint; migration 021 must do the same for the capacity-reservation
+      schema and rolling-writer constraint. A checksum mismatch, missing
+      required object, unreceipted footprint, or database-ahead state is a hard
+      stop. Never adopt an unrecorded schema because it looks current.
 - [ ] The server is the sole schema-migration owner. Crawler and recrawl jobs
       connect to the already-current schema and contain no migration or direct
       schema-repair path.
@@ -96,8 +97,12 @@ referenced material is absent or replaced under a reused ID.
       tamper detection, and zero commercial-proof delta before destroying the
       fixture.
 - [ ] After an owner-authorized deploy, `/health.release_revision`, the image
-      `org.opencontainers.image.revision` label, and migrations 019 and 020
-      `applied_by_commit` values all equal the authorized commit.
+      `org.opencontainers.image.revision` label, and migrations 019, 020, and
+      021 `applied_by_commit` values all equal the authorized commit.
+- [ ] Migration 021 is present before any pilot ticket is minted. Each live,
+      uncharged ticket has one append-only capacity reservation; the configured
+      charge consumes it, an uncharged terminal outcome releases it, and
+      expired or emergency-revoked tickets stop consuming capacity logically.
 
 ## Stage 1: observe free discovery
 

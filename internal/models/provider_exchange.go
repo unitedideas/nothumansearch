@@ -1675,23 +1675,37 @@ func lockProviderOffer(tx *sql.Tx, offerID string) error {
 	return err
 }
 
+// providerDatabaseClock is the only clock used for capacity authorization.
+// Callers acquire the offer advisory lock before using it, so ticket expiry,
+// budget mutation, terms-period math, and provider outcomes share one database
+// time domain and one serialized capacity boundary.
+func providerDatabaseClock(tx *sql.Tx) (time.Time, error) {
+	var now time.Time
+	if err := tx.QueryRow(`SELECT clock_timestamp()`).Scan(&now); err != nil {
+		return time.Time{}, err
+	}
+	return now.UTC(), nil
+}
+
 func lockVerifiedProviderOfferClaim(tx *sql.Tx, offerID string) (string, error) {
 	var claimID, status string
-	var lastSucceededAt time.Time
+	var lastSucceededAt, databaseNow time.Time
 	if err := tx.QueryRow(`
 		SELECT provider_claim_id::text FROM provider_offers
 		WHERE id=$1::uuid`, offerID).Scan(&claimID); err != nil {
 		return "", err
 	}
 	if err := tx.QueryRow(`
-		SELECT status, verification_last_succeeded_at FROM provider_claims
-		WHERE id=$1::uuid FOR UPDATE`, claimID).Scan(&status, &lastSucceededAt); err != nil {
+		SELECT status, verification_last_succeeded_at, clock_timestamp()
+		FROM provider_claims
+		WHERE id=$1::uuid FOR UPDATE`, claimID).
+		Scan(&status, &lastSucceededAt, &databaseNow); err != nil {
 		return "", err
 	}
 	if status != "verified" {
 		return "", ErrProviderClaimNotVerified
 	}
-	if !providerClaimVerificationFresh(lastSucceededAt, time.Now().UTC()) {
+	if !providerClaimVerificationFresh(lastSucceededAt, databaseNow.UTC()) {
 		return "", ErrProviderClaimVerificationStale
 	}
 	return claimID, nil
@@ -1705,6 +1719,117 @@ func providerOfferBalance(tx *sql.Tx, offerID string) (int64, error) {
 		return 0, err
 	}
 	return parseBoundedProviderMoney(raw)
+}
+
+// providerActiveReservedCapacity returns bounty capacity promised to live,
+// uncharged tickets. Reserve/consume/release events are append-only; expiry and
+// emergency revocation release capacity logically even before a cleanup event.
+// Every caller already holds the offer advisory lock, so this value is
+// serialized with ticket creation, outcomes, and operator budget changes.
+func providerActiveReservedCapacity(tx *sql.Tx, offerID string) (int64, error) {
+	now, err := providerDatabaseClock(tx)
+	if err != nil {
+		return 0, err
+	}
+	var raw string
+	if err := tx.QueryRow(`
+		SELECT COALESCE(SUM(reserve.amount_cents::numeric),0)::text
+		FROM provider_capacity_events reserve
+		JOIN action_tickets ticket ON ticket.id=reserve.action_ticket_id
+		WHERE reserve.provider_offer_id=$1::uuid
+		  AND reserve.event_type='reserve'
+		  AND ticket.expires_at > $2
+		  AND ticket.authorization_revoked_at IS NULL
+		  AND ticket.status IN ('created','redirected','accepted','activated')
+		  AND NOT EXISTS (
+			SELECT 1 FROM provider_capacity_events terminal
+			WHERE terminal.action_ticket_id=reserve.action_ticket_id
+			  AND terminal.event_type IN ('consume','release')
+		  )`, offerID, now).Scan(&raw); err != nil {
+		return 0, err
+	}
+	reserved, err := parseBoundedProviderMoney(raw)
+	if err != nil || reserved < 0 {
+		return 0, ErrProviderBudgetLimit
+	}
+	return reserved, nil
+}
+
+func reserveProviderTicketCapacity(
+	tx *sql.Tx,
+	claimID, offerID, ticketID string,
+	amountCents int64,
+	currency string,
+	createdAt time.Time,
+) error {
+	if amountCents < 1 || amountCents > ProviderBountyMaximumCents || currency != "usd" {
+		return ErrInvalidProviderExchange
+	}
+	result, err := tx.Exec(`
+		INSERT INTO provider_capacity_events (
+			provider_claim_id, provider_offer_id, action_ticket_id,
+			event_type, event_reason, amount_cents, currency, created_at
+		) VALUES ($1::uuid,$2::uuid,$3::uuid,'reserve','ticket_created',$4,$5,$6)`,
+		claimID, offerID, ticketID, amountCents, currency, createdAt)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 1 {
+		return nil
+	}
+	return errors.New("provider ticket capacity reservation was not created")
+}
+
+func settleProviderTicketCapacity(
+	tx *sql.Tx,
+	claimID, offerID, ticketID, eventType string,
+	amountCents int64,
+	currency string,
+	createdAt time.Time,
+) error {
+	reason := ""
+	switch eventType {
+	case "consume":
+		reason = "charge_recorded"
+	case "release":
+		reason = "terminal_without_charge"
+	default:
+		return ErrInvalidProviderExchange
+	}
+	result, err := tx.Exec(`
+		INSERT INTO provider_capacity_events (
+			provider_claim_id, provider_offer_id, action_ticket_id,
+			event_type, event_reason, amount_cents, currency, created_at
+		)
+		SELECT $1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8
+		WHERE EXISTS (
+			SELECT 1 FROM provider_capacity_events reserve
+			WHERE reserve.action_ticket_id=$3::uuid
+			  AND reserve.provider_claim_id=$1::uuid
+			  AND reserve.provider_offer_id=$2::uuid
+			  AND reserve.event_type='reserve'
+			  AND reserve.amount_cents=$6 AND reserve.currency=$7
+		)
+		  AND NOT EXISTS (
+			SELECT 1 FROM provider_capacity_events terminal
+			WHERE terminal.action_ticket_id=$3::uuid
+			  AND terminal.event_type IN ('consume','release')
+		)`, claimID, offerID, ticketID, eventType, reason, amountCents, currency, createdAt)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed != 1 {
+		return errors.New("provider ticket capacity reservation is unavailable")
+	}
+	return nil
 }
 
 // providerOutstandingCreditExposure reserves headroom for every charged ticket
@@ -1749,11 +1874,15 @@ func parseProviderMoney(raw string) (int64, error) {
 	return value, nil
 }
 
-func ensureTermsCreditCapacity(tx *sql.Tx, offerID string, creditLimit int64, periodDays int, periodAnchor time.Time, additionalCents int64, now time.Time) error {
+func ensureTermsCreditCapacity(tx *sql.Tx, offerID string, creditLimit int64, periodDays int, periodAnchor time.Time, additionalCents int64) error {
 	if creditLimit < 1 || creditLimit > ProviderTermsCreditMaximumCents ||
 		periodDays < 1 || periodDays > 90 || periodAnchor.IsZero() ||
 		additionalCents < 1 || additionalCents > ProviderBountyMaximumCents || additionalCents > creditLimit {
 		return ErrInvalidProviderExchange
+	}
+	now, err := providerDatabaseClock(tx)
+	if err != nil {
+		return err
 	}
 	period := time.Duration(periodDays) * 24 * time.Hour
 	periodStart := periodAnchor
@@ -1761,7 +1890,7 @@ func ensureTermsCreditCapacity(tx *sql.Tx, offerID string, creditLimit int64, pe
 		periodStart = periodAnchor.Add(time.Duration(int64(now.Sub(periodAnchor)/period)) * period)
 	}
 	var outstandingRaw, periodReceivableRaw string
-	err := tx.QueryRow(`
+	err = tx.QueryRow(`
 		SELECT
 			GREATEST(-COALESCE(SUM(amount_cents::numeric),0),0)::text,
 			GREATEST(-COALESCE(SUM(amount_cents::numeric) FILTER (
@@ -1781,7 +1910,13 @@ func ensureTermsCreditCapacity(tx *sql.Tx, offerID string, creditLimit int64, pe
 	if err != nil {
 		return err
 	}
-	if outstanding > creditLimit-additionalCents || periodReceivable > creditLimit-additionalCents {
+	reserved, err := providerActiveReservedCapacity(tx, offerID)
+	if err != nil {
+		return err
+	}
+	if reserved > creditLimit-additionalCents ||
+		outstanding > creditLimit-additionalCents-reserved ||
+		periodReceivable > creditLimit-additionalCents-reserved {
 		return ErrProviderTermsCreditLimit
 	}
 	return nil
@@ -1971,11 +2106,26 @@ func recordProviderBudgetEntry(db *sql.DB, offerID, entryType string, amountCent
 			return nil, ErrProviderBudgetLimit
 		}
 	}
-	if billingMode == "prepaid" && proposedBalance < 0 {
-		return nil, ErrInsufficientProviderFunds
+	reserved, err := providerActiveReservedCapacity(tx, offerID)
+	if err != nil {
+		return nil, err
 	}
-	if billingMode == "terms" && (!termsCreditLimit.Valid || proposedBalance < -termsCreditLimit.Int64) {
-		return nil, ErrProviderTermsCreditLimit
+	if billingMode == "prepaid" {
+		if proposedBalance < 0 || reserved > proposedBalance {
+			return nil, ErrInsufficientProviderFunds
+		}
+	}
+	if billingMode == "terms" {
+		if !termsCreditLimit.Valid || reserved > termsCreditLimit.Int64 {
+			return nil, ErrProviderTermsCreditLimit
+		}
+		outstanding := int64(0)
+		if proposedBalance < 0 {
+			outstanding = -proposedBalance
+		}
+		if outstanding > termsCreditLimit.Int64-reserved {
+			return nil, ErrProviderTermsCreditLimit
+		}
 	}
 	if err := tx.QueryRow(`
 		INSERT INTO provider_budget_ledger (
@@ -2041,13 +2191,29 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 			 AND claim.verification_last_succeeded_at >
 			     NOW() - $3::bigint * INTERVAL '1 second'
 		JOIN provider_offers offer ON offer.provider_claim_id=claim.id AND offer.status='active'
+		LEFT JOIN LATERAL (
+			SELECT COALESCE(SUM(reserve.amount_cents::numeric),0) AS reserved_cents
+			FROM provider_capacity_events reserve
+			JOIN action_tickets reserved_ticket
+			  ON reserved_ticket.id=reserve.action_ticket_id
+			WHERE reserve.provider_offer_id=offer.id
+			  AND reserve.event_type='reserve'
+			  AND reserved_ticket.expires_at > NOW()
+			  AND reserved_ticket.authorization_revoked_at IS NULL
+			  AND reserved_ticket.status IN ('created','redirected','accepted','activated')
+			  AND NOT EXISTS (
+				SELECT 1 FROM provider_capacity_events terminal
+				WHERE terminal.action_ticket_id=reserve.action_ticket_id
+				  AND terminal.event_type IN ('consume','release')
+			  )
+		) capacity ON TRUE
 		WHERE (
 			offer.billing_mode='prepaid'
 			AND COALESCE((
 				SELECT SUM(ledger.amount_cents::numeric)
 				FROM provider_budget_ledger ledger
 				WHERE ledger.provider_offer_id=offer.id
-			),0) >= offer.bounty_cents
+			),0) >= offer.bounty_cents + capacity.reserved_cents
 		) OR (
 			offer.billing_mode='terms'
 			AND offer.terms_credit_limit_cents >= offer.bounty_cents
@@ -2055,7 +2221,7 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 				SELECT SUM(ledger.amount_cents::numeric)
 				FROM provider_budget_ledger ledger
 				WHERE ledger.provider_offer_id=offer.id
-			),0),0) <= offer.terms_credit_limit_cents-offer.bounty_cents
+			),0),0) <= offer.terms_credit_limit_cents-offer.bounty_cents-capacity.reserved_cents
 			AND GREATEST(-COALESCE((
 				SELECT SUM(ledger.amount_cents::numeric)
 				FROM provider_budget_ledger ledger
@@ -2067,7 +2233,7 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 						(offer.terms_period_days*86400)
 					),0)*(offer.terms_period_days*86400))::double precision
 				  )
-			),0),0) <= offer.terms_credit_limit_cents-offer.bounty_cents
+			),0),0) <= offer.terms_credit_limit_cents-offer.bounty_cents-capacity.reserved_cents
 		)
 			ORDER BY organic.organic_position, offer.action_type, offer.id`,
 		pq.Array(ids), pq.Array(domains), int64(ProviderClaimVerificationFreshness/time.Second))
@@ -2374,15 +2540,14 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 	if !providerSigningKeyIDPattern.MatchString(attributionKeyID) {
 		return nil, nil, "", ErrInvalidProviderExchange
 	}
-	issuedAt := time.Now().UTC().Truncate(time.Second)
-	expiresAt := issuedAt.Add(input.TTL)
 	requestHash := actionTicketRequestHash(input)
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, nil, "", err
 	}
 	defer tx.Rollback()
-	if _, err := lockVerifiedProviderOfferClaim(tx, input.ProviderOfferID); err != nil {
+	lockedClaimID, err := lockVerifiedProviderOfferClaim(tx, input.ProviderOfferID)
+	if err != nil {
 		return nil, nil, "", err
 	}
 	if err := lockProviderOffer(tx, input.ProviderOfferID); err != nil {
@@ -2397,7 +2562,7 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 			JOIN provider_claims claim
 			  ON claim.id=offer.provider_claim_id AND claim.status='verified'
 			 AND claim.verification_last_succeeded_at >
-			     NOW() - $4::bigint * INTERVAL '1 second'
+			     clock_timestamp() - $4::bigint * INTERVAL '1 second'
 		JOIN search_receipts receipt
 		  ON receipt.public_id=$2 AND NOT receipt.is_synthetic
 		 AND $3=ANY(receipt.demand_topics)
@@ -2410,7 +2575,7 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		 AND organic.site_id=claim.site_id
 		 AND organic.site_domain_snapshot=claim.domain_snapshot
 		WHERE offer.id=$1::uuid AND offer.status='active'
-			FOR UPDATE OF offer`, input.ProviderOfferID, input.SearchReceiptPublicID, input.DemandTopic,
+		FOR UPDATE OF offer`, input.ProviderOfferID, input.SearchReceiptPublicID, input.DemandTopic,
 		int64(ProviderClaimVerificationFreshness/time.Second)).
 		Scan(&searchReceiptID, &sourceIsSynthetic)
 	if err == sql.ErrNoRows {
@@ -2423,6 +2588,33 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 	if err != nil {
 		return nil, nil, "", err
 	}
+	if offer.ProviderClaimID != lockedClaimID {
+		return nil, nil, "", errors.New("provider offer claim changed during ticket creation")
+	}
+	// Provider self-service pause takes the offer row lock without the advisory
+	// lock. Read the authoritative clock only after the eligibility query has
+	// acquired that row lock, then recheck ownership freshness at the same
+	// issuance boundary.
+	authorizationAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	var claimStatus string
+	var verificationLastSucceededAt time.Time
+	if err := tx.QueryRow(`
+		SELECT status, verification_last_succeeded_at
+		FROM provider_claims WHERE id=$1::uuid`, lockedClaimID).
+		Scan(&claimStatus, &verificationLastSucceededAt); err != nil {
+		return nil, nil, "", err
+	}
+	if claimStatus != "verified" {
+		return nil, nil, "", ErrProviderClaimNotVerified
+	}
+	if !providerClaimVerificationFresh(verificationLastSucceededAt, authorizationAt) {
+		return nil, nil, "", ErrProviderClaimVerificationStale
+	}
+	issuedAt := authorizationAt.Truncate(time.Second)
+	expiresAt := issuedAt.Add(input.TTL)
 	existing, err := scanActionTicket(tx.QueryRow(`
 		SELECT `+actionTicketColumns+`
 		FROM action_tickets
@@ -2435,8 +2627,25 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		if existing.AuthorizationRevokedAt != nil {
 			return nil, nil, "", ErrProviderOfferRevoked
 		}
-		if !existing.ExpiresAt.After(issuedAt) {
+		if !existing.ExpiresAt.After(authorizationAt) {
 			return nil, nil, "", ErrActionTicketExpired
+		}
+		var reservationMatches bool
+		if err := tx.QueryRow(`
+			SELECT EXISTS(
+				SELECT 1 FROM provider_capacity_events reserve
+				WHERE reserve.action_ticket_id=$1::uuid
+				  AND reserve.provider_claim_id=$2::uuid
+				  AND reserve.provider_offer_id=$3::uuid
+				  AND reserve.event_type='reserve'
+				  AND reserve.amount_cents=$4 AND reserve.currency=$5
+			)`, existing.ID, existing.ProviderClaimID, existing.ProviderOfferID,
+			existing.BountyCentsSnapshot, existing.CurrencySnapshot).
+			Scan(&reservationMatches); err != nil {
+			return nil, nil, "", err
+		}
+		if !reservationMatches {
+			return nil, nil, "", errors.New("provider ticket capacity reservation is missing")
 		}
 		claims := providerexchange.AttributionClaims{
 			Version:  providerexchange.AttributionTokenVersion,
@@ -2470,14 +2679,18 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		if err != nil {
 			return nil, nil, "", err
 		}
-		if balance < offer.BountyCents {
+		reserved, err := providerActiveReservedCapacity(tx, input.ProviderOfferID)
+		if err != nil {
+			return nil, nil, "", err
+		}
+		if balance < offer.BountyCents || reserved > balance-offer.BountyCents {
 			return nil, nil, "", ErrInsufficientProviderFunds
 		}
 	} else if offer.TermsCreditLimitCents == nil || offer.TermsPeriodDays == nil || offer.TermsPeriodAnchorAt == nil {
 		return nil, nil, "", ErrInvalidProviderExchange
 	} else if err := ensureTermsCreditCapacity(
 		tx, offer.ID, *offer.TermsCreditLimitCents, *offer.TermsPeriodDays,
-		*offer.TermsPeriodAnchorAt, offer.BountyCents, issuedAt,
+		*offer.TermsPeriodAnchorAt, offer.BountyCents,
 	); err != nil {
 		return nil, nil, "", err
 	}
@@ -2537,6 +2750,12 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		pq.Array(input.RequirementFlags), input.PrincipalConsent,
 		input.ConsentVersion, expiresAt, issuedAt))
 	if err != nil {
+		return nil, nil, "", err
+	}
+	if err := reserveProviderTicketCapacity(
+		tx, offer.ProviderClaimID, input.ProviderOfferID, ticket.ID,
+		offer.BountyCents, offer.Currency, issuedAt,
+	); err != nil {
 		return nil, nil, "", err
 	}
 	if err := tx.Commit(); err != nil {
@@ -2709,8 +2928,6 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 	if err != nil {
 		return nil, false, err
 	}
-	providerReportedAt := time.Now().UTC().Truncate(time.Second)
-	recordedAt := providerReportedAt
 	idempotencyHash := HashProviderSecret(input.IdempotencyKey)
 	tx, err := db.Begin()
 	if err != nil {
@@ -2726,8 +2943,62 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 		Scan(&claimStatus, &verificationLastSucceededAt); err != nil {
 		return nil, false, err
 	}
+	if claimStatus != "verified" &&
+		!(claimStatus == "revoked" && providerChargeResolutionOutcome(input.Outcome)) {
+		return nil, false, ErrProviderClaimNotVerified
+	}
+
+	var offerID string
+	if err := tx.QueryRow(`
+		SELECT provider_offer_id::text FROM action_tickets
+		WHERE id=$1::uuid`, input.ActionTicketID).Scan(&offerID); err != nil {
+		return nil, false, err
+	}
+	if err := lockProviderOffer(tx, offerID); err != nil {
+		return nil, false, err
+	}
+	var claimID, ticketStatus, chargeEvent, billingMode, currency string
+	var expiresAt time.Time
+	var bountyCents int64
+	var termsCreditLimit, termsPeriodDays sql.NullInt64
+	var termsPeriodAnchor, authorizationRevokedAt sql.NullTime
+	err = tx.QueryRow(`
+		SELECT ticket.provider_claim_id::text, ticket.status,
+		       ticket.expires_at, ticket.charge_event_snapshot,
+		       ticket.billing_mode_snapshot, ticket.bounty_cents_snapshot,
+		       ticket.currency_snapshot, ticket.terms_credit_limit_cents_snapshot,
+		       ticket.terms_period_days_snapshot, ticket.terms_period_anchor_at_snapshot,
+		       ticket.authorization_revoked_at
+		FROM action_tickets ticket
+		JOIN provider_offers offer ON offer.id=ticket.provider_offer_id
+		WHERE ticket.id=$1::uuid AND offer.id=$2::uuid
+		FOR UPDATE OF ticket, offer`, input.ActionTicketID, offerID).
+		Scan(
+			&claimID, &ticketStatus, &expiresAt, &chargeEvent, &billingMode,
+			&bountyCents, &currency, &termsCreditLimit, &termsPeriodDays,
+			&termsPeriodAnchor, &authorizationRevokedAt,
+		)
+	if err != nil {
+		return nil, false, err
+	}
+	if claimID != key.ProviderClaimID {
+		return nil, false, sql.ErrNoRows
+	}
+	// Decide authorization against the database wall clock only after both the
+	// offer advisory lock and the ticket/offer row locks are held. A callback
+	// that began before expiry but waited for either lock must not consume
+	// capacity using a stale process timestamp.
+	authorizationAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, false, err
+	}
+	// recordedAt remains exact for authorization guards; only values written
+	// into receipts and state transitions are truncated to whole seconds.
+	recordedAt := authorizationAt
+	receiptRecordedAt := authorizationAt.Truncate(time.Second)
+	providerReportedAt := receiptRecordedAt
 	freshClaim := verificationLastSucceededAt.Valid &&
-		providerClaimVerificationFresh(verificationLastSucceededAt.Time, providerReportedAt)
+		providerClaimVerificationFresh(verificationLastSucceededAt.Time, authorizationAt)
 	activeClaim := claimStatus == "verified" && freshClaim
 	staleClaimResolution := claimStatus == "verified" && !freshClaim &&
 		providerChargeResolutionOutcome(input.Outcome)
@@ -2766,6 +3037,9 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 	if err != nil {
 		return nil, false, err
 	}
+	if authenticatedClaimID != claimID {
+		return nil, false, sql.ErrNoRows
+	}
 	if _, err := tx.Exec(`
 		SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
 		providerIdempotencyNamespace+":"+authenticatedClaimID, idempotencyHash); err != nil {
@@ -2788,43 +3062,6 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 	}
 	if err != sql.ErrNoRows {
 		return nil, false, err
-	}
-
-	var offerID string
-	if err := tx.QueryRow(`
-		SELECT provider_offer_id::text FROM action_tickets
-		WHERE id=$1::uuid`, input.ActionTicketID).Scan(&offerID); err != nil {
-		return nil, false, err
-	}
-	if err := lockProviderOffer(tx, offerID); err != nil {
-		return nil, false, err
-	}
-	var claimID, ticketStatus, chargeEvent, billingMode, currency string
-	var expiresAt time.Time
-	var bountyCents int64
-	var termsCreditLimit, termsPeriodDays sql.NullInt64
-	var termsPeriodAnchor, authorizationRevokedAt sql.NullTime
-	err = tx.QueryRow(`
-		SELECT ticket.provider_claim_id::text, ticket.status,
-		       ticket.expires_at, ticket.charge_event_snapshot,
-		       ticket.billing_mode_snapshot, ticket.bounty_cents_snapshot,
-		       ticket.currency_snapshot, ticket.terms_credit_limit_cents_snapshot,
-		       ticket.terms_period_days_snapshot, ticket.terms_period_anchor_at_snapshot,
-		       ticket.authorization_revoked_at
-		FROM action_tickets ticket
-		JOIN provider_offers offer ON offer.id=ticket.provider_offer_id
-		WHERE ticket.id=$1::uuid AND offer.id=$2::uuid
-		FOR UPDATE OF ticket, offer`, input.ActionTicketID, offerID).
-		Scan(
-			&claimID, &ticketStatus, &expiresAt, &chargeEvent, &billingMode,
-			&bountyCents, &currency, &termsCreditLimit, &termsPeriodDays,
-			&termsPeriodAnchor, &authorizationRevokedAt,
-		)
-	if err != nil {
-		return nil, false, err
-	}
-	if claimID != authenticatedClaimID {
-		return nil, false, sql.ErrNoRows
 	}
 	if bountyCents < 1 || bountyCents > ProviderBountyMaximumCents || currency != "usd" {
 		return nil, false, ErrInvalidProviderExchange
@@ -2884,12 +3121,9 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 			if !termsCreditLimit.Valid || !termsPeriodDays.Valid || !termsPeriodAnchor.Valid {
 				return nil, false, ErrInvalidProviderExchange
 			}
-			if err := ensureTermsCreditCapacity(
-				tx, offerID, termsCreditLimit.Int64, int(termsPeriodDays.Int64),
-				termsPeriodAnchor.Time, bountyCents, recordedAt,
-			); err != nil {
-				return nil, false, err
-			}
+			// Terms capacity was reserved atomically when the ticket was
+			// created. Consuming that reservation and inserting the charge in
+			// this transaction keeps total exposure unchanged.
 		}
 		if _, err := tx.Exec(`
 			INSERT INTO provider_budget_ledger (
@@ -2898,6 +3132,12 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 			) VALUES ($1::uuid,$2::uuid,$3::uuid,'charge',$4,$5,$6)`,
 			claimID, offerID, input.ActionTicketID, -bountyCents, currency,
 			"outcome:"+nhsEventID); err != nil {
+			return nil, false, err
+		}
+		if err := settleProviderTicketCapacity(
+			tx, claimID, offerID, input.ActionTicketID, "consume",
+			bountyCents, currency, receiptRecordedAt,
+		); err != nil {
 			return nil, false, err
 		}
 		chargedCents = bountyCents
@@ -2933,6 +3173,15 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 			chargeStatus = providerexchange.ChargeStatusCredited
 		}
 	}
+	if chargedCents == 0 &&
+		(input.Outcome == "rejected" || input.Outcome == "duplicate" || input.Outcome == "invalid") {
+		if err := settleProviderTicketCapacity(
+			tx, claimID, offerID, input.ActionTicketID, "release",
+			bountyCents, currency, receiptRecordedAt,
+		); err != nil {
+			return nil, false, err
+		}
+	}
 
 	signedReceipt, signature, err := signer.SignOutcomeReceipt(providerexchange.OutcomeReceipt{
 		Version:            providerexchange.OutcomeReceiptVersion,
@@ -2942,8 +3191,8 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 		NHSEventID:         nhsEventID,
 		Outcome:            providerexchange.Outcome(input.Outcome),
 		ProviderReportedAt: providerReportedAt.Unix(),
-		RecordedAt:         recordedAt.Unix(),
-		ExpiresAt:          recordedAt.Add(OutcomeReceiptValidity).Unix(),
+		RecordedAt:         receiptRecordedAt.Unix(),
+		ExpiresAt:          receiptRecordedAt.Add(OutcomeReceiptValidity).Unix(),
 		ChargedMinor:       billedCents,
 		Currency:           currency,
 		ChargeStatus:       chargeStatus,
@@ -2964,16 +3213,16 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 		receiptID, nhsEventID, claimID, offerID, input.ActionTicketID, key.ID,
 		idempotencyHash, input.PayloadHash, input.Outcome, billedCents,
 		string(chargeStatus), currency, signedReceipt, signature,
-		providerReportedAt, recordedAt))
+		providerReportedAt, receiptRecordedAt))
 	if err != nil {
 		return nil, false, err
 	}
 	if _, err := tx.Exec(`
 		UPDATE action_tickets SET status=$1, updated_at=$2
-		WHERE id=$3::uuid`, nextActionTicketStatus(ticketStatus, input.Outcome), recordedAt, input.ActionTicketID); err != nil {
+		WHERE id=$3::uuid`, nextActionTicketStatus(ticketStatus, input.Outcome), receiptRecordedAt, input.ActionTicketID); err != nil {
 		return nil, false, err
 	}
-	if _, err := tx.Exec(`UPDATE provider_api_keys SET last_used_at=$1 WHERE id=$2`, recordedAt, key.ID); err != nil {
+	if _, err := tx.Exec(`UPDATE provider_api_keys SET last_used_at=$1 WHERE id=$2`, receiptRecordedAt, key.ID); err != nil {
 		return nil, false, err
 	}
 	if err := tx.Commit(); err != nil {

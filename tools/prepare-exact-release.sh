@@ -31,6 +31,7 @@ fi
 ARCHIVE_SHA=$(/usr/bin/shasum -a 256 "$ARCHIVE" | /usr/bin/awk '{print $1}')
 MIGRATION_019_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/019_provider_exchange.sql" | /usr/bin/awk '{print $1}')
 MIGRATION_020_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/020_action_interest_receipts.sql" | /usr/bin/awk '{print $1}')
+MIGRATION_021_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/021_provider_capacity_reservations.sql" | /usr/bin/awk '{print $1}')
 
 GO_BINARY="${NHS_GO_BINARY:-/Users/shane/.local/bin/go}"
 if [ ! -x "$GO_BINARY" ]; then
@@ -52,6 +53,7 @@ fi
     echo "release_tree=$TREE"
     echo "migration_019_sha256=$MIGRATION_019_SHA"
     echo "migration_020_sha256=$MIGRATION_020_SHA"
+    echo "migration_021_sha256=$MIGRATION_021_SHA"
     echo "source_archive_sha256=$ARCHIVE_SHA"
     echo "source_context=$CONTEXT"
 } > "$MANIFEST"

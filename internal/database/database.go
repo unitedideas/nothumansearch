@@ -138,9 +138,37 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		},
 	}
 
+	capacityReservations := protectedMigrationSpec{
+		// The latest protected contract remains cumulative. Only the append-only
+		// reservation event table and its explicit indexes/rules are the 021
+		// ambiguity footprint; inherited 019/020 objects still participate in the
+		// latest schema fingerprint.
+		relations: append(append([]migrationRelation(nil), actionInterests.relations...),
+			migrationRelation{name: "provider_capacity_events", relkind: "r"},
+			migrationRelation{name: "idx_provider_capacity_events_offer_created", relkind: "i", parent: "provider_capacity_events"},
+			migrationRelation{name: "idx_provider_capacity_events_ticket_created", relkind: "i", parent: "provider_capacity_events"},
+			migrationRelation{name: "idx_provider_capacity_one_terminal_per_ticket", relkind: "i", parent: "provider_capacity_events"},
+		),
+		rules: append(append([]migrationRule(nil), actionInterests.rules...),
+			migrationRule{relation: "provider_capacity_events", name: "provider_capacity_events_no_update"},
+			migrationRule{relation: "provider_capacity_events", name: "provider_capacity_events_no_delete"},
+		),
+		footprintRelations: map[string]bool{
+			"provider_capacity_events":                      true,
+			"idx_provider_capacity_events_offer_created":    true,
+			"idx_provider_capacity_events_ticket_created":   true,
+			"idx_provider_capacity_one_terminal_per_ticket": true,
+		},
+		footprintRules: map[string]bool{
+			"provider_capacity_events_no_update": true,
+			"provider_capacity_events_no_delete": true,
+		},
+	}
+
 	return map[string]protectedMigrationSpec{
-		"019_provider_exchange.sql":        providerExchange,
-		"020_action_interest_receipts.sql": actionInterests,
+		"019_provider_exchange.sql":              providerExchange,
+		"020_action_interest_receipts.sql":       actionInterests,
+		"021_provider_capacity_reservations.sql": capacityReservations,
 	}
 }
 
@@ -597,7 +625,8 @@ func protectedMigrationSchemaFingerprint(ctx context.Context, db migrationQuerye
 					SELECT jsonb_agg(jsonb_build_array(
 						tg.tgname,
 						tg.tgenabled::text,
-						pg_catalog.pg_get_triggerdef(tg.oid, true)
+						pg_catalog.pg_get_triggerdef(tg.oid, true),
+						pg_catalog.pg_get_functiondef(tg.tgfoid)
 					) ORDER BY tg.tgname)
 					FROM pg_catalog.pg_trigger tg
 					WHERE tg.tgrelid = c.oid AND NOT tg.tgisinternal

@@ -233,6 +233,127 @@ func TestActionInterestProtectedContractCoversDeclaredDelta(t *testing.T) {
 	}
 }
 
+func TestProviderCapacityProtectedContractCoversDeclaredDelta(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "021_provider_capacity_reservations.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	statements := migrationStatements(migrationSQL)
+	if len(statements) == 0 || !strings.Contains(statements[0], "LOCK TABLE public.action_tickets IN SHARE ROW EXCLUSIVE MODE") {
+		t.Fatal("021 must lock action_tickets before taking its backfill snapshot")
+	}
+	lockAt := strings.Index(migrationSQL, "LOCK TABLE public.action_tickets IN SHARE ROW EXCLUSIVE MODE")
+	createCapacityAt := strings.Index(migrationSQL, "CREATE TABLE IF NOT EXISTS provider_capacity_events")
+	lastBackfillAt := strings.LastIndex(migrationSQL, "INSERT INTO provider_capacity_events")
+	functionAt := strings.Index(migrationSQL, "CREATE OR REPLACE FUNCTION public.enforce_action_ticket_capacity_reservation()")
+	triggerAt := strings.Index(migrationSQL, "CREATE CONSTRAINT TRIGGER action_ticket_capacity_reservation_required")
+	if lockAt < 0 || createCapacityAt < 0 || lastBackfillAt < 0 || functionAt < 0 || triggerAt < 0 ||
+		!(lockAt < createCapacityAt && createCapacityAt < lastBackfillAt && lastBackfillAt < functionAt && functionAt < triggerAt) {
+		t.Fatalf("021 compatibility boundary order lock=%d table=%d backfill=%d function=%d trigger=%d", lockAt, createCapacityAt, lastBackfillAt, functionAt, triggerAt)
+	}
+	for _, required := range []string{
+		"AFTER INSERT OR UPDATE ON public.action_tickets",
+		"DEFERRABLE INITIALLY DEFERRED",
+		"capacity.action_ticket_id = NEW.id",
+		"capacity.provider_claim_id = NEW.provider_claim_id",
+		"capacity.provider_offer_id = NEW.provider_offer_id",
+		"capacity.event_type = 'reserve'",
+		"capacity.event_reason = 'ticket_created'",
+		"capacity.amount_cents = NEW.bounty_cents_snapshot",
+		"capacity.currency = NEW.currency_snapshot",
+		"ERRCODE = '23514'",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("021 capacity constraint is missing %q", required)
+		}
+	}
+	prior := protectedMigrationSpecs["020_action_interest_receipts.sql"]
+	current, ok := protectedMigrationSpecs["021_provider_capacity_reservations.sql"]
+	if !ok {
+		t.Fatal("provider-capacity migration has no protected schema contract")
+	}
+
+	priorRelations := map[string]bool{}
+	for _, relation := range prior.relations {
+		priorRelations[relation.name] = true
+	}
+	deltaRelations := map[string]migrationRelation{}
+	for _, relation := range current.relations {
+		if !priorRelations[relation.name] {
+			deltaRelations[relation.name] = relation
+		}
+	}
+	declaredRelations := map[string]string{}
+	relationPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?(TABLE|INDEX) IF NOT EXISTS ([a-z0-9_]+)`)
+	for _, match := range relationPattern.FindAllStringSubmatch(string(data), -1) {
+		kind := "i"
+		if match[1] == "TABLE" {
+			kind = "r"
+		}
+		declaredRelations[match[2]] = kind
+	}
+	declaredIndexParents := map[string]string{}
+	indexPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS ([a-z0-9_]+)\s+ON ([a-z0-9_]+)`)
+	for _, match := range indexPattern.FindAllStringSubmatch(string(data), -1) {
+		declaredIndexParents[match[1]] = match[2]
+	}
+	if len(deltaRelations) != len(declaredRelations) {
+		t.Fatalf("021 relation delta has %d entries, migration declares %d", len(deltaRelations), len(declaredRelations))
+	}
+	for name, relation := range deltaRelations {
+		if want, present := declaredRelations[name]; !present || relation.relkind != want {
+			t.Fatalf("021 relation delta mismatch for %s: kind=%q declared=%q present=%t", name, relation.relkind, want, present)
+		}
+		if relation.relkind == "i" && relation.parent != declaredIndexParents[name] {
+			t.Fatalf("021 index %s parent=%q, migration declares %q", name, relation.parent, declaredIndexParents[name])
+		}
+		if !current.footprintRelations[name] {
+			t.Fatalf("021 relation delta %s is not marked as its new footprint", name)
+		}
+	}
+	for name := range current.footprintRelations {
+		if _, present := deltaRelations[name]; !present {
+			t.Fatalf("021 marks inherited/unknown relation %s as a new footprint", name)
+		}
+	}
+
+	priorRules := map[string]bool{}
+	for _, rule := range prior.rules {
+		priorRules[rule.name] = true
+	}
+	deltaRules := map[string]migrationRule{}
+	for _, rule := range current.rules {
+		if !priorRules[rule.name] {
+			deltaRules[rule.name] = rule
+		}
+	}
+	declaredRules := map[string]string{}
+	rulePattern := regexp.MustCompile(`(?m)^CREATE OR REPLACE RULE ([a-z0-9_]+) AS\s+ON (?:UPDATE|DELETE) TO ([a-z0-9_]+)`)
+	for _, match := range rulePattern.FindAllStringSubmatch(string(data), -1) {
+		declaredRules[match[1]] = match[2]
+	}
+	if len(deltaRules) != len(declaredRules) {
+		t.Fatalf("021 rule delta has %d entries, migration declares %d", len(deltaRules), len(declaredRules))
+	}
+	for name, rule := range deltaRules {
+		if want, present := declaredRules[name]; !present || rule.relation != want {
+			t.Fatalf("021 rule delta mismatch for %s: relation=%q declared=%q present=%t", name, rule.relation, want, present)
+		}
+		if !current.footprintRules[name] {
+			t.Fatalf("021 rule delta %s is not marked as its new footprint", name)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
 func TestProtectedMigrationStateFailsClosed(t *testing.T) {
 	migration := migrationFile{name: "019_provider_exchange.sql", sha256: strings.Repeat("a", 64)}
 	for _, test := range []struct {

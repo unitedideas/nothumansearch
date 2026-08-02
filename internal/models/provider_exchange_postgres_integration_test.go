@@ -104,6 +104,9 @@ func TestProviderExchangePostgresReleaseRegressions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("activate provider offer: %v", err)
 	}
+	exerciseProviderTicketIssuanceAfterRowLock(t, db, signer, providerKey, accountID, claim.ID, site)
+	exerciseProviderCapacityReservations(t, db, signer, providerKey, accountID, claim.ID, site)
+	exerciseProviderOutcomeAuthorizationAcrossExpiry(t, db, signer, providerKey, accountID, claim.ID, site)
 
 	// Organic site membership alone is insufficient. The exact paid
 	// offer/version must have been committed as returned evidence before a
@@ -416,6 +419,450 @@ func TestProviderExchangePostgresReleaseRegressions(t *testing.T) {
 	}
 	if unicodeTicketCount != 0 {
 		t.Fatalf("Unicode-expanded action URL left %d committed ticket(s), want 0", unicodeTicketCount)
+	}
+}
+
+func exerciseProviderTicketIssuanceAfterRowLock(
+	t *testing.T,
+	db *sql.DB,
+	signer *providerexchange.Signer,
+	providerKey *models.ProviderAPIKey,
+	accountID int64,
+	claimID string,
+	site models.Site,
+) {
+	t.Helper()
+	const bounty int64 = 20_000
+	zero := int64(0)
+	offer, err := models.CreateProviderOffer(db, accountID, claimID, models.ProviderOfferInput{
+		OfferName:           "Post-row-lock ticket issuance",
+		OfferSummary:        "Proves ticket time is read only after provider offer eligibility is locked.",
+		ActionType:          "purchase",
+		ActionURL:           "https://provider.example/capacity/post-row-lock",
+		ChargeEvent:         "accepted",
+		BountyCents:         bounty,
+		Currency:            "usd",
+		PrincipalPriceMode:  "free",
+		PrincipalPriceCents: &zero,
+		PrincipalCurrency:   "usd",
+		BillingMode:         "prepaid",
+	})
+	if err != nil {
+		t.Fatalf("create post-row-lock offer: %v", err)
+	}
+	if _, err := models.FundProviderOffer(db, offer.ID, bounty, "usd", "pg-post-row-lock-fund"); err != nil {
+		t.Fatalf("fund post-row-lock offer: %v", err)
+	}
+	offer, err = models.ActivateProviderOffer(
+		db, offer.ID, "operator:pg-post-row-lock", "evidence:pg-post-row-lock",
+	)
+	if err != nil {
+		t.Fatalf("activate post-row-lock offer: %v", err)
+	}
+	searchID := recordPostgresDemandReceipt(t, db, site, "post-row-lock")
+	recordPostgresReturnedOffer(t, db, site, searchID, offer.ID)
+
+	blockingTx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("begin post-row-lock blocker: %v", err)
+	}
+	defer blockingTx.Rollback()
+	if _, err := blockingTx.Exec(`
+		UPDATE provider_offers SET updated_at=updated_at WHERE id=$1::uuid`, offer.ID); err != nil {
+		t.Fatalf("hold provider offer row lock: %v", err)
+	}
+
+	type ticketResult struct {
+		ticket *models.ActionTicket
+		err    error
+	}
+	result := make(chan ticketResult, 1)
+	go func() {
+		ticket, _, _, createErr := models.CreateActionTicket(db, models.ActionTicketInput{
+			ProviderOfferID:       offer.ID,
+			SearchReceiptPublicID: searchID,
+			DemandTopic:           "developer-tools",
+			PrincipalConsent:      true,
+			ConsentVersion:        models.ProviderPrincipalConsentV1,
+			TTL:                   time.Hour,
+		}, signer)
+		result <- ticketResult{ticket: ticket, err: createErr}
+	}()
+
+	waitDeadline := time.Now().Add(2 * time.Second)
+	for {
+		var waitingOnOfferRow bool
+		if err := db.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1 FROM pg_stat_activity
+				WHERE datname=current_database()
+				  AND pid<>pg_backend_pid()
+				  AND state='active'
+				  AND wait_event_type='Lock'
+				  AND position('FOR UPDATE OF offer' IN query)>0
+			)`).Scan(&waitingOnOfferRow); err != nil {
+			t.Fatalf("observe ticket waiting on offer row: %v", err)
+		}
+		if waitingOnOfferRow {
+			break
+		}
+		if time.Now().After(waitDeadline) {
+			t.Fatal("ticket creation did not reach the held provider offer row")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(1200 * time.Millisecond)
+	var releaseAt time.Time
+	if err := db.QueryRow(`SELECT clock_timestamp()`).Scan(&releaseAt); err != nil {
+		t.Fatalf("read database clock before row-lock release: %v", err)
+	}
+	if err := blockingTx.Rollback(); err != nil {
+		t.Fatalf("release provider offer row lock: %v", err)
+	}
+
+	select {
+	case got := <-result:
+		if got.err != nil || got.ticket == nil {
+			t.Fatalf("create ticket after row-lock wait: ticket=%#v err=%v", got.ticket, got.err)
+		}
+		if got.ticket.CreatedAt.Before(releaseAt.UTC().Truncate(time.Second)) {
+			t.Fatalf("ticket created_at=%v predates row-lock release boundary %v", got.ticket.CreatedAt, releaseAt)
+		}
+		if got.ticket.ExpiresAt.Sub(got.ticket.CreatedAt) != time.Hour {
+			t.Fatalf("ticket lifetime=%v, want 1h", got.ticket.ExpiresAt.Sub(got.ticket.CreatedAt))
+		}
+		recordPostgresOutcome(t, db, signer, providerKey, got.ticket.ID, "rejected", "post-row-lock-release")
+	case <-time.After(5 * time.Second):
+		t.Fatal("ticket creation did not finish after provider offer row release")
+	}
+}
+
+func exerciseProviderCapacityReservations(
+	t *testing.T,
+	db *sql.DB,
+	signer *providerexchange.Signer,
+	providerKey *models.ProviderAPIKey,
+	accountID int64,
+	claimID string,
+	site models.Site,
+) {
+	t.Helper()
+	const bounty int64 = 25_000
+	zero := int64(0)
+	createOffer := func(name, actionType, billingMode string) *models.ProviderOffer {
+		input := models.ProviderOfferInput{
+			OfferName:           name,
+			OfferSummary:        "Exercises one atomic provider capacity promise per live ticket.",
+			ActionType:          actionType,
+			ActionURL:           "https://provider.example/capacity/" + actionType,
+			ChargeEvent:         "accepted",
+			BountyCents:         bounty,
+			Currency:            "usd",
+			PrincipalPriceMode:  "free",
+			PrincipalPriceCents: &zero,
+			PrincipalCurrency:   "usd",
+			BillingMode:         billingMode,
+		}
+		if billingMode == "terms" {
+			limit, days := bounty, 30
+			input.TermsCreditLimitCents = &limit
+			input.TermsPeriodDays = &days
+		}
+		offer, err := models.CreateProviderOffer(db, accountID, claimID, input)
+		if err != nil {
+			t.Fatalf("create %s reservation offer: %v", billingMode, err)
+		}
+		if billingMode == "prepaid" {
+			if _, err := models.FundProviderOffer(db, offer.ID, bounty, "usd", "pg-capacity-prepaid-fund"); err != nil {
+				t.Fatalf("fund prepaid reservation offer: %v", err)
+			}
+		}
+		offer, err = models.ActivateProviderOffer(
+			db, offer.ID, "operator:pg-capacity", "evidence:pg-capacity-"+billingMode,
+		)
+		if err != nil {
+			t.Fatalf("activate %s reservation offer: %v", billingMode, err)
+		}
+		return offer
+	}
+
+	type ticketResult struct {
+		ticket *models.ActionTicket
+		err    error
+	}
+	runConcurrent := func(offer *models.ProviderOffer, prefix string, wantBudgetError error) *models.ActionTicket {
+		searchIDs := []string{
+			recordPostgresDemandReceipt(t, db, site, prefix+"-one"),
+			recordPostgresDemandReceipt(t, db, site, prefix+"-two"),
+		}
+		// Commit both exact disclosures while the one bounty is still fully
+		// available. Ticket creation, not response timing, owns the capacity
+		// serialization boundary.
+		for _, searchID := range searchIDs {
+			recordPostgresReturnedOffer(t, db, site, searchID, offer.ID)
+		}
+		start := make(chan struct{})
+		results := make(chan ticketResult, len(searchIDs))
+		var wait sync.WaitGroup
+		for _, searchID := range searchIDs {
+			wait.Add(1)
+			go func(id string) {
+				defer wait.Done()
+				<-start
+				ticket, _, _, err := models.CreateActionTicket(db, models.ActionTicketInput{
+					ProviderOfferID:       offer.ID,
+					SearchReceiptPublicID: id,
+					DemandTopic:           "developer-tools",
+					PrincipalConsent:      true,
+					ConsentVersion:        models.ProviderPrincipalConsentV1,
+					TTL:                   time.Hour,
+				}, signer)
+				results <- ticketResult{ticket: ticket, err: err}
+			}(searchID)
+		}
+		close(start)
+		wait.Wait()
+		close(results)
+		var winner *models.ActionTicket
+		successes, budgetFailures := 0, 0
+		for result := range results {
+			switch {
+			case result.err == nil:
+				successes++
+				winner = result.ticket
+			case errors.Is(result.err, wantBudgetError):
+				budgetFailures++
+			default:
+				t.Fatalf("%s concurrent ticket error = %v", prefix, result.err)
+			}
+		}
+		if successes != 1 || budgetFailures != 1 || winner == nil {
+			t.Fatalf("%s concurrent results successes=%d budget_failures=%d winner=%#v", prefix, successes, budgetFailures, winner)
+		}
+		return winner
+	}
+
+	prepaid := createOffer("Prepaid capacity reservation", "quote", "prepaid")
+	prepaidWinner := runConcurrent(prepaid, "capacity-prepaid", models.ErrInsufficientProviderFunds)
+	if _, err := models.AdjustProviderOfferBudget(
+		db, prepaid.ID, -bounty, "usd", "pg-capacity-blocked-withdrawal",
+	); !errors.Is(err, models.ErrInsufficientProviderFunds) {
+		t.Fatalf("prepaid withdrawal across reservation error = %v, want insufficient funds", err)
+	}
+	recordPostgresOutcome(t, db, signer, providerKey, prepaidWinner.ID, "rejected", "capacity-prepaid-release")
+	prepaidAfterRelease := createPostgresActionTicket(t, db, signer, site, prepaid.ID, "capacity-prepaid-after-release")
+	recordPostgresOutcome(t, db, signer, providerKey, prepaidAfterRelease.ID, "rejected", "capacity-prepaid-release-two")
+
+	terms := createOffer("Terms capacity reservation", "booking", "terms")
+	termsWinner := runConcurrent(terms, "capacity-terms", models.ErrProviderTermsCreditLimit)
+	recordPostgresOutcome(t, db, signer, providerKey, termsWinner.ID, "rejected", "capacity-terms-release")
+
+	var reservationCount, consumeCount, releaseCount int
+	if err := db.QueryRow(`
+		SELECT
+			COUNT(*) FILTER (WHERE event_type='reserve')::int,
+			COUNT(*) FILTER (WHERE event_type='consume')::int,
+			COUNT(*) FILTER (WHERE event_type='release')::int
+		FROM provider_capacity_events
+		WHERE provider_offer_id IN ($1::uuid,$2::uuid)`, prepaid.ID, terms.ID).
+		Scan(&reservationCount, &consumeCount, &releaseCount); err != nil {
+		t.Fatalf("read provider capacity event proof: %v", err)
+	}
+	if reservationCount != 3 || consumeCount != 0 || releaseCount != 3 {
+		t.Fatalf("capacity events reserve=%d consume=%d release=%d, want 3/0/3", reservationCount, consumeCount, releaseCount)
+	}
+}
+
+func exerciseProviderOutcomeAuthorizationAcrossExpiry(
+	t *testing.T,
+	db *sql.DB,
+	signer *providerexchange.Signer,
+	providerKey *models.ProviderAPIKey,
+	accountID int64,
+	claimID string,
+	site models.Site,
+) {
+	t.Helper()
+	const bounty int64 = 30_000
+	zero := int64(0)
+	offer, err := models.CreateProviderOffer(db, accountID, claimID, models.ProviderOfferInput{
+		OfferName:           "Post-lock outcome authorization",
+		OfferSummary:        "Proves callbacks are authorized after lock waits and ticket expiry.",
+		ActionType:          "signup",
+		ActionURL:           "https://provider.example/capacity/post-lock-expiry",
+		ChargeEvent:         "accepted",
+		BountyCents:         bounty,
+		Currency:            "usd",
+		PrincipalPriceMode:  "free",
+		PrincipalPriceCents: &zero,
+		PrincipalCurrency:   "usd",
+		BillingMode:         "prepaid",
+	})
+	if err != nil {
+		t.Fatalf("create post-lock expiry offer: %v", err)
+	}
+	if _, err := models.FundProviderOffer(
+		db, offer.ID, bounty, "usd", "pg-post-lock-expiry-fund",
+	); err != nil {
+		t.Fatalf("fund post-lock expiry offer: %v", err)
+	}
+	offer, err = models.ActivateProviderOffer(
+		db, offer.ID, "operator:pg-post-lock-expiry", "evidence:pg-post-lock-expiry",
+	)
+	if err != nil {
+		t.Fatalf("activate post-lock expiry offer: %v", err)
+	}
+
+	expiringTicket := createPostgresActionTicket(
+		t, db, signer, site, offer.ID, "post-lock-expiry-first",
+	)
+	var expiresAt time.Time
+	if err := db.QueryRow(`
+		UPDATE action_tickets
+		SET expires_at=date_trunc('second',clock_timestamp())+INTERVAL '5.05 seconds',
+		    updated_at=clock_timestamp()
+		WHERE id=$1::uuid
+		RETURNING expires_at`, expiringTicket.ID).Scan(&expiresAt); err != nil {
+		t.Fatalf("shorten post-lock expiry ticket: %v", err)
+	}
+
+	blockingTx, err := db.Begin()
+	if err != nil {
+		t.Fatalf("begin post-lock expiry blocker: %v", err)
+	}
+	defer blockingTx.Rollback()
+	if _, err := blockingTx.Exec(`
+		SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
+		"nhs-provider-offer", offer.ID); err != nil {
+		t.Fatalf("hold post-lock expiry offer lock: %v", err)
+	}
+
+	started := make(chan struct{})
+	result := make(chan error, 1)
+	go func() {
+		close(started)
+		_, _, recordErr := models.RecordProviderOutcome(db, providerKey, models.ProviderOutcomeInput{
+			ActionTicketID: expiringTicket.ID,
+			IdempotencyKey: "pg-post-lock-expiry-callback-0001",
+			PayloadHash:    postgresPayloadHash("post-lock-expiry-callback"),
+			Outcome:        "accepted",
+		}, signer)
+		result <- recordErr
+	}()
+	<-started
+
+	waitDeadline := time.Now().Add(2 * time.Second)
+	for {
+		var waitingOnAdvisoryLock bool
+		if err := db.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_stat_activity
+				WHERE datname=current_database()
+				  AND pid<>pg_backend_pid()
+				  AND state='active'
+				  AND wait_event_type='Lock'
+				  AND wait_event='advisory'
+				  AND position('pg_advisory_xact_lock' IN query)>0
+			)`).Scan(&waitingOnAdvisoryLock); err != nil {
+			t.Fatalf("observe callback waiting on offer lock: %v", err)
+		}
+		if waitingOnAdvisoryLock {
+			break
+		}
+		if time.Now().After(waitDeadline) {
+			t.Fatal("callback did not reach the held offer advisory lock before deadline")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var observedAt time.Time
+	if err := db.QueryRow(`SELECT clock_timestamp()`).Scan(&observedAt); err != nil {
+		t.Fatalf("read database clock before ticket expiry: %v", err)
+	}
+	if !expiresAt.After(observedAt) {
+		t.Fatalf("callback reached offer lock at %v after ticket expiry %v", observedAt, expiresAt)
+	}
+	for {
+		var expired bool
+		if err := db.QueryRow(`
+			SELECT expires_at<=clock_timestamp()
+			FROM action_tickets WHERE id=$1::uuid`, expiringTicket.ID).Scan(&expired); err != nil {
+			t.Fatalf("observe ticket expiry while callback is blocked: %v", err)
+		}
+		if expired {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err := blockingTx.Commit(); err != nil {
+		t.Fatalf("release post-lock expiry offer lock: %v", err)
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, models.ErrActionTicketExpired) {
+			t.Fatalf("post-lock expiry callback error = %v, want ErrActionTicketExpired", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("post-lock expiry callback did not finish after releasing offer lock")
+	}
+
+	var outcomeCount, chargeCount, terminalCapacityCount int
+	if err := db.QueryRow(`
+		SELECT
+			(SELECT COUNT(*)::int FROM outcome_receipts WHERE action_ticket_id=$1::uuid),
+			(SELECT COUNT(*)::int FROM provider_budget_ledger
+			 WHERE action_ticket_id=$1::uuid AND entry_type='charge'),
+			(SELECT COUNT(*)::int FROM provider_capacity_events
+			 WHERE action_ticket_id=$1::uuid AND event_type IN ('consume','release'))`,
+		expiringTicket.ID).Scan(&outcomeCount, &chargeCount, &terminalCapacityCount); err != nil {
+		t.Fatalf("read rejected post-lock expiry effects: %v", err)
+	}
+	if outcomeCount != 0 || chargeCount != 0 || terminalCapacityCount != 0 {
+		t.Fatalf(
+			"expired callback effects outcomes=%d charges=%d terminal_capacity=%d, want 0/0/0",
+			outcomeCount, chargeCount, terminalCapacityCount,
+		)
+	}
+	// Reuse immediately after PostgreSQL crosses the exact expiry boundary.
+	// A second-truncated process clock would still see this reservation as live
+	// for nearly a second and fail this deterministic boundary regression.
+	reusedTicket := createPostgresActionTicket(
+		t, db, signer, site, offer.ID, "post-lock-expiry-reused",
+	)
+	if reusedTicket.ID == expiringTicket.ID {
+		t.Fatalf("capacity reuse returned original expired ticket %q", reusedTicket.ID)
+	}
+	recordPostgresOutcome(
+		t, db, signer, providerKey, reusedTicket.ID, "rejected", "post-lock-expiry-reused-release",
+	)
+	assertPostgresProviderBalance(t, db, offer.ID, bounty)
+
+	var reserveCount, consumeCount, releaseCount int
+	if err := db.QueryRow(`
+		SELECT
+			COUNT(*) FILTER (WHERE event_type='reserve')::int,
+			COUNT(*) FILTER (WHERE event_type='consume')::int,
+			COUNT(*) FILTER (WHERE event_type='release')::int
+		FROM provider_capacity_events
+		WHERE provider_offer_id=$1::uuid`, offer.ID).
+		Scan(&reserveCount, &consumeCount, &releaseCount); err != nil {
+		t.Fatalf("read post-lock expiry capacity proof: %v", err)
+	}
+	if reserveCount != 2 || consumeCount != 0 || releaseCount != 1 {
+		t.Fatalf(
+			"post-lock expiry capacity reserve=%d consume=%d release=%d, want 2/0/1",
+			reserveCount, consumeCount, releaseCount,
+		)
+	}
+	// Restore the signed expiry claim before later startup-proof checks inspect
+	// an arbitrary persisted attribution sample. Marking the fixture expired
+	// keeps its reservation logically inactive without corrupting token proof.
+	if _, err := db.Exec(`
+		UPDATE action_tickets
+		SET expires_at=$2, status='expired', updated_at=clock_timestamp()
+		WHERE id=$1::uuid`, expiringTicket.ID, expiringTicket.ExpiresAt); err != nil {
+		t.Fatalf("restore signed expiry on post-lock fixture: %v", err)
 	}
 }
 
