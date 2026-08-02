@@ -52,26 +52,8 @@ func main() {
 			log.Fatalf("database: %v", err)
 		}
 		log.Println("connected to database")
-
-		// Run migrations
-		migrationsDir := "migrations"
-		if root := os.Getenv("APP_ROOT"); root != "" {
-			migrationsDir = root + "/migrations"
-		}
-		if err := database.RunMigrations(migrationsDir); err != nil {
-			log.Fatalf("migration: %v", err)
-		}
-		// Belt-and-braces: ensure favicon columns exist regardless of file-based migration state.
-		if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS has_favicon BOOLEAN DEFAULT FALSE`); err != nil {
-			log.Printf("ensure has_favicon: %v", err)
-		} else {
-			log.Println("ensured column: has_favicon")
-		}
-		if _, err := database.DB.Exec(`ALTER TABLE sites ADD COLUMN IF NOT EXISTS favicon_url TEXT DEFAULT ''`); err != nil {
-			log.Printf("ensure favicon_url: %v", err)
-		} else {
-			log.Println("ensured column: favicon_url")
-		}
+		// The web server is the sole schema-migration owner. Crawler jobs may
+		// write indexed data only after a release has made the schema current.
 	}
 
 	if *url != "" {

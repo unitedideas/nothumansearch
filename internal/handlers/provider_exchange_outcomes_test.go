@@ -66,6 +66,15 @@ func TestVerifyOutcomeReceiptLabelsProviderEvidenceHonestly(t *testing.T) {
 		!bytes.Contains(rr.Body.Bytes(), []byte("not independently audited")) {
 		t.Fatalf("verify response status=%d body=%s", rr.Code, rr.Body.String())
 	}
+	for name, want := range map[string]string{
+		"Cache-Control":   "private, no-store",
+		"Pragma":          "no-cache",
+		"Referrer-Policy": "no-referrer",
+	} {
+		if got := rr.Header().Get(name); got != want {
+			t.Fatalf("receipt verification %s = %q, want %q", name, got, want)
+		}
+	}
 }
 
 func TestVerifyOutcomeReceiptKeepsHistoricalSignatureSeparateFromFreshness(t *testing.T) {

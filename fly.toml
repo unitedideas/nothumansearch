@@ -20,7 +20,7 @@ primary_region = 'sjc'
   grace_period = "10s"
   interval = "30s"
   method = "GET"
-  path = "/"
+  path = "/health"
   timeout = "5s"
 
 [[vm]]

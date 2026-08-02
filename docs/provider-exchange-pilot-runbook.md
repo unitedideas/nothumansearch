@@ -41,13 +41,27 @@ referenced material is absent or replaced under a reused ID.
 
 ## Technical release checklist
 
+- [ ] Resolve the candidate to a full 40-character Git commit and build only
+      from `git archive <commit>` extracted into a new temporary directory.
+      Never deploy from the working checkout. Pass the same commit as Docker
+      build argument `RELEASE_REVISION`; a missing or malformed argument must
+      fail the image build. Use `tools/prepare-exact-release.sh <commit>`; it
+      verifies the archive and prints but does not execute the owner-authorized
+      deploy command. The archive-expanded `release-source-revision` must equal
+      the build argument, so a normal working-tree context fails closed.
 - [ ] Full Go tests, race tests, vet, build, formatting, OpenAPI parse, and
       secret scan pass on the exact candidate revision.
 - [ ] Migrations 001 through 019 and immediate replay pass on disposable real
       PostgreSQL from an empty database.
-- [ ] The target database is confirmed not to have recorded an earlier form of
-      migration 019. If it has, ship freshness changes in a new ALTER/backfill
-      migration instead of editing the already-applied file.
+- [ ] The target database has neither an unreceipted migration-019 footprint
+      nor a newer protected receipt. Migration 019 must atomically create its
+      schema and `nhs_schema_migrations` receipt with the raw-file SHA-256 and
+      embedded release commit. A checksum mismatch, missing required object,
+      unreceipted footprint, or database-ahead state is a hard stop. Never
+      adopt an unrecorded schema because it looks current.
+- [ ] The server is the sole schema-migration owner. Crawler and recrawl jobs
+      connect to the already-current schema and contain no migration or direct
+      schema-repair path.
 - [ ] Migration 019 constraints, append-only rules, redaction rule, composite
       tenant keys, one-charge/one-credit invariants, and cap failures pass.
 - [ ] Dedicated signing references resolve without displaying their values.
@@ -61,9 +75,19 @@ referenced material is absent or replaced under a reused ID.
       keys, or report a positive outcome.
 - [ ] Desktop and mobile provider/privacy renders match their reviewed source
       hashes and retain the free-organic, consent, privacy, and evidence limits.
-- [ ] Deployment smoke proves free REST/MCP search, neutral organic order,
-      separate paid offers, ticket idempotency, signed receipt verification,
-      current receipt state, and non-secret health responses.
+- [ ] The safe live smoke uses synthetic receipts only and proves health,
+      release revision, free REST/MCP search, neutral organic order, an empty
+      paid-offer sidecar for synthetic demand, selection, tool discovery, and
+      fail-closed invalid-receipt verification. It must not mint a real ticket
+      or submit `accepted`, `activated`, or `converted` callbacks.
+- [ ] The full paid-flow smoke runs only against disposable PostgreSQL and a
+      loopback server. It proves separate offers, consent rejection, exact
+      ticket idempotency, nonfinancial terminal rejection, receipt replay and
+      tamper detection, and zero commercial-proof delta before destroying the
+      fixture.
+- [ ] After an owner-authorized deploy, `/health.release_revision`, the image
+      `org.opencontainers.image.revision` label, and migration 019's
+      `applied_by_commit` all equal the authorized commit.
 
 ## Stage 1: observe free discovery
 

@@ -32,10 +32,11 @@ func TestProviderExchangePostgresReleaseRegressions(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = database.DB.Close() })
 	migrationDir := filepath.Join("..", "..", "migrations")
-	if err := database.RunMigrations(migrationDir); err != nil {
+	const releaseRevision = "1111111111111111111111111111111111111111"
+	if err := database.RunMigrations(migrationDir, releaseRevision); err != nil {
 		t.Fatalf("apply all migrations through repository runner: %v", err)
 	}
-	if err := database.RunMigrations(migrationDir); err != nil {
+	if err := database.RunMigrations(migrationDir, releaseRevision); err != nil {
 		t.Fatalf("immediately replay all migrations through repository runner: %v", err)
 	}
 	db := database.DB

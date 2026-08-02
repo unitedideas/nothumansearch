@@ -150,7 +150,9 @@ func ValidateProviderExchangeSigningConfiguration() error {
 
 func providerWriteJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }

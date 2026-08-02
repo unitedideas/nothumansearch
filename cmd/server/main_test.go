@@ -1,12 +1,52 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+type healthPingerStub struct {
+	err error
+}
+
+func (p healthPingerStub) Ping() error { return p.err }
+
+func TestHealthReportsCompiledReleaseRevision(t *testing.T) {
+	previous := releaseRevision
+	releaseRevision = "0123456789abcdef0123456789abcdef01234567"
+	t.Cleanup(func() { releaseRevision = previous })
+
+	for _, test := range []struct {
+		name       string
+		pingError  error
+		wantStatus int
+		wantDB     string
+	}{
+		{name: "healthy", wantStatus: http.StatusOK, wantDB: "ok"},
+		{name: "degraded", pingError: errors.New("unreachable"), wantStatus: http.StatusServiceUnavailable, wantDB: "unreachable"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			rr := httptest.NewRecorder()
+			healthHandler(healthPingerStub{err: test.pingError}).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/health", nil))
+			if rr.Code != test.wantStatus || rr.Header().Get("Cache-Control") != "no-store" {
+				t.Fatalf("health status=%d cache=%q", rr.Code, rr.Header().Get("Cache-Control"))
+			}
+			var payload healthPayload
+			if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.ReleaseRevision != releaseRevision || payload.Database != test.wantDB {
+				t.Fatalf("health payload = %+v", payload)
+			}
+		})
+	}
+}
 
 func TestDomainRedirectFailsClosedForCapabilityURLs(t *testing.T) {
 	t.Parallel()
@@ -66,5 +106,39 @@ func TestSigningPreflightRunsBeforeDatabaseMutation(t *testing.T) {
 	migrate := strings.Index(text, "database.RunMigrations(")
 	if preflight < 0 || connect < 0 || migrate < 0 || preflight > connect || preflight > migrate {
 		t.Fatalf("signing preflight order preflight=%d connect=%d migrate=%d", preflight, connect, migrate)
+	}
+}
+
+func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
+	repositoryRoot := filepath.Join("..", "..")
+	read := func(name string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(repositoryRoot, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	if marker := strings.TrimSpace(read("release-source-revision")); marker != "$Format:%H$" {
+		t.Fatalf("release source marker = %q", marker)
+	}
+	if attributes := read(".gitattributes"); !strings.Contains(attributes, "release-source-revision export-subst") {
+		t.Fatal("release source marker is not expanded by git archive")
+	}
+	dockerfile := read("Dockerfile")
+	for _, required := range []string{
+		`grep -Fxq "$RELEASE_REVISION" release-source-revision`,
+		`-X main.releaseRevision=${RELEASE_REVISION}`,
+		`org.opencontainers.image.revision=$RELEASE_REVISION`,
+	} {
+		if !strings.Contains(dockerfile, required) {
+			t.Fatalf("Dockerfile is missing release binding %q", required)
+		}
+	}
+	preparer := read(filepath.Join("tools", "prepare-exact-release.sh"))
+	for _, required := range []string{"git -C \"$REPOSITORY\" archive", "RELEASE_REVISION=$COMMIT", "No deployment was performed"} {
+		if !strings.Contains(preparer, required) {
+			t.Fatalf("exact release preparer is missing %q", required)
+		}
 	}
 }

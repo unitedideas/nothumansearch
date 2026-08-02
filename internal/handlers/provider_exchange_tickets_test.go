@@ -36,6 +36,15 @@ func TestActionTicketRejectsUnknownContactFieldBeforeDatabase(t *testing.T) {
 	if rr.Code != http.StatusBadRequest || !bytes.Contains(rr.Body.Bytes(), []byte("contact details")) {
 		t.Fatalf("ticket response status=%d body=%s", rr.Code, rr.Body.String())
 	}
+	for name, want := range map[string]string{
+		"Cache-Control":   "private, no-store",
+		"Pragma":          "no-cache",
+		"Referrer-Policy": "no-referrer",
+	} {
+		if got := rr.Header().Get(name); got != want {
+			t.Fatalf("ticket response %s = %q, want %q", name, got, want)
+		}
+	}
 }
 
 func TestPrepareProviderActionMCPUsesDedicatedTicketLimit(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -20,6 +21,34 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/handlers"
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
+
+var releaseRevision = "development"
+
+type databasePinger interface {
+	Ping() error
+}
+
+type healthPayload struct {
+	Status          string `json:"status"`
+	Database        string `json:"db"`
+	ReleaseRevision string `json:"release_revision"`
+}
+
+func healthHandler(db databasePinger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		response := healthPayload{
+			Status: "ok", Database: "ok", ReleaseRevision: releaseRevision,
+		}
+		if db == nil || db.Ping() != nil {
+			response.Status = "degraded"
+			response.Database = "unreachable"
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	})
+}
 
 func main() {
 	port := flag.String("port", "8091", "server port")
@@ -50,7 +79,7 @@ func main() {
 	}
 	log.Println("connected to database")
 
-	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations")); err != nil {
+	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations"), releaseRevision); err != nil {
 		log.Fatalf("migration: %v", err)
 	}
 
@@ -244,20 +273,7 @@ func main() {
 	})
 
 	// SEO / GEO
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		// Simple DB-reachability check. Returns 200 + body "ok" if Postgres
-		// responds to a trivial ping within 2s, else 503. Used by Fly
-		// machine checks + external uptime monitors.
-		w.Header().Set("Cache-Control", "no-store")
-		if err := database.DB.Ping(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(503)
-			w.Write([]byte(`{"status":"degraded","db":"unreachable"}`))
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","db":"ok"}`))
-	})
+	mux.Handle("/health", healthHandler(database.DB))
 	mux.HandleFunc("/robots.txt", seoHandler.Robots)
 	mux.HandleFunc("/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/llm.txt", seoHandler.LLMsTxt)
