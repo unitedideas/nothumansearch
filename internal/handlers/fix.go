@@ -380,13 +380,18 @@ func (h *FixHandler) fixProduct() map[string]interface{} {
 func (h *FixHandler) apiProduct(plan models.APIPlan) map[string]interface{} {
 	return map[string]interface{}{
 		"id":          apiProductID(plan),
-		"name":        "Not Human Search API " + strings.Title(plan.Name),
-		"description": fmt.Sprintf("%d REST/MCP calls per month after the anonymous quota.", plan.MonthlyLimit),
+		"name":        "Not Human Search Priority API",
+		"description": fmt.Sprintf("%d priority-throughput REST/MCP calls per month. Baseline discovery remains free before, during, and after the allocation.", plan.MonthlyLimit),
 		"type":        "recurring_subscription",
 		"plan":        plan.Name,
 		"quota": map[string]interface{}{
 			"monthly_limit": plan.MonthlyLimit,
-			"unit":          "billable REST or MCP calls",
+			"unit":          "priority-throughput REST, MCP, or live-check calls",
+		},
+		"free_fallback": map[string]interface{}{
+			"search_access":     true,
+			"organic_rank_same": true,
+			"payment_wall":      false,
 		},
 		"price": map[string]interface{}{
 			"amount":   plan.PriceCents,

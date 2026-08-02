@@ -1,0 +1,95 @@
+{
+  "reviewed_at": "2026-08-01T21:12:00-07:00",
+  "surface": "Not Human Search production homepage and populated search",
+  "production_url": "https://nothumansearch.ai/",
+  "deployment_image_digest": "sha256:fb0c76038b9394545c6fa31bb98e52364480dcb8c6aeaf34141164da6127c263",
+  "category": "high-volume information and search directory",
+  "audience": [
+    "AI agents",
+    "developers operating agents",
+    "humans evaluating agent-ready APIs and services"
+  ],
+  "primary_conversion": "free search to relevant result detail to a later verified provider action",
+  "conversion_quality_metric": [
+    "search-to-detail selection rate",
+    "zero-result rate",
+    "provider-accepted action rate when the provider pilot exists"
+  ],
+  "source_contract": {
+    "file": "templates/home.html",
+    "sha256": "292b3480b9a4151c9518aa55d0504443dd124f6b41d617bf54377fe87fc5ddb5",
+    "approval_invalidates_when_hash_changes": true
+  },
+  "evidence_classification": {
+    "measured": [
+      "Production reports 4,344 indexed sites.",
+      "The synthetic post-deploy smoke suite passed 39 of 39 checks.",
+      "Unauthenticated REST and MCP search both returned free results and committed query-free receipts.",
+      "A provider report remained at zero real Razorpay receipts after multiple synthetic Razorpay searches and reported synthetic_excluded true.",
+      "True mobile emulation measured inner, document, body, and client widths at 390 CSS pixels."
+    ],
+    "standards": [
+      "WCAG 2.2 AA contrast and keyboard-operability target.",
+      "Organic score and order cannot be purchased.",
+      "Canonical provider links stay directly available."
+    ],
+    "observed_patterns": [
+      "The first screen leads with the query and relevant filters.",
+      "Result cards expose domain, description, readiness score, signals, and missing signals.",
+      "The optional score-owner actions are secondary to search."
+    ],
+    "hypotheses": [
+      "Free discovery will produce decision-useful search and detail-selection behavior.",
+      "Thresholded provider demand and verified action receipts will be valuable enough for providers to fund."
+    ]
+  },
+  "render_evidence": [
+    {
+      "viewport": "desktop 1440x1100",
+      "state": "home",
+      "file": "design/reviews/evidence/2026-08-01-desktop-home.png",
+      "sha256": "6c69e1013476384931ab065bb51a7de40e742a001e71f6d7b7c6e1c4f72b264e"
+    },
+    {
+      "viewport": "desktop 1440x1100",
+      "state": "payment API search",
+      "file": "design/reviews/evidence/2026-08-01-desktop-search.png",
+      "sha256": "2230495b159ed0d701b89f8c253df57aaa0402747c2ff847f41f3125d2a9647e"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "home",
+      "file": "design/reviews/evidence/2026-08-01-mobile-home.png",
+      "sha256": "c25a243b66448b6810632f3aad1d3f6eeeb856353cd6dd3a3c910b6fb4382dd6"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "payment API search",
+      "file": "design/reviews/evidence/2026-08-01-mobile-search.png",
+      "sha256": "3eee26e3ad98b61d95d022ee8105eb55ba48312c970dacab372d7f58ea846df5"
+    },
+    {
+      "viewport": "mobile 390x844 CSS pixels",
+      "state": "result cards",
+      "file": "design/reviews/evidence/2026-08-01-mobile-result.png",
+      "sha256": "7b40ebe9124d3b4d03210c0266d7e8ceb5390b157b240ed48ce08f2938d78546"
+    }
+  ],
+  "review": {
+    "first_screen": "pass: value proposition, free-search promise, query, submit action, and index scale are visible",
+    "decision_path": "pass: query to neutral comparison to detail receipt is direct",
+    "trust": "pass: copy states organic rank is based on readiness and never payment; result cards explain score inputs",
+    "copy": "pass: no subscription wall or unlock language remains in discovery",
+    "responsive": "pass: desktop and true 390-pixel mobile states were inspected with no horizontal overflow",
+    "accessibility": "pass for scoped source and visual review: explicit search label and help text, minimum 44-pixel mobile submit target, visible input focus border, semantic result links, and sufficient tested color contrast",
+    "contrast_ratios": {
+      "primary_text_on_background": 14.72,
+      "muted_text_on_background": 5.48,
+      "accent_on_background": 6.22,
+      "button_text_on_accent": 6.22,
+      "green_signal_on_badge": 8.31
+    }
+  },
+  "unresolved_findings": [],
+  "status": "approved_for_exact_template_hash"
+}

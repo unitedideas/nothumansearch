@@ -68,8 +68,8 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: gostripe.String("usd"),
 				ProductData: &gostripe.CheckoutSessionLineItemPriceDataProductDataParams{
-					Name:        gostripe.String("Not Human Search API " + strings.Title(plan.Name)),
-					Description: gostripe.String(fmt.Sprintf("%d billable API/MCP calls per month", plan.MonthlyLimit)),
+					Name:        gostripe.String("Not Human Search Priority API"),
+					Description: gostripe.String(fmt.Sprintf("%d priority-throughput REST/MCP calls per month; baseline discovery remains free afterward", plan.MonthlyLimit)),
 				},
 				Recurring: &gostripe.CheckoutSessionLineItemPriceDataRecurringParams{
 					Interval: gostripe.String("month"),
@@ -107,8 +107,9 @@ func (h *APIKeyHandler) subscribeDocument(w http.ResponseWriter) {
 		plans = append(plans, map[string]any{
 			"id":            "nhs_api_" + plan.Name,
 			"plan":          plan.Name,
-			"name":          "Not Human Search API " + strings.Title(plan.Name),
+			"name":          "Not Human Search Priority API",
 			"monthly_limit": plan.MonthlyLimit,
+			"benefit":       "Higher hourly safety ceilings for REST, MCP tools, and live checks. Organic results and baseline discovery remain free and identical.",
 			"price": map[string]any{
 				"amount":   plan.PriceCents,
 				"currency": "USD",
@@ -119,17 +120,17 @@ func (h *APIKeyHandler) subscribeDocument(w http.ResponseWriter) {
 	writeFixJSON(w, http.StatusOK, map[string]any{
 		"seller":         "nothumansearch",
 		"product_family": "api_keys",
-		"description":    "Paid API keys for Not Human Search REST and MCP usage after the anonymous quota.",
+		"description":    "Optional priority-throughput API keys. Search, site details, organic rank, and baseline REST/MCP discovery remain free without a key; exhausted allocations fall back to free safety limits.",
 		"plans":          plans,
 		"subscribe": map[string]any{
 			"method":          "POST",
 			"endpoint":        h.BaseURL + "/api/v1/api-keys/subscribe",
 			"content_type":    "application/json",
 			"required_fields": []string{"email", "plan"},
-			"allowed_plans":   []string{"starter", "pro", "scale"},
+			"allowed_plans":   []string{"unlimited"},
 			"example_body": map[string]string{
 				"email": "buyer@example.com",
-				"plan":  "starter",
+				"plan":  "unlimited",
 			},
 			"response_fields": []string{"checkout_url", "plan", "monthly_limit", "amount_cents", "activation_url"},
 		},

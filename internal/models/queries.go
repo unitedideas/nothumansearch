@@ -92,28 +92,8 @@ type SearchParams struct {
 	HasOpenAPI  bool
 	HasLLMsTxt  bool
 	OrderNewest bool // when true, sorts by created_at DESC instead of score
-	PinDomain   string
 	Limit       int
 	Page        int
-}
-
-func normalizedPinDomain(domain string) string {
-	domain = strings.TrimSpace(strings.ToLower(domain))
-	domain = strings.TrimPrefix(domain, "https://")
-	domain = strings.TrimPrefix(domain, "http://")
-	domain = strings.TrimPrefix(domain, "www.")
-	if i := strings.IndexAny(domain, "/?#"); i >= 0 {
-		domain = domain[:i]
-	}
-	return strings.TrimSuffix(domain, ".")
-}
-
-func pinDomainOrderClause(argN int, domain string) (string, string, bool) {
-	domain = normalizedPinDomain(domain)
-	if domain == "" {
-		return "", "", false
-	}
-	return fmt.Sprintf("CASE WHEN lower(domain) = $%d THEN 1 ELSE 0 END DESC, ", argN), domain, true
 }
 
 func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
@@ -231,12 +211,6 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 
 	// Fetch with relevance ranking
 	offset := (p.Page - 1) * p.Limit
-	pinOrder := ""
-	if clause, domain, ok := pinDomainOrderClause(argN, p.PinDomain); ok {
-		pinOrder = clause
-		args = append(args, domain)
-		argN++
-	}
 	var orderBy string
 	if useFTS {
 		// Rank by: all-terms-match boost + OR-relevance * score-multiplier + additive
@@ -247,13 +221,12 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 		// project_nhs_ranking_improvement.md (2026-04-15). Initial /150 floor was too
 		// weak for multi-term queries; bumped to /75 after A/B on 10 baseline queries.
 		orderBy = fmt.Sprintf(
-			"ORDER BY %sts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, is_featured DESC, agentic_score DESC",
-			pinOrder,
+			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, agentic_score DESC, lower(domain) ASC",
 			tsQueryArg+1, tsQueryArg)
 	} else if p.OrderNewest {
-		orderBy = "ORDER BY " + pinOrder + "created_at DESC, agentic_score DESC"
+		orderBy = "ORDER BY created_at DESC, agentic_score DESC, lower(domain) ASC"
 	} else {
-		orderBy = "ORDER BY " + pinOrder + "is_featured DESC, agentic_score DESC, updated_at DESC"
+		orderBy = "ORDER BY agentic_score DESC, updated_at DESC, lower(domain) ASC"
 	}
 
 	query := fmt.Sprintf(`
@@ -511,7 +484,8 @@ func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, result
 }
 
 // GetMCPAnalytics returns aggregated MCP request data: tool breakdown, method
-// breakdown, top agent user-agents, and top search queries.
+// breakdown, client-family user agents, and controlled demand topics. Raw
+// search text and alleged unique-agent counts are deliberately excluded.
 func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	result := map[string]any{}
 
@@ -571,32 +545,35 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	}
 	result["agents"] = agentBreakdown
 
-	// Top search queries via MCP — include both the canonical tool name AND
-	// its aliases (see MCP tools/call switch in handlers/mcp.go).
+	// Controlled topics are written by mcpAnalyticsArguments; query text is
+	// intentionally absent from all new request rows.
 	rows4, err := db.Query(`
-		SELECT arguments->>'query' as q, COUNT(*) as cnt
-		FROM mcp_requests
-		WHERE tool_name IN ('search_agents', 'search') AND arguments->>'query' IS NOT NULL AND arguments->>'query' != ''
-			AND created_at > NOW() - make_interval(days => $1)
-		GROUP BY q ORDER BY cnt DESC LIMIT 30`, days)
+		SELECT expanded.topic, COUNT(*)::int AS receipt_count
+		FROM mcp_requests request
+		CROSS JOIN LATERAL jsonb_array_elements_text(
+			COALESCE(request.arguments->'demand_topics', '[]'::jsonb)
+		) AS expanded(topic)
+		WHERE request.tool_name IN ('search_agents', 'search', 'find_mcp_servers')
+		  AND request.created_at > NOW() - make_interval(days => $1)
+		GROUP BY expanded.topic ORDER BY receipt_count DESC, expanded.topic ASC LIMIT 30`, days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows4.Close()
-	topQueries := []map[string]any{}
+	topics := []map[string]any{}
 	for rows4.Next() {
-		var q string
+		var topic string
 		var c int
-		rows4.Scan(&q, &c)
-		topQueries = append(topQueries, map[string]any{"query": q, "count": c})
+		rows4.Scan(&topic, &c)
+		topics = append(topics, map[string]any{"topic": topic, "request_receipts": c})
 	}
-	result["top_queries"] = topQueries
+	result["demand_topics"] = topics
 
-	var totalReqs, uniqueAgents int
+	var totalReqs, distinctClientBuckets int
 	db.QueryRow(`SELECT COUNT(*) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&totalReqs)
-	db.QueryRow(`SELECT COUNT(DISTINCT ip_hash) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&uniqueAgents)
+	db.QueryRow(`SELECT COUNT(DISTINCT ip_hash) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&distinctClientBuckets)
 	result["total_requests"] = totalReqs
-	result["unique_agents"] = uniqueAgents
+	result["distinct_client_buckets"] = distinctClientBuckets
 
 	return result, nil
 }

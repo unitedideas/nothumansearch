@@ -69,6 +69,30 @@ func main() {
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("intent_events prune: deleted %d rows", n)
 			}
+			// Legacy search_queries contains raw query text plus IP/UA fields. New
+			// discovery telemetry never writes this table, but historical rows must
+			// still obey the same bounded retention promise.
+			if res, err := database.DB.Exec(`DELETE FROM search_queries WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("search_queries prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("search_queries prune: deleted %d rows", n)
+			}
+			// Usage events support calendar-month quota accounting. Keep 35 days so
+			// day-one usage remains available through a 31-day month, then delete the
+			// event (including its legacy anonymous hash and user agent).
+			if res, err := database.DB.Exec(`DELETE FROM usage_events WHERE created_at < now() - interval '35 days'`); err != nil {
+				log.Printf("usage_events prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("usage_events prune: deleted %d rows", n)
+			}
+			// Search receipts cascade-delete returned-result and selection rows.
+			// Provider products use thresholded controlled-topic aggregates rather
+			// than exporting individual searches.
+			if res, err := database.DB.Exec(`DELETE FROM search_receipts WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("search_receipts prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("search_receipts prune: deleted %d rows", n)
+			}
 			if res, err := database.DB.Exec(`DELETE FROM submissions WHERE status IN ('failed','rejected','duplicate') AND created_at < now() - interval '30 days'`); err != nil {
 				log.Printf("submissions prune: %v", err)
 			} else if n, _ := res.RowsAffected(); n > 0 {
@@ -112,10 +136,9 @@ func main() {
 	}
 	fixHandler := handlers.NewFixHandler(database.DB, baseURL)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database.DB, baseURL)
-	usageGate := handlers.NewUsageGate(database.DB, baseURL)
 
-	// Auth: humans log in with a magic link (session cookie); bots use API keys.
-	// Both flow from the same $9.99/mo subscription.
+	// Legacy account/API-key support remains for existing customers and future
+	// high-throughput plans. Core website, REST, and MCP discovery is free.
 	authSvc := handlers.NewAuthService(database.DB, baseURL)
 	apiHandler.Auth = authSvc
 	apiKeyHandler.Auth = authSvc
@@ -290,19 +313,20 @@ func main() {
 	mux.HandleFunc("/logout", authSvc.Logout)
 	mux.HandleFunc("/subscribe", authSvc.SubscribePage)
 
-	// Search is subscription-gated inside the handler (session or API key), so it
-	// is no longer wrapped in the anonymous-quota Billable middleware.
+	// Cached discovery reads stay public. Search has an in-handler abuse throttle;
+	// indexed site details are free so agents can evaluate results without a key.
 	mux.HandleFunc("/api/v1/search", apiHandler.Search)
-	mux.Handle("/api/v1/site/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
-	mux.Handle("/api/v1/sites/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
+	mux.HandleFunc("/api/v1/site/", apiHandler.GetSite)
+	mux.HandleFunc("/api/v1/sites/", apiHandler.GetSite)
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/top", apiHandler.Top)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
-	mux.Handle("/api/v1/verify-mcp", usageGate.Billable("rest", "/api/v1/verify-mcp", http.HandlerFunc(apiHandler.VerifyMCP)))
+	mux.HandleFunc("/api/v1/verify-mcp", apiHandler.VerifyMCP)
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
+	mux.HandleFunc("/api/v1/admin/demand", apiHandler.ProviderDemandAnalytics)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
 	mux.HandleFunc("/api/v1/admin/geo-jobs/action", fixHandler.AdminAction)
 

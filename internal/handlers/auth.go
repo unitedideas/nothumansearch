@@ -44,9 +44,8 @@ func (a *AuthService) CurrentAccount(r *http.Request) *models.Account {
 	return acct
 }
 
-// SearchEntitled reports whether a request may receive full search results:
-// an active human session OR an active API key. Returns the resolved key (if any)
-// so callers can meter it against the monthly cap without a second lookup.
+// SearchEntitled is retained only for legacy account/API-key surfaces. Core
+// website, REST, and MCP discovery no longer calls it or varies results by it.
 func (a *AuthService) SearchEntitled(r *http.Request) (bool, string, *models.APIKey) {
 	if a == nil {
 		return false, "", nil
@@ -62,8 +61,8 @@ func (a *AuthService) SearchEntitled(r *http.Request) (bool, string, *models.API
 	return false, "", nil
 }
 
-// MeterKey records one billable unit for an API-key request and reports whether
-// the key has exceeded its monthly cap (the $4.99 plan's 50k soft "unlimited").
+// MeterKey is retained for legacy gated routes. Core discovery uses atomic
+// priority reservations with free fallback instead of this historical meter.
 func (a *AuthService) MeterKey(r *http.Request, key *models.APIKey, surface, path string) (overCap bool) {
 	if a == nil || a.DB == nil || key == nil {
 		return false
@@ -192,8 +191,8 @@ func (a *AuthService) renderLogin(w http.ResponseWriter, errMsg, sentTo string) 
 		if errMsg != "" {
 			e = fmt.Sprintf(`<p class="err">%s</p>`, html.EscapeString(errMsg))
 		}
-		inner = `<h1>Sign in</h1><p class="muted">Enter your email and we'll send you a sign-in link. New here? ` +
-			`<a href="/subscribe">Subscribe for $9.99/mo</a>.</p>` + e +
+		inner = `<h1>Sign in</h1><p class="muted">Enter your email and we'll send you a sign-in link. Need higher API throughput? ` +
+			`<a href="/subscribe">Get a priority key for $9.99/mo</a>.</p>` + e +
 			`<form method="POST" action="/login"><input type="email" name="email" placeholder="you@example.com" required autofocus>` +
 			`<button type="submit">Email me a link</button></form>`
 	}
@@ -205,8 +204,8 @@ func (a *AuthService) renderLogin(w http.ResponseWriter, errMsg, sentTo string) 
 func (a *AuthService) SubscribePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	prefill := html.EscapeString(strings.TrimSpace(r.URL.Query().Get("email")))
-	inner := `<h1>Not Human Search — $9.99/mo</h1>` +
-		`<p class="muted">Unlimited agent-ready search for humans and agents. After checkout you're signed in instantly and get an API key for your agents.</p>` +
+	inner := `<h1>Priority API throughput — $9.99/mo</h1>` +
+		`<p class="muted">Search and organic results are already free. This optional key provides 50,000 priority-throughput REST/MCP calls per month and higher hourly safety ceilings; requests fall back to the free tier after the allocation.</p>` +
 		`<form id="sub"><input type="email" id="email" name="email" placeholder="you@example.com" value="` + prefill + `" required autofocus>` +
 		`<button type="submit">Subscribe — $9.99/mo</button></form>` +
 		`<p class="muted" id="msg"></p>` +

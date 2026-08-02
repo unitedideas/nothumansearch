@@ -95,3 +95,32 @@ func TestLLMsTxtCategoryCopyUsesExpectedArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAPIDescribesFreeFallbackAndOptionalPriorityThroughput(t *testing.T) {
+	seo := NewSEOHandler(nil, "https://nothumansearch.ai")
+	rr := httptest.NewRecorder()
+	seo.OpenAPISpec(rr, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
+	body := rr.Body.String()
+	if strings.Contains(body, "\t") {
+		t.Fatal("OpenAPI YAML contains tab indentation")
+	}
+	for _, required := range []string{
+		"receipt_recorded",
+		"free access resumes after the reset",
+		"optional priority key raises this to 100/hour",
+		"enum: [nhs_geo_fix_my_score, nhs_api_unlimited]",
+		"enum: [unlimited]",
+		"is_featured:",
+		"deprecated: true",
+		"never affects organic score or ordering",
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("OpenAPI priority/free contract missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{"Free search abuse limit exceeded", "nhs_api_starter", "nhs_api_pro", "nhs_api_scale"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("OpenAPI retained obsolete contract %q", forbidden)
+		}
+	}
+}

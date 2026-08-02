@@ -10,50 +10,22 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 type WebHandler struct {
-	DB   *sql.DB
-	tmpl *template.Template
-	Auth *AuthService
+	DB                *sql.DB
+	tmpl              *template.Template
+	Auth              *AuthService
+	searchRateLimiter *mcpDiscoveryRateLimiter
 }
 
 type scoreReason struct {
 	Label  string
 	Points int
 	Found  bool
-}
-
-const homepagePinnedListingDomain = "bringyour.ai"
-
-func homepagePinDomain(q, category string, page int) string {
-	if q == "" && category == "" && page == 1 {
-		return homepagePinnedListingDomain
-	}
-	return ""
-}
-
-func unfilteredTopPinDomain(category, tag string, hasAPI, hasMCP, hasOpenAPI, hasLLMsTxt bool) string {
-	if category == "" && tag == "" && !hasAPI && !hasMCP && !hasOpenAPI && !hasLLMsTxt {
-		return homepagePinnedListingDomain
-	}
-	return ""
-}
-
-func campaignSubscribeURL(r *http.Request) (string, bool) {
-	if r == nil {
-		return "/subscribe", false
-	}
-	q := r.URL.Query()
-	if strings.ToLower(q.Get("utm_source")) != "linkedin" || strings.ToLower(q.Get("utm_medium")) != "qlimit" {
-		return "/subscribe", false
-	}
-	if r.URL.RawQuery == "" {
-		return "/subscribe", true
-	}
-	return "/subscribe?" + r.URL.RawQuery, true
 }
 
 func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
@@ -165,7 +137,11 @@ func NewWebHandler(db *sql.DB, templatesDir string) (*WebHandler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &WebHandler{DB: db, tmpl: tmpl}, nil
+	return &WebHandler{
+		DB:                db,
+		tmpl:              tmpl,
+		searchRateLimiter: newMCPDiscoveryRateLimiter(240, time.Hour),
+	}, nil
 }
 
 func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
@@ -176,64 +152,86 @@ func (h *WebHandler) HomePage(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query().Get("q")
 	category := r.URL.Query().Get("category")
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if pn, err := strconv.Atoi(p); err == nil {
-			page = pn
-		}
-	}
+	page := parsePositivePage(r.URL.Query().Get("page"))
 
 	params := models.SearchParams{
-		Query:     q,
-		Category:  category,
-		PinDomain: homepagePinDomain(q, category, page),
-		Limit:     20,
-		Page:      page,
+		Query:    q,
+		Category: category,
+		Limit:    20,
+		Page:     page,
+	}
+
+	// A query or category filter performs a database search and writes a demand
+	// receipt. Apply the same free-discovery abuse ceiling as REST before either
+	// operation so the human surface cannot bypass API/MCP protection or inflate
+	// provider demand telemetry. Browsing the unfiltered home page stays open.
+	if q != "" || category != "" {
+		if h.searchRateLimiter == nil {
+			h.searchRateLimiter = newMCPDiscoveryRateLimiter(240, time.Hour)
+		}
+		now := time.Now()
+		remaining, retryAfter, ok := h.searchRateLimiter.allow(submitHashIP(r), now)
+		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(h.searchRateLimiter.limit))
+		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(now.Add(retryAfter).Unix(), 10))
+		if !ok {
+			retrySeconds := max(1, int(retryAfter.Seconds()))
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			http.Error(w, "free search rate limit exceeded; retry after the indicated interval", http.StatusTooManyRequests)
+			return
+		}
 	}
 
 	sites, total, err := models.SearchSites(h.DB, params)
 	if err != nil {
 		log.Printf("search error: %v", err)
+		http.Error(w, "search temporarily unavailable", http.StatusInternalServerError)
+		return
+	}
+	searchID := ""
+	if q != "" || category != "" {
+		var receiptErr error
+		searchID, receiptErr = recordDemandSearchReceipt(h.DB, models.DemandSearchReceipt{
+			Surface:     "web",
+			Query:       q,
+			Category:    category,
+			ResultCount: total,
+			Page:        page,
+			PageSize:    params.Limit,
+			Synthetic:   demandRequestIsSynthetic(r),
+		}, sites)
+		if receiptErr != nil {
+			log.Printf("demand receipt web search: %v", receiptErr)
+		}
 	}
 
 	totalSites, avgScore, _ := models.GetStats(h.DB)
 	popularTags, _ := models.TopTags(h.DB, 12)
 
-	// Subscription gate: searching/filtering the index requires an active human
-	// session or API key. Unentitled visitors get a 3-result metered preview plus
-	// a subscribe/login CTA. Browsing the bare homepage (no query) stays open.
-	entitled := true
+	// Search is free. Accounts are still resolved for legacy account surfaces,
+	// but never determine which organic results a visitor can inspect.
 	var accountEmail string
 	if h.Auth != nil {
 		if acct := h.Auth.CurrentAccount(r); acct != nil {
 			accountEmail = acct.Email
 		}
-		entitled, _, _ = h.Auth.SearchEntitled(r)
 	}
-	locked := false
-	if !entitled && (q != "" || category != "") {
-		locked = true
-		if len(sites) > 3 {
-			sites = sites[:3]
-		}
-	}
-	subscribeURL, showCampaignSubscribeCTA := campaignSubscribeURL(r)
 
 	data := map[string]interface{}{
 		"Query":                    q,
 		"Category":                 category,
+		"SearchID":                 searchID,
 		"Sites":                    sites,
 		"Total":                    total,
 		"Page":                     page,
-		"HasNext":                  !locked && page*20 < total,
+		"HasNext":                  page*20 < total,
 		"TotalSites":               totalSites,
 		"AvgScore":                 avgScore,
 		"PopularTags":              popularTags,
-		"Entitled":                 entitled,
-		"Locked":                   locked,
+		"Entitled":                 true,
+		"Locked":                   false,
 		"AccountEmail":             accountEmail,
-		"ShowCampaignSubscribeCTA": showCampaignSubscribeCTA && accountEmail == "",
-		"CampaignSubscribeURL":     subscribeURL,
+		"ShowCampaignSubscribeCTA": false,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -428,7 +426,7 @@ func (h *WebHandler) TopPage(w http.ResponseWriter, r *http.Request) {
 		Heading:    "Top 100 Agent-Ready Sites",
 		Subheading: "The sites AI agents can actually use. Ranked by agentic readiness — publish llms.txt, OpenAPI, ai-plugin, MCP, or a structured API to appear here.",
 		OGImage:    "og-top.png",
-		Params:     models.SearchParams{PinDomain: homepagePinnedListingDomain, Limit: 100},
+		Params:     models.SearchParams{Limit: 100},
 	})
 }
 
@@ -554,17 +552,14 @@ type categoryLanding struct {
 }
 
 func (h *WebHandler) renderCategoryLanding(w http.ResponseWriter, r *http.Request, c categoryLanding) {
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		if pn, err := strconv.Atoi(p); err == nil && pn > 0 {
-			page = pn
-		}
-	}
+	page := parsePositivePage(r.URL.Query().Get("page"))
 	c.Params.Page = page
 
 	sites, total, err := models.SearchSites(h.DB, c.Params)
 	if err != nil {
 		log.Printf("%s search: %v", c.Path, err)
+		http.Error(w, "search temporarily unavailable", http.StatusInternalServerError)
+		return
 	}
 
 	totalSites, avgScore, _ := models.GetStats(h.DB)
@@ -658,6 +653,14 @@ func (h *WebHandler) SitePage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.NotFound(w, r)
 		return
+	}
+	if searchID := strings.TrimSpace(r.URL.Query().Get("search_id")); searchID != "" {
+		recorded, selectionErr := models.RecordDemandSelection(h.DB, searchID, site.Domain, "web")
+		if selectionErr != nil {
+			log.Printf("demand selection web detail: %v", selectionErr)
+		} else {
+			w.Header().Set("NHS-Selection-Recorded", strconv.FormatBool(recorded))
+		}
 	}
 	go models.LogIntentFromRequest(h.DB, r, "site_report_view", "site", site.Domain, map[string]any{
 		"score":       site.AgenticScore,

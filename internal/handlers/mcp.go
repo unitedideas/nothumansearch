@@ -1,13 +1,15 @@
 package handlers
 
 import (
-	"crypto/sha256"
+	"bytes"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +17,8 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/crawler"
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
+
+const mcpMaxRequestBodyBytes int64 = 64 << 10
 
 // MCPHandler exposes Not Human Search as a remote MCP (Model Context Protocol) server.
 // Agents can register this server via:
@@ -24,26 +28,33 @@ import (
 // Protocol: JSON-RPC 2.0 over Streamable HTTP (POST requests, JSON responses).
 // Spec: https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
 type MCPHandler struct {
-	DB                   *sql.DB
-	BaseURL              string
-	discoveryRateLimiter *mcpDiscoveryRateLimiter
-	usageGate            *UsageGate
+	DB                      *sql.DB
+	BaseURL                 string
+	discoveryRateLimiter    *mcpDiscoveryRateLimiter
+	toolRateLimiter         *mcpDiscoveryRateLimiter
+	probeRateLimiter        *mcpDiscoveryRateLimiter
+	priorityToolRateLimiter *mcpDiscoveryRateLimiter
+	priorityProbeLimiter    *mcpDiscoveryRateLimiter
 }
 
 func NewMCPHandler(db *sql.DB, baseURL string) *MCPHandler {
 	return &MCPHandler{
-		DB:                   db,
-		BaseURL:              baseURL,
-		discoveryRateLimiter: newMCPDiscoveryRateLimiter(90, time.Hour),
-		usageGate:            NewUsageGate(db, baseURL),
+		DB:                      db,
+		BaseURL:                 baseURL,
+		discoveryRateLimiter:    newMCPDiscoveryRateLimiter(90, time.Hour),
+		toolRateLimiter:         newMCPDiscoveryRateLimiter(freeSearchHourlyLimit, time.Hour),
+		probeRateLimiter:        newMCPDiscoveryRateLimiter(freeActiveProbeHourlyLimit, time.Hour),
+		priorityToolRateLimiter: newMCPDiscoveryRateLimiter(prioritySearchHourlyLimit, time.Hour),
+		priorityProbeLimiter:    newMCPDiscoveryRateLimiter(priorityActiveProbeLimit, time.Hour),
 	}
 }
 
 type mcpDiscoveryRateLimiter struct {
-	mu      sync.Mutex
-	limit   int
-	window  time.Duration
-	buckets map[string]mcpDiscoveryBucket
+	mu        sync.Mutex
+	limit     int
+	window    time.Duration
+	buckets   map[string]mcpDiscoveryBucket
+	nextPrune time.Time
 }
 
 type mcpDiscoveryBucket struct {
@@ -52,6 +63,12 @@ type mcpDiscoveryBucket struct {
 }
 
 func newMCPDiscoveryRateLimiter(limit int, window time.Duration) *mcpDiscoveryRateLimiter {
+	if limit < 1 {
+		limit = 1
+	}
+	if window <= 0 {
+		window = time.Hour
+	}
 	return &mcpDiscoveryRateLimiter{
 		limit:   limit,
 		window:  window,
@@ -63,17 +80,34 @@ func (l *mcpDiscoveryRateLimiter) allow(key string, now time.Time) (remaining in
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	// Expired buckets are opportunistically evicted so attacker-controlled keys
+	// cannot make this process-local abuse guard grow without bound.
+	if l.nextPrune.IsZero() || !now.Before(l.nextPrune) {
+		for bucketKey, bucket := range l.buckets {
+			if !now.Before(bucket.resetAt) {
+				delete(l.buckets, bucketKey)
+			}
+		}
+		pruneEvery := l.window
+		if pruneEvery > 5*time.Minute {
+			pruneEvery = 5 * time.Minute
+		}
+		l.nextPrune = now.Add(pruneEvery)
+	}
+	if key == "" {
+		key = "unknown"
+	}
 	b := l.buckets[key]
 	if b.resetAt.IsZero() || !now.Before(b.resetAt) {
 		b = mcpDiscoveryBucket{resetAt: now.Add(l.window)}
 	}
 	if b.count >= l.limit {
 		l.buckets[key] = b
-		return 0, time.Until(b.resetAt), false
+		return 0, b.resetAt.Sub(now), false
 	}
 	b.count++
 	l.buckets[key] = b
-	return l.limit - b.count, time.Until(b.resetAt), true
+	return l.limit - b.count, b.resetAt.Sub(now), true
 }
 
 // JSON-RPC 2.0 envelope types
@@ -120,21 +154,43 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, mcpMaxRequestBodyBytes)
+	decoder := json.NewDecoder(r.Body)
 	var req rpcRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decoder.Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			_ = json.NewEncoder(w).Encode(rpcResponse{
+				JSONRPC: "2.0",
+				Error:   &rpcError{Code: -32000, Message: "request body exceeds 64 KiB"},
+			})
+			return
+		}
 		h.writeError(w, nil, -32700, "parse error")
+		return
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			_ = json.NewEncoder(w).Encode(rpcResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &rpcError{Code: -32000, Message: "request body exceeds 64 KiB"},
+			})
+			return
+		}
+		h.writeError(w, req.ID, -32700, "parse error: request must contain exactly one JSON value")
 		return
 	}
 
 	start := time.Now()
 	ua := r.UserAgent()
-	ip := r.RemoteAddr
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		ip = strings.TrimSpace(strings.Split(fwd, ",")[0])
-	}
-	ip = strings.Split(ip, ":")[0]
-	ipSum := sha256.Sum256([]byte(ip))
-	ipHash := hex.EncodeToString(ipSum[:8])
+	ipHash := submitHashIP(r)
 
 	// Notifications (no id) expect no response body, just 202 Accepted.
 	if len(req.ID) == 0 {
@@ -267,6 +323,10 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 					"domain": map[string]any{
 						"type":        "string",
 						"description": "Domain to look up (e.g. 'stripe.com'). Do not include scheme or path.",
+					},
+					"search_id": map[string]any{
+						"type":        "string",
+						"description": "Optional receipt returned by search_agents. If this domain was returned, NHS records a detail selection.",
 					},
 				},
 				"required": []string{"domain"},
@@ -438,73 +498,132 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 		h.writeError(w, req.ID, -32602, "invalid params")
 		return
 	}
+	knownTool := isKnownMCPTool(params.Name)
 
-	if isNHSBillableMCPTool(params.Name) {
-		_, _, limit, used, err := h.usageGate.ConsumeMCP(r, params.Name)
-		if err != nil {
-			status := http.StatusPaymentRequired
-			message := models.QuotaErrorMessage(limit)
-			switch err.Error() {
-			case "invalid_api_key":
-				status = http.StatusUnauthorized
-				message = "API key was not found or is inactive"
-			case "key_required":
-				status = http.StatusUnauthorized
-				message = "Not Human Search requires a subscription. Get an API key for $9.99/mo at " + h.BaseURL + "/subscribe, then send it as 'Authorization: Bearer <key>'."
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(status)
-			_ = json.NewEncoder(w).Encode(rpcResponse{
-				JSONRPC: "2.0",
-				ID:      req.ID,
-				Error: &rpcError{
-					Code:    -32042,
-					Message: message,
-					Data: map[string]any{
-						"limit":            limit,
-						"used":             used,
-						"reset_at_unix":    models.QuotaResetUnix(),
-						"subscribe_url":    h.BaseURL + "/api/v1/api-keys/subscribe",
-						"subscribe_method": "POST",
-						"subscribe_fields": []string{"email", "plan"},
-						"plans_url":        h.BaseURL + "/api/v1/api-keys/subscribe",
-					},
-				},
-			})
-			return
+	access := resolveRequestRateAccess(h.DB, r)
+	activeTool := isNHSActiveProbeTool(params.Name)
+	limiter := h.toolRateLimiter
+	if activeTool {
+		limiter = h.probeRateLimiter
+	}
+	if access.tier == priorityRateLimitTier {
+		limiter = h.priorityToolRateLimiter
+		if activeTool {
+			limiter = h.priorityProbeLimiter
 		}
 	}
+	if limiter == nil {
+		limit := freeSearchHourlyLimit
+		if activeTool {
+			limit = freeActiveProbeHourlyLimit
+		}
+		if access.tier == priorityRateLimitTier {
+			limit = prioritySearchHourlyLimit
+			if activeTool {
+				limit = priorityActiveProbeLimit
+			}
+		}
+		limiter = newMCPDiscoveryRateLimiter(limit, time.Hour)
+		if access.tier == priorityRateLimitTier && activeTool {
+			h.priorityProbeLimiter = limiter
+		} else if access.tier == priorityRateLimitTier {
+			h.priorityToolRateLimiter = limiter
+		} else if activeTool {
+			h.probeRateLimiter = limiter
+		} else {
+			h.toolRateLimiter = limiter
+		}
+	}
+	rateBucket := access.bucket + ":mcp-tools"
+	if activeTool {
+		rateBucket = access.bucket + ":mcp-active"
+	}
+	remaining, retryAfter, ok := limiter.allow(rateBucket, time.Now())
+	if ok && access.key != nil && knownTool {
+		var reserved bool
+		access, reserved = reservePriorityUnit(h.DB, access, "mcp", "tools/call", "/mcp", params.Name)
+		if !reserved {
+			access = freeRequestRateAccess(r)
+			if activeTool {
+				if h.probeRateLimiter == nil {
+					h.probeRateLimiter = newMCPDiscoveryRateLimiter(freeActiveProbeHourlyLimit, time.Hour)
+				}
+				limiter = h.probeRateLimiter
+				rateBucket = access.bucket + ":mcp-active"
+			} else {
+				if h.toolRateLimiter == nil {
+					h.toolRateLimiter = newMCPDiscoveryRateLimiter(freeSearchHourlyLimit, time.Hour)
+				}
+				limiter = h.toolRateLimiter
+				rateBucket = access.bucket + ":mcp-tools"
+			}
+			remaining, retryAfter, ok = limiter.allow(rateBucket, time.Now())
+		}
+	}
+	access.setHeaders(w)
+	w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limiter.limit))
+	w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+	w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(retryAfter).Unix()))
+	if !ok {
+		retrySeconds := max(1, int(retryAfter.Seconds()))
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Retry-After", fmt.Sprintf("%d", retrySeconds))
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(rpcResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error: &rpcError{
+				Code:    -32029,
+				Message: "MCP safety limit exceeded; retry after the indicated interval. Discovery access is not paywalled",
+				Data: map[string]any{
+					"limit":       limiter.limit,
+					"window":      "1h",
+					"retry_after": retrySeconds,
+				},
+			},
+		})
+		return
+	}
 
+	toolResponse := &mcpToolResponseBuffer{header: w.Header()}
 	switch params.Name {
 	case "search_agents", "search":
 		// "search" is an alias; some agents guess this simpler name when
 		// surveying the tool list. Route both to the same handler.
-		h.toolSearchAgents(w, req.ID, params.Arguments)
+		h.toolSearchAgents(toolResponse, req.ID, params.Arguments, demandRequestIsSynthetic(r))
 	case "get_site_details":
-		h.toolGetSiteDetails(w, req.ID, params.Arguments)
+		h.toolGetSiteDetails(toolResponse, req.ID, params.Arguments)
 	case "get_stats":
-		h.toolGetStats(w, req.ID)
+		h.toolGetStats(toolResponse, req.ID)
 	case "submit_site":
-		h.toolSubmitSite(w, req.ID, params.Arguments)
+		h.toolSubmitSite(toolResponse, req.ID, params.Arguments)
 	case "register_monitor":
-		h.toolRegisterMonitor(w, req.ID, params.Arguments)
+		h.toolRegisterMonitor(toolResponse, req.ID, params.Arguments)
 	case "check_url":
-		h.toolCheckURL(w, req.ID, params.Arguments)
+		h.toolCheckURL(toolResponse, req.ID, params.Arguments)
 	case "verify_mcp":
-		h.toolVerifyMCP(w, req.ID, params.Arguments)
+		h.toolVerifyMCP(toolResponse, req.ID, params.Arguments)
 	case "list_categories":
-		h.toolListCategories(w, req.ID)
+		h.toolListCategories(toolResponse, req.ID)
 	case "get_top_sites":
-		h.toolGetTopSites(w, req.ID, params.Arguments)
+		h.toolGetTopSites(toolResponse, req.ID, params.Arguments)
 	case "find_mcp_servers":
-		h.toolFindMCPServers(w, req.ID, params.Arguments)
+		h.toolFindMCPServers(toolResponse, req.ID, params.Arguments, demandRequestIsSynthetic(r))
 	case "recent_additions":
-		h.toolRecentAdditions(w, req.ID, params.Arguments)
+		h.toolRecentAdditions(toolResponse, req.ID, params.Arguments)
 	default:
-		h.writeToolError(w, req.ID, "unknown tool: "+params.Name)
+		h.writeToolError(toolResponse, req.ID, "unknown tool: "+params.Name)
+	}
+	if toolResponse.toolError {
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
+	}
+	if err := toolResponse.flushTo(w); err != nil {
+		log.Printf("MCP response write %s: %v", params.Name, err)
 	}
 
-	argsJSON, _ := json.Marshal(params.Arguments)
+	safeArgs := mcpAnalyticsArguments(params.Name, params.Arguments)
+	argsJSON, _ := json.Marshal(safeArgs)
 	go models.LogMCPRequest(h.DB, "tools/call", params.Name, argsJSON, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 	go models.LogIntentEvent(h.DB, models.IntentEvent{
 		EventName:  "mcp_tool_call",
@@ -514,14 +633,25 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 		IPHash:     ipHash,
 		IsBot:      true,
 		Metadata: map[string]any{
-			"arguments": params.Arguments,
+			"arguments": safeArgs,
 		},
 	})
 }
 
-func isNHSBillableMCPTool(name string) bool {
+func isNHSActiveProbeTool(name string) bool {
 	switch name {
-	case "search_agents", "search", "get_site_details", "check_url", "verify_mcp", "find_mcp_servers":
+	case "check_url", "verify_mcp", "submit_site", "register_monitor":
+		return true
+	default:
+		return false
+	}
+}
+
+func isKnownMCPTool(name string) bool {
+	switch name {
+	case "search_agents", "search", "get_site_details", "get_stats", "submit_site",
+		"register_monitor", "check_url", "verify_mcp", "list_categories",
+		"get_top_sites", "find_mcp_servers", "recent_additions":
 		return true
 	default:
 		return false
@@ -586,6 +716,10 @@ func (h *MCPHandler) toolSubmitSite(w http.ResponseWriter, id json.RawMessage, a
 	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
 		rawURL = "https://" + rawURL
 	}
+	if err := crawler.ValidatePublicURL(rawURL); err != nil {
+		h.writeToolError(w, id, "url must resolve to a public HTTP(S) address")
+		return
+	}
 
 	_, err := h.DB.Exec(`
 		INSERT INTO submissions (url, status) VALUES ($1, 'pending')
@@ -634,7 +768,7 @@ func (h *MCPHandler) toolSubmitSite(w http.ResponseWriter, id json.RawMessage, a
 	})
 }
 
-func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage, args map[string]any, synthetic bool) {
 	p := models.SearchParams{
 		Query:      asString(args["query"]),
 		Category:   asString(args["category"]),
@@ -656,9 +790,17 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		return
 	}
 
+	searchID := h.recordMCPSearchReceipt(p, total, sites, synthetic)
+
 	// Compact text view for agents (cheap tokens, still readable).
 	var b strings.Builder
-	fmt.Fprintf(&b, "Found %d total results (showing %d).\n\n", total, len(sites))
+	fmt.Fprintf(&b, "Found %d total results (showing %d).", total, len(sites))
+	if searchID != "" {
+		fmt.Fprintf(&b, " Search receipt: %s. Pass this search_id to get_site_details to record a result selection.", searchID)
+	} else {
+		fmt.Fprint(&b, " Search receipt unavailable; no selection attribution will be claimed for this response.")
+	}
+	b.WriteString("\n\n")
 	for i, s := range sites {
 		name := s.Name
 		if name == "" {
@@ -693,8 +835,13 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 	// Return both human-readable text (content) and structured JSON (structuredContent).
 	// Per MCP spec, structuredContent lets agents parse without string-munging.
 	structured := map[string]any{
-		"total":   total,
-		"results": sites,
+		"access":           "free",
+		"receipt_recorded": searchID != "",
+		"total":            total,
+		"results":          sites,
+	}
+	if searchID != "" {
+		structured["search_id"] = searchID
 	}
 	h.writeResult(w, id, map[string]any{
 		"content": []map[string]any{
@@ -702,6 +849,61 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		},
 		"structuredContent": structured,
 	})
+}
+
+func (h *MCPHandler) recordMCPSearchReceipt(p models.SearchParams, total int, sites []models.Site, synthetic bool) string {
+	searchID, err := recordDemandSearchReceipt(h.DB, models.DemandSearchReceipt{
+		Surface:     "mcp",
+		Query:       p.Query,
+		Category:    p.Category,
+		HasAPI:      p.HasAPI,
+		HasMCP:      p.HasMCP,
+		HasOpenAPI:  p.HasOpenAPI,
+		HasLLMsTxt:  p.HasLLMsTxt,
+		ResultCount: total,
+		Page:        max(1, p.Page),
+		PageSize:    p.Limit,
+		Synthetic:   synthetic,
+	}, sites)
+	if err != nil {
+		log.Printf("demand receipt MCP search: %v", err)
+		return ""
+	}
+	return searchID
+}
+
+func mcpAnalyticsArguments(tool string, args map[string]any) map[string]any {
+	safe := map[string]any{}
+	copyBool := func(key string) {
+		if value, ok := args[key].(bool); ok {
+			safe[key] = value
+		}
+	}
+	copyBoundedString := func(key string) {
+		if value := strings.TrimSpace(asString(args[key])); value != "" {
+			if len(value) > 120 {
+				value = value[:120]
+			}
+			safe[key] = value
+		}
+	}
+
+	switch tool {
+	case "search_agents", "search":
+		safe["demand_topics"] = models.ClassifyDemandTopics(asString(args["query"]), asString(args["category"]))
+		for _, key := range []string{"has_api", "has_mcp", "has_openapi", "has_llms_txt"} {
+			copyBool(key)
+		}
+	case "get_site_details", "register_monitor":
+		copyBoundedString("domain")
+	case "submit_site", "check_url", "verify_mcp":
+		// URLs can contain credentials or private paths. Retain only a coarse
+		// redacted label for operational counts, never the raw value.
+		safe["target_supplied"] = strings.TrimSpace(asString(args["url"])) != ""
+	case "find_mcp_servers":
+		safe["demand_topics"] = models.ClassifyDemandTopics(asString(args["query"]), asString(args["category"]))
+	}
+	return safe
 }
 
 func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
@@ -725,6 +927,14 @@ func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessag
 	if err != nil {
 		h.writeToolError(w, id, fmt.Sprintf("site not found: %s (try search_agents first)", domain))
 		return
+	}
+	if searchID := strings.TrimSpace(asString(args["search_id"])); searchID != "" {
+		recorded, selectionErr := models.RecordDemandSelection(h.DB, searchID, site.Domain, "mcp")
+		if selectionErr != nil {
+			log.Printf("demand selection MCP detail: %v", selectionErr)
+		} else {
+			w.Header().Set("NHS-Selection-Recorded", strconv.FormatBool(recorded))
+		}
 	}
 
 	var b strings.Builder
@@ -797,11 +1007,25 @@ func (h *MCPHandler) toolCheckURL(w http.ResponseWriter, id json.RawMessage, arg
 	if !strings.HasPrefix(lowerRaw, "http://") && !strings.HasPrefix(lowerRaw, "https://") {
 		raw = "https://" + raw
 	}
+	if err := crawler.ValidatePublicURL(raw); err != nil {
+		h.writeToolError(w, id, "url must resolve to a public HTTP(S) address")
+		return
+	}
+	select {
+	case submitCrawlSem <- struct{}{}:
+		// The crawl goroutine owns the slot until it exits, including after a
+		// handler timeout, so distributed callers cannot accumulate background
+		// crawl work faster than it completes.
+	default:
+		h.writeToolError(w, id, "live check capacity is busy; retry shortly")
+		return
+	}
 
 	done := make(chan struct{})
 	var site *models.Site
 	var crawlErr error
 	go func() {
+		defer func() { <-submitCrawlSem }()
 		site, crawlErr = crawler.CrawlSite(raw)
 		close(done)
 	}()
@@ -819,9 +1043,11 @@ func (h *MCPHandler) toolCheckURL(w http.ResponseWriter, id json.RawMessage, arg
 	// Upsert as a fire-and-forget side-effect so repeat checks improve the index
 	// over time. Failure here doesn't affect the caller's response — same
 	// pattern as /api/v1/check.
-	go func(s *models.Site) {
-		_ = models.UpsertSite(h.DB, s)
-	}(site)
+	if h.DB != nil {
+		go func(s *models.Site) {
+			_ = models.UpsertSite(h.DB, s)
+		}(site)
+	}
 
 	var signals []string
 	if site.HasLLMsTxt {
@@ -886,6 +1112,10 @@ func (h *MCPHandler) toolVerifyMCP(w http.ResponseWriter, id json.RawMessage, ar
 	lowerRaw := strings.ToLower(raw)
 	if !strings.HasPrefix(lowerRaw, "http://") && !strings.HasPrefix(lowerRaw, "https://") {
 		raw = "https://" + raw
+	}
+	if err := crawler.ValidatePublicURL(raw); err != nil {
+		h.writeToolError(w, id, "url must resolve to a public HTTP(S) address")
+		return
 	}
 	verified := crawler.ProbeMCPJSONRPC(raw)
 	note := "Endpoint responded with valid JSON-RPC 2.0 — server is live and MCP-compliant."
@@ -1056,7 +1286,7 @@ func (h *MCPHandler) toolRecentAdditions(w http.ResponseWriter, id json.RawMessa
 // HasMCP=true. Agents looking specifically for MCP endpoints don't have
 // to know the has_mcp filter exists on search_agents — they can discover
 // this tool by name. Pairs with verify_mcp for probe-before-use flows.
-func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessage, args map[string]any, synthetic bool) {
 	p := models.SearchParams{
 		Query:    asString(args["query"]),
 		Category: asString(args["category"]),
@@ -1073,9 +1303,16 @@ func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessag
 		h.writeToolError(w, id, "query failed: "+err.Error())
 		return
 	}
+	searchID := h.recordMCPSearchReceipt(p, total, sites, synthetic)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "Found %d MCP-exposing sites (showing %d).\n\n", total, len(sites))
+	fmt.Fprintf(&b, "Found %d MCP-exposing sites (showing %d).", total, len(sites))
+	if searchID != "" {
+		fmt.Fprintf(&b, " Search receipt: %s. Pass this search_id to get_site_details to record a result selection.", searchID)
+	} else {
+		fmt.Fprint(&b, " Search receipt unavailable; no selection attribution will be claimed for this response.")
+	}
+	b.WriteString("\n\n")
 	for i, s := range sites {
 		name := s.Name
 		if name == "" {
@@ -1088,20 +1325,61 @@ func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessag
 		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n\n", s.URL, h.BaseURL, s.Domain)
 	}
 
+	structured := map[string]any{
+		"receipt_recorded": searchID != "",
+		"total":            total,
+		"results":          sites,
+	}
+	if searchID != "" {
+		structured["search_id"] = searchID
+	}
 	h.writeResult(w, id, map[string]any{
 		"content": []map[string]any{
 			{"type": "text", "text": b.String()},
 		},
-		"structuredContent": map[string]any{
-			"total":   total,
-			"results": sites,
-		},
+		"structuredContent": structured,
 	})
 }
 
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
+
+// mcpToolResponseBuffer delays committing a tool response until quota
+// accounting knows whether the tool succeeded. This lets NHS refund failed or
+// capacity-rejected priority calls and publish the corrected remaining quota in
+// the same HTTP response.
+type mcpToolResponseBuffer struct {
+	header    http.Header
+	body      bytes.Buffer
+	status    int
+	toolError bool
+}
+
+func (w *mcpToolResponseBuffer) Header() http.Header { return w.header }
+
+func (w *mcpToolResponseBuffer) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+}
+
+func (w *mcpToolResponseBuffer) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.body.Write(p)
+}
+
+func (w *mcpToolResponseBuffer) flushTo(dst http.ResponseWriter) error {
+	status := w.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	dst.WriteHeader(status)
+	_, err := dst.Write(w.body.Bytes())
+	return err
+}
 
 func (h *MCPHandler) writeResult(w http.ResponseWriter, id json.RawMessage, result any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -1125,6 +1403,9 @@ func (h *MCPHandler) writeError(w http.ResponseWriter, id json.RawMessage, code 
 // a normal result with isError=true rather than a JSON-RPC error, so the
 // agent can still reason about what went wrong.
 func (h *MCPHandler) writeToolError(w http.ResponseWriter, id json.RawMessage, message string) {
+	if buffered, ok := w.(*mcpToolResponseBuffer); ok {
+		buffered.toolError = true
+	}
 	h.writeResult(w, id, map[string]any{
 		"isError": true,
 		"content": []map[string]any{

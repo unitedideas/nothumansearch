@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -18,8 +16,9 @@ import (
 // CheckHandler exposes on-demand agentic-readiness checks at /api/v1/check.
 // Developers can POST a URL and get back the same 7-signal score the crawler
 // produces, without waiting for indexing. This is the primary monetization
-// surface — free tier is rate-limited; paid tiers (future) unlock higher
-// limits and CI-grade webhooks.
+// surface. Every caller retains a free safety-limited path; active legacy API
+// keys receive a higher priority-throughput ceiling while their monthly
+// allocation remains.
 type CheckHandler struct {
 	DB *sql.DB
 
@@ -38,9 +37,10 @@ func NewCheckHandler(db *sql.DB) *CheckHandler {
 }
 
 const (
-	checkWindow       = time.Hour
-	checkFreeLimit    = 10 // requests per hour per IP
-	checkMaxBodyBytes = 2048
+	checkWindow        = time.Hour
+	checkFreeLimit     = freeCheckHourlyLimit
+	checkPriorityLimit = priorityCheckHourlyLimit
+	checkMaxBodyBytes  = 2048
 )
 
 func (h *CheckHandler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -53,12 +53,13 @@ func (h *CheckHandler) writeJSON(w http.ResponseWriter, status int, data interfa
 func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		h.writeJSON(w, 200, map[string]any{
-			"endpoint":    "/api/v1/check",
-			"method":      "POST",
-			"description": "On-demand agentic readiness check. Returns the same 7-signal score the NHS crawler computes.",
-			"body":        map[string]string{"url": "https://example.com"},
-			"free_tier":   "10 checks/hour per IP. No key required.",
-			"example":     "curl -X POST https://nothumansearch.ai/api/v1/check -H 'Content-Type: application/json' -d '{\"url\":\"https://stripe.com\"}'",
+			"endpoint":      "/api/v1/check",
+			"method":        "POST",
+			"description":   "On-demand agentic readiness check. Returns the same 7-signal score the NHS crawler computes.",
+			"body":          map[string]string{"url": "https://example.com"},
+			"free_tier":     "10 checks/hour per IP. No key required.",
+			"priority_tier": "100 checks/hour per active API key while its 50,000-call monthly priority allocation remains; free access continues afterward.",
+			"example":       "curl -X POST https://nothumansearch.ai/api/v1/check -H 'Content-Type: application/json' -d '{\"url\":\"https://stripe.com\"}'",
 		})
 		return
 	}
@@ -67,33 +68,48 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ipHash := hashIP(r)
-	if !h.allow(ipHash) {
-		remaining, resetUnix := h.rateLimitState(ipHash)
+	access := resolveRequestRateAccess(h.DB, r)
+	limit := checkFreeLimit
+	if access.tier == priorityRateLimitTier {
+		limit = checkPriorityLimit
+	}
+	allowed := h.allow(access.bucket, limit)
+	if allowed && access.key != nil {
+		var reserved bool
+		access, reserved = reservePriorityUnit(h.DB, access, "rest", r.Method, "/api/v1/check", "")
+		if !reserved {
+			access = freeRequestRateAccess(r)
+			limit = checkFreeLimit
+			allowed = h.allow(access.bucket, limit)
+		}
+	}
+	access.setHeaders(w)
+	if !allowed {
+		remaining, resetUnix := h.rateLimitState(access.bucket, limit)
 		w.Header().Set("Retry-After", fmt.Sprintf("%d", int(time.Until(time.Unix(resetUnix, 0)).Seconds())+1))
-		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", checkFreeLimit))
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
 		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
 		h.writeJSON(w, 429, map[string]any{
 			"error":            "rate limit exceeded",
-			"limit":            checkFreeLimit,
+			"limit":            limit,
 			"window_sec":       int(checkWindow.Seconds()),
 			"reset_at_unix":    resetUnix,
 			"plans_url":        "https://nothumansearch.ai/api/v1/api-keys/subscribe",
 			"subscribe_url":    "https://nothumansearch.ai/api/v1/api-keys/subscribe",
 			"subscribe_method": "POST",
 			"subscribe_fields": []string{"email", "plan"},
-			"upgrade":          "Higher limits are available through paid API keys.",
+			"upgrade":          "An active API key raises the safety ceiling; free checking remains available without one.",
 		})
 		go models.LogIntentFromRequest(h.DB, r, "check_rate_limit_hit", "api", "/api/v1/check", map[string]any{
-			"limit": checkFreeLimit,
+			"limit": limit,
 		})
 		return
 	}
 	// Emit rate-limit headers on successful responses too so callers can pace themselves.
 	{
-		remaining, resetUnix := h.rateLimitState(ipHash)
-		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", checkFreeLimit))
+		remaining, resetUnix := h.rateLimitState(access.bucket, limit)
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
 		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", resetUnix))
 	}
@@ -103,11 +119,15 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, checkMaxBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
 		h.writeJSON(w, 400, map[string]string{"error": "invalid JSON body"})
 		return
 	}
 	req.URL = strings.TrimSpace(req.URL)
 	if req.URL == "" {
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
 		h.writeJSON(w, 400, map[string]string{"error": "url required"})
 		return
 	}
@@ -118,6 +138,23 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !strings.HasPrefix(lowerURL, "http://") && !strings.HasPrefix(lowerURL, "https://") {
 		req.URL = "https://" + req.URL
 	}
+	if err := crawler.ValidatePublicURL(req.URL); err != nil {
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
+		h.writeJSON(w, 400, map[string]string{"error": "url must resolve to a public HTTP(S) address"})
+		return
+	}
+	select {
+	case submitCrawlSem <- struct{}{}:
+		// Released by the crawl goroutine when it actually exits. A handler
+		// timeout cannot release early and accumulate runaway background crawls.
+	default:
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
+		w.Header().Set("Retry-After", "2")
+		h.writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "live check capacity is busy; retry shortly"})
+		return
+	}
 
 	// Run the crawler inline. CrawlSite hits the network; cap total time so a
 	// slow target can't pin the request open.
@@ -125,16 +162,21 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var site *models.Site
 	var crawlErr error
 	go func() {
+		defer func() { <-submitCrawlSem }()
 		site, crawlErr = crawler.CrawlSite(req.URL)
 		close(done)
 	}()
 	select {
 	case <-done:
 	case <-time.After(25 * time.Second):
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
 		h.writeJSON(w, 504, map[string]string{"error": "target site took too long to respond"})
 		return
 	}
 	if crawlErr != nil {
+		access = releasePriorityUnit(h.DB, access)
+		access.setHeaders(w)
 		h.writeJSON(w, 502, map[string]string{"error": "crawl failed: " + crawlErr.Error()})
 		return
 	}
@@ -181,7 +223,7 @@ func (h *CheckHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // allow increments the per-IP counter and returns true if the request is
 // under the free-tier limit.
-func (h *CheckHandler) allow(ipHash string) bool {
+func (h *CheckHandler) allow(ipHash string, limit int) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	now := time.Now()
@@ -189,7 +231,7 @@ func (h *CheckHandler) allow(ipHash string) bool {
 		h.counts = map[string]int{}
 		h.resetAt = now.Add(checkWindow)
 	}
-	if h.counts[ipHash] >= checkFreeLimit {
+	if h.counts[ipHash] >= limit {
 		return false
 	}
 	h.counts[ipHash]++
@@ -199,29 +241,13 @@ func (h *CheckHandler) allow(ipHash string) bool {
 // rateLimitState returns the current (remaining, resetUnix) for a given IP
 // without incrementing. Used to emit X-RateLimit-* headers on every response
 // so callers can back off gracefully instead of surprise-429ing.
-func (h *CheckHandler) rateLimitState(ipHash string) (remaining int, resetUnix int64) {
+func (h *CheckHandler) rateLimitState(ipHash string, limit int) (remaining int, resetUnix int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	remaining = checkFreeLimit - h.counts[ipHash]
+	remaining = limit - h.counts[ipHash]
 	if remaining < 0 {
 		remaining = 0
 	}
 	resetUnix = h.resetAt.Unix()
 	return
-}
-
-func hashIP(r *http.Request) string {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		ip = r.RemoteAddr
-	}
-	if idx := strings.Index(ip, ","); idx > 0 {
-		ip = ip[:idx]
-	}
-	if idx := strings.LastIndex(ip, ":"); idx > 0 {
-		// strip port
-		ip = ip[:idx]
-	}
-	sum := sha256.Sum256([]byte(strings.TrimSpace(ip)))
-	return hex.EncodeToString(sum[:8])
 }

@@ -196,12 +196,16 @@ Returns live agentic readiness score without waiting for the crawl queue.
 Free tier: 10 checks/hour per IP. Great for CI pipelines that fail the build
 when a site's agent signals regress.
 
-### Paid API Keys
-GET /api/v1/api-keys/subscribe
-Returns the available API plans and the machine contract for creating a Stripe Checkout session.
+### Optional Priority API Key
+Search, site details, and organic results are free without a key. An active key
+only raises hourly safety ceilings; it never changes results, rank, or score.
 
-POST /api/v1/api-keys/subscribe  Body: {"email": "you@example.com", "plan": "starter"}
-Plans: starter ($19/mo, 1,000 calls), pro ($49/mo, 10,000 calls), scale ($199/mo, 100,000 calls).
+GET /api/v1/api-keys/subscribe
+Returns the optional priority-throughput plan and the machine contract for creating a Stripe Checkout session.
+
+POST /api/v1/api-keys/subscribe  Body: {"email": "you@example.com", "plan": "unlimited"}
+Plan: $9.99/month for 50,000 priority-throughput calls. After that allocation,
+requests continue at free safety limits instead of returning a payment error.
 Returns: {checkout_url, plan, monthly_limit, amount_cents, activation_url}
 
 ### Stats
@@ -497,8 +501,8 @@ paths:
             schema:
               type: object
               properties:
-                product_id: { type: string, enum: [nhs_geo_fix_my_score, nhs_api_starter, nhs_api_pro, nhs_api_scale] }
-                plan:       { type: string, enum: [starter, pro, scale] }
+                product_id: { type: string, enum: [nhs_geo_fix_my_score, nhs_api_unlimited] }
+                plan:       { type: string, enum: [unlimited] }
       responses:
         "200":
           description: Quote with amount, total, currency, and required checkout metadata
@@ -527,11 +531,11 @@ paths:
           description: Requested payment mode is not supported
   /api-keys/subscribe:
     get:
-      summary: List paid API key plans and checkout contract
+      summary: List the optional priority-throughput API key plan and checkout contract
       operationId: getAPIKeySubscriptionPlans
       responses:
         "200":
-          description: Starter, pro, and scale API subscription plans
+          description: Priority throughput only; baseline discovery and organic results remain free
     post:
       summary: Create a Stripe Checkout session for a paid API key subscription
       operationId: createAPIKeySubscriptionCheckout
@@ -544,7 +548,7 @@ paths:
               required: [email, plan]
               properties:
                 email: { type: string, format: email }
-                plan:  { type: string, enum: [starter, pro, scale], default: starter }
+                plan:  { type: string, enum: [unlimited], default: unlimited }
       responses:
         "200":
           description: Stripe Checkout URL and activation URL
@@ -647,10 +651,16 @@ paths:
               schema:
                 type: object
                 properties:
+                  access: { type: string, enum: [free] }
+                  receipt_recorded: { type: boolean, description: True only when the query-free receipt transaction committed }
+                  search_id: { type: string, description: Query-free receipt for an optional detail-selection request }
                   results: { type: array, items: { $ref: "#/components/schemas/Site" } }
                   total: { type: integer }
                   page: { type: integer }
+                  per_page: { type: integer }
                   has_next: { type: boolean }
+        "429":
+          description: Temporary search safety limit exceeded; free access resumes after the reset
   /site/{domain}:
     get:
       summary: Get detailed agentic readiness report for a site
@@ -659,6 +669,11 @@ paths:
         - name: domain
           in: path
           required: true
+          schema: { type: string }
+        - name: search_id
+          in: query
+          required: false
+          description: Optional receipt returned by search; records a detail selection only when this domain was returned
           schema: { type: string }
       responses:
         "200":
@@ -689,6 +704,8 @@ paths:
         Crawls the target URL on demand and returns its 7-signal agentic
         readiness score. Ideal for CI pipelines that should fail when an
         agent-facing site regresses. Free tier: 10 checks/hour per IP.
+        An optional priority key raises this to 100/hour while its monthly
+        allocation remains; exhaustion falls back to the free tier.
       requestBody:
         content:
           application/json:
@@ -730,6 +747,8 @@ paths:
                   note:     { type: string }
         "400":
           description: url query param missing
+        "429":
+          description: Temporary live-probe safety limit exceeded; free access resumes after the reset
   /stats:
     get:
       summary: Get index statistics
@@ -797,7 +816,10 @@ components:
         category: { type: string }
         tags: { type: array, items: { type: string } }
         is_verified: { type: boolean }
-        is_featured: { type: boolean }
+        is_featured:
+          type: boolean
+          deprecated: true
+          description: Legacy display metadata only; never affects organic score or ordering
 `, h.BaseURL, searchCategoryOpenAPIEnum())
 }
 

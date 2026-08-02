@@ -4,6 +4,7 @@
 set -uo pipefail
 
 BASE="${1:-https://nothumansearch.ai}"
+SYNTHETIC_HEADER="NHS-Synthetic-Test: deploy-smoke"
 FAILED=0
 TOTAL=0
 
@@ -12,7 +13,7 @@ check() {
     local expected="$2"
     local url="$3"
     TOTAL=$((TOTAL + 1))
-    local actual=$(/usr/bin/curl -s -o /dev/null -w '%{http_code}' "$url")
+    local actual=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" -o /dev/null -w '%{http_code}' "$url")
     if [ "$actual" = "$expected" ]; then
         printf "  \033[32m✓\033[0m %-45s %s\n" "$name" "$actual"
     else
@@ -26,7 +27,7 @@ check_contains() {
     local needle="$2"
     local url="$3"
     TOTAL=$((TOTAL + 1))
-    local body=$(/usr/bin/curl -s "$url")
+    local body=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" "$url")
     if echo "$body" | grep -q "$needle"; then
         printf "  \033[32m✓\033[0m %-45s contains %s\n" "$name" "'$needle'"
     else
@@ -35,16 +36,39 @@ check_contains() {
     fi
 }
 
+check_search_selection() {
+    TOTAL=$((TOTAL + 1))
+    local payload search_id domain headers
+    payload=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" "$BASE/api/v1/search?q=payment&per_page=1")
+    search_id=$(printf '%s' "$payload" | /usr/bin/jq -r '.search_id // empty')
+    domain=$(printf '%s' "$payload" | /usr/bin/jq -r '.results[0].domain // empty')
+    if [[ "$search_id" != nhs_sr_* ]] || [ -z "$domain" ]; then
+        printf "  \033[31m✗\033[0m %-45s missing search receipt or result\n" "Search-to-detail receipt"
+        FAILED=$((FAILED + 1))
+        return
+    fi
+    headers=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" -D - -o /dev/null "$BASE/api/v1/site/$domain?search_id=$search_id")
+    if printf '%s' "$headers" | tr -d '\r' | grep -qi '^NHS-Selection-Recorded: true$'; then
+        printf "  \033[32m✓\033[0m %-45s %s\n" "Search-to-detail receipt" "$domain"
+    else
+        printf "  \033[31m✗\033[0m %-45s selection header missing for %s\n" "Search-to-detail receipt" "$domain"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
 echo "NHS smoke test: $BASE"
 echo ""
 echo "Core API"
-check "GET /api/v1/search paywall" 402 "$BASE/api/v1/search?per_page=1"
-check_contains "Search paywall contract" "subscription_required" "$BASE/api/v1/search?per_page=1"
-check "GET /api/v1/site/{domain} paywall" 402 "$BASE/api/v1/site/openai.com"
-check "GET /api/v1/sites/{domain} paywall alias" 402 "$BASE/api/v1/sites/openai.com"
+check "GET /api/v1/search is free" 200 "$BASE/api/v1/search?q=payment&per_page=1"
+check_contains "Search free-access contract" '"access":"free"' "$BASE/api/v1/search?q=payment&per_page=1"
+check_contains "Search receipt contract" '"search_id":"nhs_sr_' "$BASE/api/v1/search?q=payment&per_page=1"
+check_search_selection
+check "GET /api/v1/site/{domain} is free" 200 "$BASE/api/v1/site/openai.com"
+check "GET /api/v1/sites/{domain} free alias" 200 "$BASE/api/v1/sites/openai.com"
 check "GET /api/v1/stats" 200 "$BASE/api/v1/stats"
 check "GET /api/v1/categories" 200 "$BASE/api/v1/categories"
 check "GET /api/v1/top" 200 "$BASE/api/v1/top?limit=1"
+check "GET /api/v1/verify-mcp is free" 400 "$BASE/api/v1/verify-mcp"
 
 echo ""
 echo "MCP"

@@ -35,9 +35,10 @@ func APIPlans() []APIPlan {
 	return []APIPlan{APIPlanFor("unlimited")}
 }
 
-// APIPlanFor returns the single public plan: $9.99/mo with a 50,000 call/month
-// soft "unlimited" cap (the cap protects against a single agent running tens of
-// thousands of crawl/search calls on one seat). Any plan name resolves to it.
+// APIPlanFor returns the single legacy-compatible priority-throughput plan:
+// $9.99/mo with 50,000 higher-ceiling calls per month. "unlimited" remains the
+// stored identifier for existing Stripe subscriptions; baseline discovery is
+// free and falls back to public safety limits rather than a payment wall.
 func APIPlanFor(name string) APIPlan {
 	return APIPlan{Name: "unlimited", MonthlyLimit: 50000, PriceCents: 999}
 }
@@ -187,6 +188,68 @@ func RecordUsageEvent(db *sql.DB, key *APIKey, anonHash, surface, method, path, 
 	if err == nil && key != nil && status < 400 {
 		_, _ = db.Exec(`UPDATE api_keys SET last_used_at=NOW() WHERE id=$1`, key.ID)
 	}
+	return err
+}
+
+// ReservePriorityUsage atomically consumes one unit from an active API key's
+// monthly priority-throughput allocation. A transaction-scoped advisory lock
+// serializes the final check and insert for each key, so concurrent requests
+// cannot overshoot the advertised allocation. Callers fall back to free safety
+// limits when reserved is false or err is non-nil; discovery is never blocked.
+func ReservePriorityUsage(db *sql.DB, key *APIKey, surface, method, path, tool string) (reservationID int64, remaining int, reserved bool, err error) {
+	if db == nil || key == nil || key.MonthlyLimit < 1 {
+		return 0, 0, false, nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return 0, 0, false, err
+	}
+	defer tx.Rollback()
+
+	// Domain-separate these locks from unrelated application advisory locks.
+	const priorityUsageLockNamespace int64 = 0x4e48530000000000
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock($1)`, priorityUsageLockNamespace+key.ID); err != nil {
+		return 0, 0, false, err
+	}
+
+	var used int
+	if err := tx.QueryRow(`
+		SELECT COALESCE(SUM(units),0)::int
+		FROM usage_events
+		WHERE api_key_id=$1
+		  AND created_at >= date_trunc('month', NOW())
+		  AND status < 400`, key.ID).Scan(&used); err != nil {
+		return 0, 0, false, err
+	}
+	if used >= key.MonthlyLimit {
+		return 0, 0, false, nil
+	}
+
+	if err := tx.QueryRow(`
+		INSERT INTO usage_events (
+			api_key_id, anonymous_hash, surface, method, path,
+			tool_name, units, status, user_agent
+		) VALUES ($1,'',$2,$3,$4,$5,1,200,'')
+		RETURNING id`, key.ID, surface, method, path, tool).Scan(&reservationID); err != nil {
+		return 0, 0, false, err
+	}
+	if _, err := tx.Exec(`UPDATE api_keys SET last_used_at=NOW() WHERE id=$1`, key.ID); err != nil {
+		return 0, 0, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, 0, false, err
+	}
+	return reservationID, key.MonthlyLimit - used - 1, true, nil
+}
+
+// ReleasePriorityUsage refunds one just-reserved unit when NHS rejects a tool
+// or cannot perform the admitted request. The exact id + key scope prevents a
+// caller from deleting any other usage record.
+func ReleasePriorityUsage(db *sql.DB, key *APIKey, reservationID int64) error {
+	if db == nil || key == nil || reservationID < 1 {
+		return nil
+	}
+	_, err := db.Exec(`DELETE FROM usage_events WHERE id=$1 AND api_key_id=$2`, reservationID, key.ID)
 	return err
 }
 

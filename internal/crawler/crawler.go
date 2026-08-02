@@ -14,15 +14,10 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
-var client = &http.Client{
-	Timeout: 15 * time.Second,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 3 {
-			return fmt.Errorf("too many redirects")
-		}
-		return nil
-	},
-}
+var (
+	client      = newPublicHTTPClient(15*time.Second, 3)
+	probeClient = newPublicHTTPClient(6*time.Second, 3)
+)
 
 // Categorize returns the category for an already-populated Site (no HTTP).
 // Exposed so the crawler CLI can re-apply categorize() rules over existing
@@ -42,6 +37,9 @@ const userAgent = "NotHumanSearch/1.0 (+https://nothumansearch.ai/about)"
 // (6s) so this doesn't slow the crawler. Exported so the MCP server can
 // expose it as a verify_mcp tool for agents.
 func ProbeMCPJSONRPC(endpoint string) bool {
+	if err := ValidatePublicURL(endpoint); err != nil {
+		return false
+	}
 	payload := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	req, err := http.NewRequest("POST", endpoint, payload)
 	if err != nil {
@@ -51,7 +49,6 @@ func ProbeMCPJSONRPC(endpoint string) bool {
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("User-Agent", userAgent)
 
-	probeClient := &http.Client{Timeout: 6 * time.Second}
 	resp, err := probeClient.Do(req)
 	if err != nil {
 		return false
@@ -98,6 +95,9 @@ func ProbeMCPJSONRPC(endpoint string) bool {
 }
 
 func fetch(rawURL string) (string, int, error) {
+	if _, err := parsePublicHTTPURL(rawURL); err != nil {
+		return "", 0, err
+	}
 	req, err := http.NewRequest("GET", rawURL, nil)
 	if err != nil {
 		return "", 0, err
@@ -124,6 +124,14 @@ func fetch(rawURL string) (string, int, error) {
 
 // CrawlSite checks a domain for all agentic readiness signals.
 func CrawlSite(siteURL string) (*models.Site, error) {
+	siteURL = strings.TrimSpace(siteURL)
+	lowerSiteURL := strings.ToLower(siteURL)
+	if !strings.HasPrefix(lowerSiteURL, "http://") && !strings.HasPrefix(lowerSiteURL, "https://") {
+		siteURL = "https://" + siteURL
+	}
+	if err := ValidatePublicURL(siteURL); err != nil {
+		return nil, fmt.Errorf("unsafe target URL: %w", err)
+	}
 	u, err := url.Parse(siteURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)

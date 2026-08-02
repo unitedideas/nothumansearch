@@ -159,7 +159,6 @@
             transition:border-color 0.2s; display:flex; gap:16px; align-items:flex-start;
         }
         .site-card:hover { border-color:var(--accent); }
-        .site-card.featured { border-left:3px solid var(--accent); }
 
         .site-favicon {
             width:32px; height:32px; border-radius:6px; flex-shrink:0;
@@ -271,7 +270,7 @@
     <div class="container">
         <div class="authbar" style="display:flex;justify-content:flex-end;gap:14px;padding:10px 0;font-size:13px;">
             {{if .AccountEmail}}<span style="color:var(--text-muted);">{{.AccountEmail}}</span><a href="/logout" style="color:var(--accent);text-decoration:none;">Log out</a>
-            {{else}}<a href="/login" style="color:var(--accent);text-decoration:none;">Log in</a><a href="/subscribe" style="color:var(--accent);text-decoration:none;">Subscribe&nbsp;$9.99/mo</a>{{end}}
+            {{else}}<a href="/login" style="color:var(--accent);text-decoration:none;">Account</a>{{end}}
         </div>
         <header>
             <div class="logo"><img src="/static/img/logo.svg" width="38" height="38" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:10px"><a href="/" style="color:inherit;text-decoration:none;">Not Human Search</a></div>
@@ -280,8 +279,8 @@
             <p class="tagline">{{.Subheading}}</p>
             {{if eq .Mode "mcp-servers"}}<p class="tagline" style="font-size:13px;">Wire any of these into your agent with <code style="color:var(--green);">claude mcp add --transport http &lt;name&gt; &lt;url&gt;/mcp</code>.</p>{{end}}
             {{else}}
-            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Can AI agents find your site?</h1>
-            <p class="tagline">Not Human Search ranks the agentic web — and scores any site for agent-readiness in seconds. The Google for AI agents: find any service, API, or tool by how well it serves non-human users.</p>
+            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Find services AI agents can actually use.</h1>
+            <p class="tagline">Search the agentic web for free. Compare services, APIs, and tools by machine-readable readiness. Organic rank is based on readiness, never payment.</p>
             {{end}}
         </header>
 
@@ -307,16 +306,6 @@
             <a class="primary-link" href="/score">Score Your Site</a>
             <a class="secondary-link" href="/guide">Improve a score</a>
         </div>
-        {{if .ShowCampaignSubscribeCTA}}
-        <div style="max-width:760px;margin:18px auto 0;padding:16px 18px;background:var(--surface);border:1px solid rgba(217,119,87,0.45);border-radius:8px;display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;text-align:left;">
-            <div style="min-width:240px;flex:1;">
-                <div style="font-size:12px;text-transform:uppercase;color:var(--accent);font-weight:700;letter-spacing:.08em;margin-bottom:6px;">API access</div>
-                <div style="color:var(--text);font-weight:700;margin-bottom:4px;">Run Not Human Search from your agents.</div>
-                <div style="color:var(--text-muted);font-size:13px;line-height:1.5;">Unlimited search includes human access plus an API key for recurring agent and MCP workflows.</div>
-            </div>
-            <a href="{{.CampaignSubscribeURL}}" style="display:inline-block;background:var(--accent);color:#0d0d0e;text-decoration:none;padding:11px 16px;border-radius:6px;font-weight:700;font-size:14px;white-space:nowrap;">Subscribe $9.99/mo</a>
-        </div>
-        {{end}}
         {{end}}
 
         {{if not .Heading}}
@@ -340,22 +329,11 @@
         </div>
         {{end}}
 
-        {{if .Locked}}
-        <div class="cta-box" style="border:1px solid var(--accent);">
-            <h3>{{.Total}} results match{{if .Query}} "{{.Query}}"{{end}} &mdash; preview</h3>
-            <p>Not Human Search is subscription-only. You're seeing the top 3. Unlock every result for <strong>$9.99/mo</strong>.</p>
-            <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-                <a href="/subscribe{{if .AccountEmail}}?email={{.AccountEmail}}{{end}}" style="background:var(--accent);color:var(--bg);padding:10px 18px;border-radius:6px;font-weight:600;text-decoration:none;">Subscribe &mdash; $9.99/mo</a>
-                {{if not .AccountEmail}}<a href="/login" style="background:var(--bg);color:var(--accent);border:1px solid rgba(217,119,87,0.35);padding:10px 18px;border-radius:6px;font-weight:600;text-decoration:none;">Already a member? Log in</a>{{end}}
-            </div>
-        </div>
-        {{end}}
-
         {{if .Sites}}
         <div class="results-header">{{.Total}} {{if .Heading}}entries in this directory{{else}}sites found{{if .Query}} for "{{.Query}}"{{end}}{{end}}</div>
 
         {{range .Sites}}
-        <div class="site-card {{if .IsFeatured}}featured{{end}}">
+		<div class="site-card">
             {{if .HasFavicon}}
             <img class="site-favicon" src="{{if .FaviconURL}}{{.FaviconURL}}{{else}}https://{{.Domain}}/favicon.ico{{end}}" alt="" loading="lazy"
                  onerror="this.outerHTML='<div class=\u0022site-favicon-fallback\u0022>{{initial .Domain}}</div>';">
@@ -363,8 +341,7 @@
             <div class="site-favicon-fallback">{{initial .Domain}}</div>
             {{end}}
             <div class="site-info">
-                <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
-                {{if .IsFeatured}} <span style="color:var(--accent);font-size:11px;font-weight:600;">FEATURED</span>{{end}}
+				<a href="/site/{{.Domain}}{{if $.SearchID}}?search_id={{$.SearchID}}{{end}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
                 <div class="site-domain">{{.Domain}}</div>
                 {{if .Description}}<div class="site-desc">{{displayText .Description}}</div>{{end}}
                 <div class="site-badges">
