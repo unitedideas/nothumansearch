@@ -1612,7 +1612,7 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 	})
 
 	if err := RunMigrations(repositoryMigrations, revision); err != nil {
-		t.Fatalf("apply exact 028 migration: %v", err)
+		t.Fatalf("apply exact 029 migration: %v", err)
 	}
 
 	t.Run("concurrent exact replay", func(t *testing.T) {
@@ -1877,6 +1877,25 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 	if got028SHA != want028SHA || len(got028SchemaSHA) != 64 || got028Revision != revision {
 		t.Fatalf("028 receipt sha=%q schema_sha_length=%d revision=%q", got028SHA, len(got028SchemaSHA), got028Revision)
 	}
+	migration029Data, err := os.ReadFile(filepath.Join(repositoryMigrations, "029_provider_settlement_receipts.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest029 := sha256.Sum256(migration029Data)
+	want029SHA := hex.EncodeToString(digest029[:])
+	var got029SHA, got029SchemaSHA, got029Revision string
+	var applied029At time.Time
+	if err := DB.QueryRow(`
+		SELECT sha256, schema_sha256, applied_by_commit, applied_at
+		FROM nhs_schema_migrations
+		WHERE name = '029_provider_settlement_receipts.sql'`).Scan(
+		&got029SHA, &got029SchemaSHA, &got029Revision, &applied029At,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if got029SHA != want029SHA || len(got029SchemaSHA) != 64 || got029Revision != revision {
+		t.Fatalf("029 receipt sha=%q schema_sha_length=%d revision=%q", got029SHA, len(got029SchemaSHA), got029Revision)
+	}
 	if err := RunMigrations(repositoryMigrations, "development"); err != nil {
 		t.Fatalf("exact receipt replay should not require a new release identity: %v", err)
 	}
@@ -1949,6 +1968,13 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 	}
 	if !replayed028At.Equal(applied028At) {
 		t.Fatalf("exact replay changed 028 applied_at from %s to %s", applied028At, replayed028At)
+	}
+	var replayed029At time.Time
+	if err := DB.QueryRow(`SELECT applied_at FROM nhs_schema_migrations WHERE name = '029_provider_settlement_receipts.sql'`).Scan(&replayed029At); err != nil {
+		t.Fatal(err)
+	}
+	if !replayed029At.Equal(applied029At) {
+		t.Fatalf("exact replay changed 029 applied_at from %s to %s", applied029At, replayed029At)
 	}
 
 	t.Run("checksum mismatch", func(t *testing.T) {
@@ -2059,10 +2085,22 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 		}
 	})
 
+	t.Run("029 checksum mismatch", func(t *testing.T) {
+		changed := copyMigrationFixture(t, repositoryMigrations, func(name string, data []byte) ([]byte, bool) {
+			if name == "029_provider_settlement_receipts.sql" {
+				data = append(data, []byte("\n-- provider settlement receipt checksum drift fixture\n")...)
+			}
+			return data, true
+		})
+		if err := RunMigrations(changed, revision); err == nil || !strings.Contains(err.Error(), "checksum drift") {
+			t.Fatalf("029 checksum mismatch error = %v", err)
+		}
+	})
+
 	t.Run("database ahead", func(t *testing.T) {
 		if _, err := DB.Exec(`
 			INSERT INTO nhs_schema_migrations (name, sha256, schema_sha256, applied_by_commit)
-			VALUES ('029_future.sql', $1, $2, $3)`, strings.Repeat("f", 64), strings.Repeat("e", 64), revision); err != nil {
+			VALUES ('030_future.sql', $1, $2, $3)`, strings.Repeat("f", 64), strings.Repeat("e", 64), revision); err != nil {
 			t.Fatal(err)
 		}
 		if err := RunMigrations(repositoryMigrations, revision); err == nil || !strings.Contains(err.Error(), "database_ahead_of_binary") {
