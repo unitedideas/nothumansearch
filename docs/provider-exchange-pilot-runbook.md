@@ -114,6 +114,14 @@ any live commercial threshold has been met.
       changed-path secret scan pass on the exact candidate revision. The
       preparer must observe explicit pass events—not a package-level `PASS`
       after a skip—for both real-PostgreSQL release tests.
+- [ ] For local diagnostic coverage without a provisioned DSN, an operator may
+      explicitly run `NHS_EMBEDDED_POSTGRES=1 go test -count=1 -run
+      'TestProtectedMigrationLedgerPostgres|TestProviderExchangePostgresReleaseRegressions'
+      ./internal/database ./internal/models`. This starts temporary
+      PostgreSQL 17 fixtures and leaves ordinary test runs unchanged. It is not
+      an exact-archive release receipt and does not replace the two isolated
+      PostgreSQL DSNs, recovery smoke, snapshot drill, or protected cutover
+      requirements above.
 - [ ] After exact verification and separate owner authorization, adopt only the
       verified candidate into its durable namespaced canonical ref with
       `tools/adopt-provider-exchange-candidate.sh CANDIDATE_REPOSITORY COMMIT TREE PARENT EXACT_RELEASE_MANIFEST --confirm-owner-authorized`.

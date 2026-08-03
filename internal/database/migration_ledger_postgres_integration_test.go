@@ -16,14 +16,15 @@ import (
 
 	"github.com/lib/pq"
 	"github.com/unitedideas/nothumansearch/internal/models"
+	"github.com/unitedideas/nothumansearch/internal/testpostgres"
 )
 
 // TestProtectedMigrationLedgerPostgres is opt-in because it owns and mutates
 // the isolated database named by NHS_MIGRATION_TEST_POSTGRES_DSN.
 func TestProtectedMigrationLedgerPostgres(t *testing.T) {
-	dsn := os.Getenv("NHS_MIGRATION_TEST_POSTGRES_DSN")
+	dsn := testpostgres.DSN(t, "NHS_MIGRATION_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("set NHS_MIGRATION_TEST_POSTGRES_DSN to an isolated disposable PostgreSQL database")
+		t.Skip("set NHS_MIGRATION_TEST_POSTGRES_DSN to an isolated disposable PostgreSQL database or set NHS_EMBEDDED_POSTGRES=1")
 	}
 	t.Setenv("DATABASE_URL", dsn)
 	allowPartialProtectedMigrationsForTests = true
@@ -2116,7 +2117,7 @@ func TestProtectedMigrationLedgerPostgres(t *testing.T) {
 			DISABLE RULE nhs_schema_migrations_no_delete`); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(`DELETE FROM nhs_schema_migrations WHERE name = '029_future.sql'`); err != nil {
+		if _, err := tx.Exec(`DELETE FROM nhs_schema_migrations WHERE name = '030_future.sql'`); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := tx.Exec(`

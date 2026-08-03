@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -23,6 +22,7 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/handlers"
 	"github.com/unitedideas/nothumansearch/internal/models"
 	"github.com/unitedideas/nothumansearch/internal/providerexchange"
+	"github.com/unitedideas/nothumansearch/internal/testpostgres"
 )
 
 var postgresProviderPilotEpochID string
@@ -33,9 +33,9 @@ var postgresCommercialProviderFixtures map[string]*postgresCommercialProvider
 // exercises transaction and PostgreSQL locking behavior that cannot be proved
 // by the source-contract unit tests.
 func TestProviderExchangePostgresReleaseRegressions(t *testing.T) {
-	dsn := os.Getenv("NHS_TEST_POSTGRES_DSN")
+	dsn := testpostgres.DSN(t, "NHS_TEST_POSTGRES_DSN")
 	if dsn == "" {
-		t.Skip("set NHS_TEST_POSTGRES_DSN to an isolated disposable PostgreSQL database")
+		t.Skip("set NHS_TEST_POSTGRES_DSN to an isolated disposable PostgreSQL database or set NHS_EMBEDDED_POSTGRES=1")
 	}
 	t.Setenv("DATABASE_URL", dsn)
 	if err := database.Connect(); err != nil {
