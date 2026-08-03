@@ -207,16 +207,25 @@ func (a *AuthService) renderLogin(w http.ResponseWriter, errMsg, sentTo string) 
 func (a *AuthService) SubscribePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	prefill := html.EscapeString(strings.TrimSpace(r.URL.Query().Get("email")))
+	var attributionFields strings.Builder
+	var payloadAttribution strings.Builder
+	for _, key := range []string{"qc", "utm_source", "utm_medium", "utm_campaign"} {
+		if value := strings.TrimSpace(r.URL.Query().Get(key)); value != "" {
+			fmt.Fprintf(&attributionFields, `<input type="hidden" id="%s" value="%s">`, html.EscapeString(key), html.EscapeString(value))
+			fmt.Fprintf(&payloadAttribution, `,%q:document.getElementById(%q).value`, key, key)
+		}
+	}
 	inner := `<h1>Priority API throughput — $9.99/mo</h1>` +
 		`<p class="muted">Search and organic results are already free. This optional key provides 50,000 priority-throughput REST/MCP calls per month and higher hourly safety ceilings; requests fall back to the free tier after the allocation.</p>` +
 		`<form id="sub"><input type="email" id="email" name="email" placeholder="you@example.com" value="` + prefill + `" required autofocus>` +
+		attributionFields.String() +
 		`<button type="submit">Subscribe — $9.99/mo</button></form>` +
 		`<p class="muted" id="msg"></p>` +
 		`<p class="muted">Already a member? <a href="/login">Sign in</a>.</p>` +
 		`<script>document.getElementById('sub').addEventListener('submit',function(e){e.preventDefault();` +
 		`var b=this.querySelector('button');b.disabled=true;b.textContent='Redirecting…';` +
 		`fetch('/api/v1/api-keys/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},` +
-		`body:JSON.stringify({email:document.getElementById('email').value,plan:'unlimited'})})` +
+		`body:JSON.stringify({email:document.getElementById('email').value,plan:'unlimited'` + payloadAttribution.String() + `})})` +
 		`.then(function(r){return r.json()}).then(function(d){if(d.checkout_url){window.location=d.checkout_url}` +
 		`else{document.getElementById('msg').textContent=d.error||'Could not start checkout.';b.disabled=false;b.textContent='Subscribe — $9.99/mo';}})` +
 		`.catch(function(){document.getElementById('msg').textContent='Network error.';b.disabled=false;b.textContent='Subscribe — $9.99/mo';});});</script>`

@@ -6,11 +6,14 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +26,12 @@ const (
 	protectedMigrationStart = "019_"
 	migrationLockClass      = 0x4e4853 // "NHS"
 	migrationLockID         = 1
+)
+
+var (
+	migrationOverallTimeout              = 2 * time.Minute
+	migrationTransactionLockTimeout      = 15 * time.Second
+	migrationTransactionStatementTimeout = 90 * time.Second
 )
 
 const migrationReceiptTableSQL = `
@@ -51,19 +60,71 @@ type migrationRule struct {
 	name     string
 }
 
+type migrationFootprintKind string
+
+const (
+	migrationFootprintColumn   migrationFootprintKind = "column"
+	migrationFootprintTrigger  migrationFootprintKind = "trigger"
+	migrationFootprintFunction migrationFootprintKind = "function"
+)
+
+// migrationFootprintProbe names a migration-specific catalog marker that is
+// not itself part of the cumulative relation/rule completeness contract. These
+// probes catch unreceipted ALTERs and behavior attached to inherited tables.
+// They are intentionally not carried into later migration specs: once this
+// migration has a receipt, the cumulative schema fingerprint owns them.
+type migrationFootprintProbe struct {
+	kind     migrationFootprintKind
+	relation string
+	name     string
+}
+
 type protectedMigrationSpec struct {
-	relations              []migrationRelation
-	rules                  []migrationRule
+	relations []migrationRelation
+	rules     []migrationRule
+	// fingerprintTables adds inherited behavior-bearing tables without
+	// pretending those legacy relations were created by this migration. It is
+	// used when a protected ALTER/trigger migration needs the full table
+	// definition in its latest schema receipt.
+	fingerprintTables []string
+	// fingerprintFunctions carries standalone behavior-bearing routines whose
+	// definitions are not embedded in a table trigger. Entries are canonical
+	// regprocedure identities such as function_name(uuid,text,uuid).
+	fingerprintFunctions   []string
 	allObjectsAreFootprint bool
 	footprintRelations     map[string]bool
 	footprintRules         map[string]bool
+	footprintFunctions     map[string]bool
+	footprintProbes        []migrationFootprintProbe
 }
+
+// ProtectedMigrationPreflight runs inside the exact protected-migration
+// transaction only when that migration has no receipt and is about to apply.
+// It may acquire migration-specific locks and must not commit independently.
+type ProtectedMigrationPreflight func(context.Context, *sql.Tx, string) error
 
 // Every protected migration must declare the PostgreSQL objects that prove its
 // complete application. A new protected migration without a contract fails
 // before any older migration is replayed. This prevents an unrecorded partial
 // schema from being adopted merely because its DDL uses IF NOT EXISTS.
 var protectedMigrationSpecs = buildProtectedMigrationSpecs()
+
+var requiredProtectedMigrationNames = []string{
+	"019_provider_exchange.sql",
+	"020_action_interest_receipts.sql",
+	"021_provider_capacity_reservations.sql",
+	"022_provider_commercial_proof.sql",
+	"023_provider_controlled_intent_disclosure.sql",
+	"024_provider_pilot_boundary.sql",
+	"025_stage1_fact_integrity.sql",
+	"026_provider_pilot_proof_integrity.sql",
+	"027_provider_pilot_review_evidence.sql",
+	"028_provider_commercial_proof_manifest.sql",
+}
+
+// Historical migration tests deliberately replay prefix releases one at a
+// time. Production code has no setter for this test-only in-process escape.
+var allowPartialProtectedMigrationsForTests bool
 
 func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 	providerExchange := protectedMigrationSpec{
@@ -165,26 +226,357 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		},
 	}
 
+	commercialProof := protectedMigrationSpec{
+		// 022 keeps the cumulative protected contract and adds only immutable
+		// provider/company acceptance plus owner-verified commitment evidence.
+		// ALTERed columns and behavior attached to inherited tables need explicit
+		// ambiguity probes in addition to the cumulative schema fingerprint.
+		relations: append(append([]migrationRelation(nil), capacityReservations.relations...),
+			migrationRelation{name: "provider_commercial_acceptance_events", relkind: "r"},
+			migrationRelation{name: "idx_provider_commercial_acceptance_claim_created", relkind: "i", parent: "provider_commercial_acceptance_events"},
+			migrationRelation{name: "idx_provider_commercial_acceptance_offer_created", relkind: "i", parent: "provider_commercial_acceptance_events"},
+			migrationRelation{name: "idx_provider_commercial_acceptance_one_renewal", relkind: "i", parent: "provider_commercial_acceptance_events"},
+			migrationRelation{name: "provider_pilot_companies", relkind: "r"},
+			migrationRelation{name: "idx_provider_pilot_companies_claim", relkind: "i", parent: "provider_pilot_companies"},
+			migrationRelation{name: "provider_commercial_commitment_events", relkind: "r"},
+			migrationRelation{name: "idx_provider_commercial_commitment_company_created", relkind: "i", parent: "provider_commercial_commitment_events"},
+			migrationRelation{name: "idx_provider_commercial_commitment_offer_created", relkind: "i", parent: "provider_commercial_commitment_events"},
+			migrationRelation{name: "idx_provider_commercial_commitment_related", relkind: "i", parent: "provider_commercial_commitment_events"},
+			migrationRelation{name: "idx_provider_commercial_one_terms_renewal", relkind: "i", parent: "provider_commercial_commitment_events"},
+			migrationRelation{name: "provider_action_handoff_receipts", relkind: "r"},
+			migrationRelation{name: "idx_provider_action_handoff_offer_observed", relkind: "i", parent: "provider_action_handoff_receipts"},
+		),
+		rules: append(append([]migrationRule(nil), capacityReservations.rules...),
+			migrationRule{relation: "provider_commercial_acceptance_events", name: "provider_commercial_acceptance_no_update"},
+			migrationRule{relation: "provider_commercial_acceptance_events", name: "provider_commercial_acceptance_no_delete"},
+			migrationRule{relation: "provider_pilot_companies", name: "provider_pilot_companies_no_update"},
+			migrationRule{relation: "provider_pilot_companies", name: "provider_pilot_companies_no_delete"},
+			migrationRule{relation: "provider_commercial_commitment_events", name: "provider_commercial_commitment_no_update"},
+			migrationRule{relation: "provider_commercial_commitment_events", name: "provider_commercial_commitment_no_delete"},
+			migrationRule{relation: "provider_action_handoff_receipts", name: "provider_action_handoff_no_update"},
+			migrationRule{relation: "provider_action_handoff_receipts", name: "provider_action_handoff_no_delete"},
+		),
+		footprintRelations: map[string]bool{
+			"provider_commercial_acceptance_events":              true,
+			"idx_provider_commercial_acceptance_claim_created":   true,
+			"idx_provider_commercial_acceptance_offer_created":   true,
+			"idx_provider_commercial_acceptance_one_renewal":     true,
+			"provider_pilot_companies":                           true,
+			"idx_provider_pilot_companies_claim":                 true,
+			"provider_commercial_commitment_events":              true,
+			"idx_provider_commercial_commitment_company_created": true,
+			"idx_provider_commercial_commitment_offer_created":   true,
+			"idx_provider_commercial_commitment_related":         true,
+			"idx_provider_commercial_one_terms_renewal":          true,
+			"provider_action_handoff_receipts":                   true,
+			"idx_provider_action_handoff_offer_observed":         true,
+		},
+		footprintRules: map[string]bool{
+			"provider_commercial_acceptance_no_update": true,
+			"provider_commercial_acceptance_no_delete": true,
+			"provider_pilot_companies_no_update":       true,
+			"provider_pilot_companies_no_delete":       true,
+			"provider_commercial_commitment_no_update": true,
+			"provider_commercial_commitment_no_delete": true,
+			"provider_action_handoff_no_update":        true,
+			"provider_action_handoff_no_delete":        true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintColumn, relation: "provider_offers", name: "commercial_terms_contract_version"},
+			{kind: migrationFootprintColumn, relation: "provider_offers", name: "commercial_terms_sha256"},
+			{kind: migrationFootprintColumn, relation: "provider_offers_returned", name: "commercial_terms_contract_version_snapshot"},
+			{kind: migrationFootprintColumn, relation: "provider_offers_returned", name: "commercial_terms_sha256_snapshot"},
+			{kind: migrationFootprintColumn, relation: "action_tickets", name: "commercial_terms_contract_version_snapshot"},
+			{kind: migrationFootprintColumn, relation: "action_tickets", name: "commercial_terms_sha256_snapshot"},
+			{kind: migrationFootprintTrigger, relation: "provider_offers", name: "provider_offer_commercial_immutability_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_offer_commercial_immutability"},
+			{kind: migrationFootprintTrigger, relation: "provider_action_handoff_receipts", name: "provider_action_handoff_receipt_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_action_handoff_receipt"},
+			{kind: migrationFootprintTrigger, relation: "action_tickets", name: "action_ticket_observed_handoff_status_enforced"},
+			{kind: migrationFootprintTrigger, relation: "action_tickets", name: "action_ticket_observed_handoff_insert_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_action_ticket_observed_handoff_status"},
+		},
+	}
+
+	controlledIntentDisclosure := protectedMigrationSpec{
+		// 023 adds an opt-in disclosure pair to the existing append-only handoff
+		// receipt and makes the separately disclosed ticket bundle immutable except
+		// for one-way redaction. The cumulative 022 contract remains intact; altered
+		// columns and behavior on inherited tables are explicit ambiguity probes.
+		relations:          append([]migrationRelation(nil), commercialProof.relations...),
+		rules:              append([]migrationRule(nil), commercialProof.rules...),
+		footprintRelations: map[string]bool{},
+		footprintRules:     map[string]bool{},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintColumn, relation: "provider_action_handoff_receipts", name: "principal_controlled_intent_disclosure_consent"},
+			{kind: migrationFootprintColumn, relation: "provider_action_handoff_receipts", name: "controlled_intent_disclosure_consent_version"},
+			{kind: migrationFootprintTrigger, relation: "action_tickets", name: "action_ticket_controlled_intent_immutability_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_action_ticket_controlled_intent_immutability"},
+		},
+	}
+
+	providerPilotBoundary := protectedMigrationSpec{
+		// 024 turns the documentary Stage 2 cohort into a database-enforced
+		// owner-authorized epoch. The latest protected fingerprint remains
+		// cumulative; only the new pilot tables, indexes, rules, and transition
+		// behavior count as this migration's ambiguity footprint.
+		relations: append(append([]migrationRelation(nil), controlledIntentDisclosure.relations...),
+			migrationRelation{name: "provider_pilot_epochs", relkind: "r"},
+			migrationRelation{name: "idx_provider_pilot_one_open_epoch", relkind: "i", parent: "provider_pilot_epochs"},
+			migrationRelation{name: "provider_pilot_enrollments", relkind: "r"},
+			migrationRelation{name: "idx_provider_pilot_enrollments_claim", relkind: "i", parent: "provider_pilot_enrollments"},
+			migrationRelation{name: "provider_pilot_epoch_events", relkind: "r"},
+			migrationRelation{name: "idx_provider_pilot_epoch_singleton_events", relkind: "i", parent: "provider_pilot_epoch_events"},
+			migrationRelation{name: "idx_provider_pilot_epoch_enrollment_events", relkind: "i", parent: "provider_pilot_epoch_events"},
+			migrationRelation{name: "idx_action_tickets_pilot_epoch_claim", relkind: "i", parent: "action_tickets"},
+		),
+		rules: append(append([]migrationRule(nil), controlledIntentDisclosure.rules...),
+			migrationRule{relation: "provider_pilot_enrollments", name: "provider_pilot_enrollments_no_update"},
+			migrationRule{relation: "provider_pilot_enrollments", name: "provider_pilot_enrollments_no_delete"},
+			migrationRule{relation: "provider_pilot_epoch_events", name: "provider_pilot_epoch_events_no_update"},
+			migrationRule{relation: "provider_pilot_epoch_events", name: "provider_pilot_epoch_events_no_delete"},
+			migrationRule{relation: "provider_pilot_epochs", name: "provider_pilot_epochs_no_delete"},
+		),
+		fingerprintFunctions: []string{
+			"provider_pilot_stage1_eligibility_snapshot_sha256(text,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,text,timestamptz)",
+			"provider_pilot_enrollment_eligibility_is_current(uuid,uuid)",
+		},
+		footprintRelations: map[string]bool{
+			"provider_pilot_epochs":                      true,
+			"idx_provider_pilot_one_open_epoch":          true,
+			"provider_pilot_enrollments":                 true,
+			"idx_provider_pilot_enrollments_claim":       true,
+			"provider_pilot_epoch_events":                true,
+			"idx_provider_pilot_epoch_singleton_events":  true,
+			"idx_provider_pilot_epoch_enrollment_events": true,
+			"idx_action_tickets_pilot_epoch_claim":       true,
+		},
+		footprintRules: map[string]bool{
+			"provider_pilot_enrollments_no_update":  true,
+			"provider_pilot_enrollments_no_delete":  true,
+			"provider_pilot_epoch_events_no_update": true,
+			"provider_pilot_epoch_events_no_delete": true,
+			"provider_pilot_epochs_no_delete":       true,
+		},
+		footprintFunctions: map[string]bool{
+			"provider_pilot_stage1_eligibility_snapshot_sha256(text,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,text,timestamptz)": true,
+			"provider_pilot_enrollment_eligibility_is_current(uuid,uuid)":                                                               true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintColumn, relation: "provider_offers", name: "provider_pilot_epoch_id"},
+			{kind: migrationFootprintColumn, relation: "provider_offers_returned", name: "provider_pilot_epoch_id_snapshot"},
+			{kind: migrationFootprintColumn, relation: "action_tickets", name: "provider_pilot_epoch_id"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "provider_pilot_epoch_insert_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_epoch_insert"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_enrollments", name: "provider_pilot_enrollment_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_enrollment"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epoch_events", name: "provider_pilot_epoch_event_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_epoch_event"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "provider_pilot_epoch_transition_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_epoch_transition"},
+			{kind: migrationFootprintTrigger, relation: "provider_offers", name: "provider_offer_pilot_binding_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_offer_binding"},
+			{kind: migrationFootprintTrigger, relation: "provider_offers_returned", name: "provider_pilot_returned_offer_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_returned_offer"},
+			{kind: migrationFootprintTrigger, relation: "action_tickets", name: "action_ticket_pilot_insert_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_action_ticket_pilot_insert"},
+			{kind: migrationFootprintTrigger, relation: "action_tickets", name: "action_ticket_pilot_binding_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_action_ticket_pilot_binding"},
+			{kind: migrationFootprintTrigger, relation: "provider_action_handoff_receipts", name: "zz_provider_action_handoff_pilot_boundary_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_handoff_insert"},
+		},
+	}
+
+	stage1FactIntegrity := protectedMigrationSpec{
+		// 025 makes the protected migration ledger and every fact counted by the
+		// Stage 1 release gate immutable, with database-owned observation clocks.
+		// The explicit inherited-table fingerprint set brings their complete
+		// definitions (including the new timestamp/update triggers) into the
+		// latest receipt without treating legacy tables as 025-created objects.
+		relations: append([]migrationRelation(nil), providerPilotBoundary.relations...),
+		rules: append(append([]migrationRule(nil), providerPilotBoundary.rules...),
+			migrationRule{relation: "nhs_schema_migrations", name: "nhs_schema_migrations_no_update"},
+			migrationRule{relation: "nhs_schema_migrations", name: "nhs_schema_migrations_no_delete"},
+		),
+		fingerprintTables: []string{
+			"nhs_schema_migrations",
+			"search_receipts",
+			"organic_results_returned",
+			"result_selections",
+			"action_interest_receipts",
+		},
+		fingerprintFunctions: append([]string(nil), providerPilotBoundary.fingerprintFunctions...),
+		footprintRelations:   map[string]bool{},
+		footprintRules: map[string]bool{
+			"nhs_schema_migrations_no_update": true,
+			"nhs_schema_migrations_no_delete": true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintColumn, relation: "search_receipts", name: "stage1_integrity_generation"},
+			{kind: migrationFootprintColumn, relation: "organic_results_returned", name: "stage1_integrity_generation"},
+			{kind: migrationFootprintColumn, relation: "result_selections", name: "stage1_integrity_generation"},
+			{kind: migrationFootprintColumn, relation: "action_interest_receipts", name: "stage1_integrity_generation"},
+			{kind: migrationFootprintFunction, name: "enforce_search_receipt_stage1_immutability"},
+			{kind: migrationFootprintFunction, name: "enforce_organic_result_stage1_immutability"},
+			{kind: migrationFootprintFunction, name: "enforce_result_selection_stage1_immutability"},
+			{kind: migrationFootprintFunction, name: "own_search_receipt_created_at"},
+			{kind: migrationFootprintFunction, name: "own_organic_result_returned_at"},
+			{kind: migrationFootprintFunction, name: "own_result_selection_selected_at"},
+			{kind: migrationFootprintFunction, name: "own_action_interest_created_at"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "aa_provider_pilot_stage1_epoch_anchor_locked"},
+			{kind: migrationFootprintFunction, name: "lock_provider_pilot_stage1_epoch_anchor"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "ab_provider_pilot_stage1_generation_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_stage1_generation"},
+		},
+	}
+
+	providerPilotProofIntegrity := protectedMigrationSpec{
+		// 026 adds no new relation. It strengthens outcome receipts and pilot
+		// lifecycle rows inherited through 025, so the complete cumulative
+		// relation/rule contract and inherited-table fingerprints must carry
+		// forward while only its new functions/triggers form the ambiguity
+		// footprint.
+		relations:         append([]migrationRelation(nil), stage1FactIntegrity.relations...),
+		rules:             append([]migrationRule(nil), stage1FactIntegrity.rules...),
+		fingerprintTables: append([]string(nil), stage1FactIntegrity.fingerprintTables...),
+		fingerprintFunctions: append(
+			[]string(nil), stage1FactIntegrity.fingerprintFunctions...,
+		),
+		footprintRelations: map[string]bool{},
+		footprintRules:     map[string]bool{},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_outcome_receipt"},
+			{kind: migrationFootprintTrigger, relation: "outcome_receipts", name: "provider_pilot_outcome_receipt_enforced"},
+			{kind: migrationFootprintFunction, name: "require_provider_pilot_lifecycle_event"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "provider_pilot_epoch_created_event_required"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_enrollments", name: "provider_pilot_enrollment_event_required"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "provider_pilot_epoch_transition_event_required"},
+		},
+	}
+
+	providerPilotReviewEvidence := protectedMigrationSpec{
+		// 027 adds append-only owner review evidence. The generic review subject
+		// is resolved and hash-checked by a table trigger, while the standalone
+		// canonical snapshot routine is carried explicitly in every later schema
+		// fingerprint so changing its body cannot preserve a green receipt.
+		relations: append(append([]migrationRelation(nil), providerPilotProofIntegrity.relations...),
+			migrationRelation{name: "provider_pilot_review_events", relkind: "r"},
+			migrationRelation{name: "idx_provider_pilot_reviews_pilot_type", relkind: "i", parent: "provider_pilot_review_events"},
+			migrationRelation{name: "idx_provider_pilot_reviews_claim_type", relkind: "i", parent: "provider_pilot_review_events"},
+		),
+		rules: append(append([]migrationRule(nil), providerPilotProofIntegrity.rules...),
+			migrationRule{relation: "provider_pilot_review_events", name: "provider_pilot_review_events_no_update"},
+			migrationRule{relation: "provider_pilot_review_events", name: "provider_pilot_review_events_no_delete"},
+		),
+		fingerprintTables: append([]string(nil), providerPilotProofIntegrity.fingerprintTables...),
+		fingerprintFunctions: append(
+			append([]string(nil), providerPilotProofIntegrity.fingerprintFunctions...),
+			"provider_pilot_review_snapshot_sha256(uuid,text,uuid)",
+		),
+		footprintRelations: map[string]bool{
+			"provider_pilot_review_events":          true,
+			"idx_provider_pilot_reviews_pilot_type": true,
+			"idx_provider_pilot_reviews_claim_type": true,
+		},
+		footprintRules: map[string]bool{
+			"provider_pilot_review_events_no_update": true,
+			"provider_pilot_review_events_no_delete": true,
+		},
+		footprintFunctions: map[string]bool{
+			"provider_pilot_review_snapshot_sha256(uuid,text,uuid)": true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_review_events", name: "provider_pilot_review_event_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_review_event"},
+			{kind: migrationFootprintTrigger, relation: "provider_pilot_epochs", name: "provider_pilot_activation_provider_reviews"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_pilot_epoch_provider_reviews"},
+			{kind: migrationFootprintTrigger, relation: "provider_offers", name: "provider_offer_activation_review"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_offer_pre_activation_review"},
+			{kind: migrationFootprintTrigger, relation: "provider_action_handoff_receipts", name: "provider_handoff_ticket_review"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_handoff_ticket_review"},
+		},
+	}
+
+	providerCommercialProofManifest := protectedMigrationSpec{
+		// 028 adds one append-only, aggregate signed proof per exact closed
+		// pilot. The table trigger owns JSON/relational/time/hash bindings;
+		// production signing-key retention separately re-verifies the HMAC.
+		relations: append(append([]migrationRelation(nil), providerPilotReviewEvidence.relations...),
+			migrationRelation{name: "provider_commercial_proof_manifests", relkind: "r"},
+			migrationRelation{name: "idx_provider_proof_manifests_issued", relkind: "i", parent: "provider_commercial_proof_manifests"},
+			migrationRelation{name: "idx_provider_proof_manifests_key", relkind: "i", parent: "provider_commercial_proof_manifests"},
+		),
+		rules: append(append([]migrationRule(nil), providerPilotReviewEvidence.rules...),
+			migrationRule{relation: "provider_commercial_proof_manifests", name: "provider_commercial_proof_manifests_no_update"},
+			migrationRule{relation: "provider_commercial_proof_manifests", name: "provider_commercial_proof_manifests_no_delete"},
+		),
+		fingerprintTables:    append([]string(nil), providerPilotReviewEvidence.fingerprintTables...),
+		fingerprintFunctions: append([]string(nil), providerPilotReviewEvidence.fingerprintFunctions...),
+		footprintRelations: map[string]bool{
+			"provider_commercial_proof_manifests": true,
+			"idx_provider_proof_manifests_issued": true,
+			"idx_provider_proof_manifests_key":    true,
+		},
+		footprintRules: map[string]bool{
+			"provider_commercial_proof_manifests_no_update": true,
+			"provider_commercial_proof_manifests_no_delete": true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintTrigger, relation: "provider_commercial_proof_manifests", name: "provider_commercial_proof_manifest_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_commercial_proof_manifest"},
+		},
+	}
+
 	return map[string]protectedMigrationSpec{
-		"019_provider_exchange.sql":              providerExchange,
-		"020_action_interest_receipts.sql":       actionInterests,
-		"021_provider_capacity_reservations.sql": capacityReservations,
+		"019_provider_exchange.sql":                     providerExchange,
+		"020_action_interest_receipts.sql":              actionInterests,
+		"021_provider_capacity_reservations.sql":        capacityReservations,
+		"022_provider_commercial_proof.sql":             commercialProof,
+		"023_provider_controlled_intent_disclosure.sql": controlledIntentDisclosure,
+		"024_provider_pilot_boundary.sql":               providerPilotBoundary,
+		"025_stage1_fact_integrity.sql":                 stage1FactIntegrity,
+		"026_provider_pilot_proof_integrity.sql":        providerPilotProofIntegrity,
+		"027_provider_pilot_review_evidence.sql":        providerPilotReviewEvidence,
+		"028_provider_commercial_proof_manifest.sql":    providerCommercialProofManifest,
 	}
 }
 
 func Connect() error {
+	return ConnectWithReleaseRevision("development")
+}
+
+// ConnectWithReleaseRevision tags every pooled server connection with the
+// exact compiled release. Cutover preflight can therefore distinguish old
+// application sessions from the candidate without exposing the database DSN.
+func ConnectWithReleaseRevision(releaseRevision string) error {
+	return ConnectWithReleaseRevisionContext(context.Background(), releaseRevision)
+}
+
+// ConnectWithReleaseRevisionContext applies the caller's deadline to the
+// initial database handshake. Cutover preflight must not outlive its advertised
+// bound because lib/pq's default background ping may otherwise stall on a
+// broken route or unavailable database.
+func ConnectWithReleaseRevisionContext(ctx context.Context, releaseRevision string) error {
+	if ctx == nil {
+		return fmt.Errorf("database connection context is unavailable")
+	}
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		return fmt.Errorf("DATABASE_URL not set")
 	}
+	taggedDSN, err := databaseDSNWithReleaseApplicationName(dsn, releaseRevision)
+	if err != nil {
+		return err
+	}
 
-	var err error
-	DB, err = sql.Open("postgres", dsn)
+	DB, err = sql.Open("postgres", taggedDSN)
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
 
-	if err := DB.Ping(); err != nil {
+	if err := DB.PingContext(ctx); err != nil {
+		_ = DB.Close()
+		DB = nil
 		return fmt.Errorf("ping: %w", err)
 	}
 
@@ -193,7 +585,32 @@ func Connect() error {
 	return nil
 }
 
+func databaseDSNWithReleaseApplicationName(dsn, releaseRevision string) (string, error) {
+	revision := strings.ToLower(strings.TrimSpace(releaseRevision))
+	if revision != "development" {
+		if _, err := protectedMigrationRevision(revision); err != nil {
+			return "", fmt.Errorf("database application identity: %w", err)
+		}
+	}
+	applicationName := "nhs-server:" + revision
+	parsed, err := url.Parse(dsn)
+	if err == nil && (parsed.Scheme == "postgres" || parsed.Scheme == "postgresql") {
+		query := parsed.Query()
+		query.Set("application_name", applicationName)
+		parsed.RawQuery = query.Encode()
+		return parsed.String(), nil
+	}
+	// applicationName is constructed only from a fixed prefix and a validated
+	// hexadecimal revision (or the fixed development label), so quoting this
+	// lib/pq keyword parameter cannot introduce DSN syntax.
+	return strings.TrimSpace(dsn) + " application_name='" + applicationName + "'", nil
+}
+
 func RunMigrations(dir, releaseRevision string) error {
+	return RunMigrationsWithPreflight(dir, releaseRevision, nil)
+}
+
+func RunMigrationsWithPreflight(dir, releaseRevision string, preflight ProtectedMigrationPreflight) error {
 	if DB == nil {
 		return fmt.Errorf("database is not connected")
 	}
@@ -202,7 +619,8 @@ func RunMigrations(dir, releaseRevision string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx, cancelMigration := context.WithTimeout(context.Background(), migrationOverallTimeout)
+	defer cancelMigration()
 	conn, err := DB.Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("reserve migration connection: %w", err)
@@ -232,7 +650,7 @@ func RunMigrations(dir, releaseRevision string) error {
 	for _, migration := range migrations {
 		if isProtectedMigration(migration.name) {
 			spec := protectedMigrationSpecs[migration.name]
-			applied, err := applyProtectedMigration(ctx, conn, migration, spec, releaseRevision, migration.name == latestReceipt)
+			applied, err := applyProtectedMigration(ctx, conn, migration, spec, releaseRevision, migration.name == latestReceipt, preflight)
 			if err != nil {
 				return err
 			}
@@ -248,6 +666,82 @@ func RunMigrations(dir, releaseRevision string) error {
 		}
 	}
 	return nil
+}
+
+type ProtectedMigrationReadiness struct {
+	Name                   string `json:"name"`
+	ExpectedSHA256         string `json:"expected_sha256"`
+	ReceiptExists          bool   `json:"receipt_exists"`
+	ReceiptMatchesFile     bool   `json:"receipt_matches_file"`
+	SchemaComplete         bool   `json:"schema_complete"`
+	LatestSchemaMatches    bool   `json:"latest_schema_matches"`
+	UnreceiptedFootprint   bool   `json:"unreceipted_footprint"`
+	ReceiptAppliedByCommit string `json:"receipt_applied_by_commit,omitempty"`
+}
+
+type MigrationReadinessReport struct {
+	CandidateRevision      string                        `json:"candidate_revision"`
+	LatestProtectedReceipt string                        `json:"latest_protected_receipt,omitempty"`
+	PendingProtectedCount  int                           `json:"pending_protected_count"`
+	DatabaseAhead          bool                          `json:"database_ahead"`
+	Protected              []ProtectedMigrationReadiness `json:"protected"`
+}
+
+// InspectMigrationReadiness executes the exact protected migration receipt,
+// checksum, schema-fingerprint, database-ahead, and unreceipted-footprint gates
+// without acquiring the migration advisory lock or changing database state.
+func InspectMigrationReadiness(ctx context.Context, dir, releaseRevision string) (*MigrationReadinessReport, error) {
+	if ctx == nil || DB == nil {
+		return nil, fmt.Errorf("database is not connected")
+	}
+	revision, err := protectedMigrationRevision(releaseRevision)
+	if err != nil {
+		return nil, err
+	}
+	migrations, err := loadMigrations(dir)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := DB.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("reserve migration inspection connection: %w", err)
+	}
+	defer conn.Close()
+	latestReceipt, err := preflightProtectedMigrations(ctx, conn, migrations, revision)
+	if err != nil {
+		return nil, err
+	}
+	report := &MigrationReadinessReport{
+		CandidateRevision:      revision,
+		LatestProtectedReceipt: latestReceipt,
+		DatabaseAhead:          false,
+		Protected:              []ProtectedMigrationReadiness{},
+	}
+	for _, migration := range migrations {
+		if !isProtectedMigration(migration.name) {
+			continue
+		}
+		state, err := inspectProtectedMigration(ctx, conn, migration.name, protectedMigrationSpecs[migration.name])
+		if err != nil {
+			return nil, fmt.Errorf("inspect protected migration %s: %w", migration.name, err)
+		}
+		item := ProtectedMigrationReadiness{
+			Name:               migration.name,
+			ExpectedSHA256:     migration.sha256,
+			ReceiptExists:      state.receiptExists,
+			ReceiptMatchesFile: state.receiptExists && state.receiptSHA256 == migration.sha256,
+			SchemaComplete:     state.complete,
+			LatestSchemaMatches: migration.name != latestReceipt ||
+				(state.receiptExists && state.receiptSchemaSHA256 == state.currentSchemaSHA256),
+			UnreceiptedFootprint:   state.anyFootprint && !state.receiptExists,
+			ReceiptAppliedByCommit: state.receiptRevision,
+		}
+		if !state.receiptExists {
+			report.PendingProtectedCount++
+		}
+		report.Protected = append(report.Protected, item)
+	}
+	return report, nil
 }
 
 func loadMigrations(dir string) ([]migrationFile, error) {
@@ -282,7 +776,33 @@ func isProtectedMigration(name string) bool {
 	return name >= protectedMigrationStart
 }
 
+func validateRequiredProtectedMigrationSet(migrations []migrationFile) error {
+	present := make(map[string]bool, len(migrations))
+	protectedCount := 0
+	for _, migration := range migrations {
+		if !isProtectedMigration(migration.name) {
+			continue
+		}
+		protectedCount++
+		present[migration.name] = true
+	}
+	for _, required := range requiredProtectedMigrationNames {
+		if !present[required] {
+			return fmt.Errorf("required protected migration is missing: %s", required)
+		}
+	}
+	if protectedCount != len(requiredProtectedMigrationNames) {
+		return fmt.Errorf("protected migration set is not exact through %s", requiredProtectedMigrationNames[len(requiredProtectedMigrationNames)-1])
+	}
+	return nil
+}
+
 func preflightProtectedMigrations(ctx context.Context, conn *sql.Conn, migrations []migrationFile, releaseRevision string) (string, error) {
+	if !allowPartialProtectedMigrationsForTests {
+		if err := validateRequiredProtectedMigrationSet(migrations); err != nil {
+			return "", err
+		}
+	}
 	known := make(map[string]bool, len(migrations))
 	for _, migration := range migrations {
 		if isProtectedMigration(migration.name) {
@@ -356,6 +876,8 @@ func preflightProtectedMigrations(ctx context.Context, conn *sql.Conn, migration
 func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 	priorRelations := map[string]migrationRelation{}
 	priorRules := map[string]migrationRule{}
+	priorFingerprintTables := map[string]bool{}
+	priorFingerprintFunctions := map[string]bool{}
 	first := true
 	for _, migration := range migrations {
 		if !isProtectedMigration(migration.name) {
@@ -385,6 +907,26 @@ func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 			}
 			currentRules[rule.name] = rule
 		}
+		currentFingerprintTables := map[string]bool{}
+		for _, table := range spec.fingerprintTables {
+			if table == "" {
+				return fmt.Errorf("protected migration %s has an empty fingerprint table", migration.name)
+			}
+			if currentFingerprintTables[table] {
+				return fmt.Errorf("protected migration %s repeats fingerprint table %s", migration.name, table)
+			}
+			currentFingerprintTables[table] = true
+		}
+		currentFingerprintFunctions := map[string]bool{}
+		for _, function := range spec.fingerprintFunctions {
+			if strings.TrimSpace(function) == "" {
+				return fmt.Errorf("protected migration %s has an empty fingerprint function", migration.name)
+			}
+			if currentFingerprintFunctions[function] {
+				return fmt.Errorf("protected migration %s repeats fingerprint function %s", migration.name, function)
+			}
+			currentFingerprintFunctions[function] = true
+		}
 		for name, prior := range priorRelations {
 			current, ok := currentRelations[name]
 			if !ok || current.relkind != prior.relkind || current.parent != prior.parent {
@@ -397,6 +939,16 @@ func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 				return fmt.Errorf("protected migration %s does not carry forward rule contract %s", migration.name, name)
 			}
 		}
+		for table := range priorFingerprintTables {
+			if !currentFingerprintTables[table] {
+				return fmt.Errorf("protected migration %s does not carry forward fingerprint table %s", migration.name, table)
+			}
+		}
+		for function := range priorFingerprintFunctions {
+			if !currentFingerprintFunctions[function] {
+				return fmt.Errorf("protected migration %s does not carry forward fingerprint function %s", migration.name, function)
+			}
+		}
 		for name := range spec.footprintRelations {
 			if _, ok := currentRelations[name]; !ok {
 				return fmt.Errorf("protected migration %s names unknown footprint relation %s", migration.name, name)
@@ -405,6 +957,29 @@ func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 		for name := range spec.footprintRules {
 			if _, ok := currentRules[name]; !ok {
 				return fmt.Errorf("protected migration %s names unknown footprint rule %s", migration.name, name)
+			}
+		}
+		for name := range spec.footprintFunctions {
+			if !currentFingerprintFunctions[name] {
+				return fmt.Errorf("protected migration %s names unknown footprint function %s", migration.name, name)
+			}
+		}
+		seenProbes := map[string]bool{}
+		for _, probe := range spec.footprintProbes {
+			key, err := migrationFootprintProbeKey(probe)
+			if err != nil {
+				return fmt.Errorf("protected migration %s has invalid footprint probe: %w", migration.name, err)
+			}
+			if seenProbes[key] {
+				return fmt.Errorf("protected migration %s repeats footprint probe %s", migration.name, key)
+			}
+			seenProbes[key] = true
+			if probe.kind == migrationFootprintColumn || probe.kind == migrationFootprintTrigger {
+				relation, ok := currentRelations[probe.relation]
+				declaredTable := ok && relation.relkind == "r"
+				if !declaredTable && !currentFingerprintTables[probe.relation] {
+					return fmt.Errorf("protected migration %s footprint probe %s names unknown table %s", migration.name, key, probe.relation)
+				}
 			}
 		}
 		if !first {
@@ -428,12 +1003,44 @@ func validateProtectedMigrationSpecChain(migrations []migrationFile) error {
 					return fmt.Errorf("protected migration %s omits new rule %s from its footprint", migration.name, name)
 				}
 			}
+			for name := range currentFingerprintFunctions {
+				inherited := priorFingerprintFunctions[name]
+				marked := spec.footprintFunctions[name]
+				switch {
+				case inherited && marked:
+					return fmt.Errorf("protected migration %s marks inherited fingerprint function %s as a new footprint", migration.name, name)
+				case !inherited && !marked:
+					return fmt.Errorf("protected migration %s omits new fingerprint function %s from its footprint", migration.name, name)
+				}
+			}
 		}
 		priorRelations = currentRelations
 		priorRules = currentRules
+		priorFingerprintTables = currentFingerprintTables
+		priorFingerprintFunctions = currentFingerprintFunctions
 		first = false
 	}
 	return nil
+}
+
+func migrationFootprintProbeKey(probe migrationFootprintProbe) (string, error) {
+	if probe.name == "" {
+		return "", fmt.Errorf("%s footprint has an empty name", probe.kind)
+	}
+	switch probe.kind {
+	case migrationFootprintColumn, migrationFootprintTrigger:
+		if probe.relation == "" {
+			return "", fmt.Errorf("%s footprint %s has an empty relation", probe.kind, probe.name)
+		}
+		return string(probe.kind) + ":" + probe.relation + ":" + probe.name, nil
+	case migrationFootprintFunction:
+		if probe.relation != "" {
+			return "", fmt.Errorf("function footprint %s cannot name relation %s", probe.name, probe.relation)
+		}
+		return string(probe.kind) + ":" + probe.name, nil
+	default:
+		return "", fmt.Errorf("unknown footprint kind %q for %s", probe.kind, probe.name)
+	}
 }
 
 type migrationQueryer interface {
@@ -522,6 +1129,31 @@ func inspectProtectedMigration(ctx context.Context, db migrationQueryer, name st
 			state.complete = false
 		}
 	}
+	for _, function := range spec.fingerprintFunctions {
+		var exists bool
+		if err := db.QueryRowContext(ctx, `
+			SELECT to_regprocedure('public.' || $1) IS NOT NULL`, function).Scan(&exists); err != nil {
+			return state, fmt.Errorf("inspect fingerprint function %s: %w", function, err)
+		}
+		if exists && spec.footprintFunctions[function] {
+			state.anyFootprint = true
+		}
+		if !exists {
+			state.complete = false
+		}
+	}
+	if !state.anyFootprint {
+		for _, probe := range spec.footprintProbes {
+			exists, err := protectedMigrationFootprintProbeExists(ctx, db, probe)
+			if err != nil {
+				return state, err
+			}
+			if exists {
+				state.anyFootprint = true
+				break
+			}
+		}
+	}
 	if state.complete {
 		fingerprint, err := protectedMigrationSchemaFingerprint(ctx, db, spec)
 		if err != nil {
@@ -530,6 +1162,58 @@ func inspectProtectedMigration(ctx context.Context, db migrationQueryer, name st
 		state.currentSchemaSHA256 = fingerprint
 	}
 	return state, nil
+}
+
+func protectedMigrationFootprintProbeExists(ctx context.Context, db migrationQueryer, probe migrationFootprintProbe) (bool, error) {
+	var exists bool
+	switch probe.kind {
+	case migrationFootprintColumn:
+		if err := db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_catalog.pg_attribute a
+				JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+				JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+				WHERE n.nspname = 'public'
+				  AND c.relname = $1
+				  AND c.relkind IN ('r', 'p')
+				  AND a.attname = $2
+				  AND a.attnum > 0
+				  AND NOT a.attisdropped
+			)`, probe.relation, probe.name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("inspect footprint column %s.%s: %w", probe.relation, probe.name, err)
+		}
+	case migrationFootprintTrigger:
+		if err := db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_catalog.pg_trigger tg
+				JOIN pg_catalog.pg_class c ON c.oid = tg.tgrelid
+				JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+				WHERE n.nspname = 'public'
+				  AND c.relname = $1
+				  AND tg.tgname = $2
+				  AND NOT tg.tgisinternal
+			)`, probe.relation, probe.name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("inspect footprint trigger %s.%s: %w", probe.relation, probe.name, err)
+		}
+	case migrationFootprintFunction:
+		if err := db.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_catalog.pg_proc p
+				JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+				WHERE n.nspname = 'public'
+				  AND p.proname = $1
+				  AND p.prorettype = 'pg_catalog.trigger'::pg_catalog.regtype
+				  AND pg_catalog.pg_get_function_identity_arguments(p.oid) = ''
+			)`, probe.name).Scan(&exists); err != nil {
+			return false, fmt.Errorf("inspect footprint function %s: %w", probe.name, err)
+		}
+	default:
+		return false, fmt.Errorf("inspect unknown footprint kind %q for %s", probe.kind, probe.name)
+	}
+	return exists, nil
 }
 
 // protectedMigrationSchemaFingerprint captures the behavior-bearing catalog
@@ -545,6 +1229,9 @@ func protectedMigrationSchemaFingerprint(ctx context.Context, db migrationQuerye
 	}
 	for _, rule := range spec.rules {
 		tableSet[rule.relation] = true
+	}
+	for _, table := range spec.fingerprintTables {
+		tableSet[table] = true
 	}
 	tables := make([]string, 0, len(tableSet))
 	for table := range tableSet {
@@ -654,6 +1341,24 @@ func protectedMigrationSchemaFingerprint(ctx context.Context, db migrationQuerye
 		_, _ = digest.Write([]byte(definition))
 		_, _ = digest.Write([]byte{0})
 	}
+	functions := append([]string(nil), spec.fingerprintFunctions...)
+	sort.Strings(functions)
+	for _, function := range functions {
+		var definition string
+		if err := db.QueryRowContext(ctx, `
+			SELECT COALESCE(pg_catalog.pg_get_functiondef(
+				to_regprocedure('public.' || $1)
+			), '')`, function).Scan(&definition); err != nil {
+			return "", fmt.Errorf("fingerprint function %s: %w", function, err)
+		}
+		if definition == "" {
+			return "", fmt.Errorf("fingerprint function %s is missing", function)
+		}
+		_, _ = digest.Write([]byte(function))
+		_, _ = digest.Write([]byte{0})
+		_, _ = digest.Write([]byte(definition))
+		_, _ = digest.Write([]byte{0})
+	}
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
@@ -688,6 +1393,10 @@ func applyLegacyMigration(ctx context.Context, conn *sql.Conn, migration migrati
 	if err != nil {
 		return fmt.Errorf("begin migration %s: %w", migration.name, err)
 	}
+	if err := configureMigrationTransaction(ctx, tx); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("configure migration %s timeouts: %w", migration.name, err)
+	}
 	statements := migrationStatements(string(migration.data))
 	for i, stmt := range statements {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
@@ -702,7 +1411,7 @@ func applyLegacyMigration(ctx context.Context, conn *sql.Conn, migration migrati
 	return nil
 }
 
-func applyProtectedMigration(ctx context.Context, conn *sql.Conn, migration migrationFile, spec protectedMigrationSpec, releaseRevision string, validateLatestFingerprint bool) (bool, error) {
+func applyProtectedMigration(ctx context.Context, conn *sql.Conn, migration migrationFile, spec protectedMigrationSpec, releaseRevision string, validateLatestFingerprint bool, preflight ProtectedMigrationPreflight) (bool, error) {
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return false, fmt.Errorf("begin protected migration %s: %w", migration.name, err)
@@ -710,6 +1419,9 @@ func applyProtectedMigration(ctx context.Context, conn *sql.Conn, migration migr
 	rollback := func(err error) (bool, error) {
 		_ = tx.Rollback()
 		return false, err
+	}
+	if err := configureMigrationTransaction(ctx, tx); err != nil {
+		return rollback(fmt.Errorf("configure protected migration %s timeouts: %w", migration.name, err))
 	}
 	state, err := inspectProtectedMigration(ctx, tx, migration.name, spec)
 	if err != nil {
@@ -723,6 +1435,11 @@ func applyProtectedMigration(ctx context.Context, conn *sql.Conn, migration migr
 			return false, fmt.Errorf("commit protected migration receipt check %s: %w", migration.name, err)
 		}
 		return false, nil
+	}
+	if preflight != nil {
+		if err := preflight(ctx, tx, migration.name); err != nil {
+			return rollback(fmt.Errorf("protected migration %s preflight: %w", migration.name, err))
+		}
 	}
 
 	revision, err := protectedMigrationRevision(releaseRevision)
@@ -757,6 +1474,18 @@ func applyProtectedMigration(ctx context.Context, conn *sql.Conn, migration migr
 		return false, fmt.Errorf("commit protected migration %s: %w", migration.name, err)
 	}
 	return true, nil
+}
+
+func configureMigrationTransaction(ctx context.Context, tx *sql.Tx) error {
+	if migrationTransactionLockTimeout <= 0 || migrationTransactionStatementTimeout <= 0 {
+		return errors.New("migration transaction timeouts must be positive")
+	}
+	lockTimeout := strconv.FormatInt(migrationTransactionLockTimeout.Milliseconds(), 10) + "ms"
+	statementTimeout := strconv.FormatInt(migrationTransactionStatementTimeout.Milliseconds(), 10) + "ms"
+	_, err := tx.ExecContext(ctx, `
+		SELECT set_config('lock_timeout',$1,true),
+		       set_config('statement_timeout',$2,true)`, lockTimeout, statementTimeout)
+	return err
 }
 
 func protectedMigrationRevision(candidate string) (string, error) {

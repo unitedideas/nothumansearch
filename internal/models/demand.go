@@ -313,13 +313,14 @@ func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string
 		return nil, err
 	}
 	result := map[string]any{
-		"domain":                            domain,
-		"days":                              days,
-		"retention_days":                    30,
-		"action_interest_cohort":            "organic_result_returned_at",
-		"topic_receipt_threshold":           ProviderDemandPrivacyThreshold,
-		"action_interest_receipt_threshold": ProviderDemandPrivacyThreshold,
-		"synthetic_excluded":                true,
+		"domain":                             domain,
+		"days":                               days,
+		"retention_days":                     30,
+		"action_interest_cohort":             "organic_result_returned_at",
+		"topic_receipt_threshold":            ProviderDemandPrivacyThreshold,
+		"result_selection_receipt_threshold": ProviderDemandPrivacyThreshold,
+		"action_interest_receipt_threshold":  ProviderDemandPrivacyThreshold,
+		"synthetic_excluded":                 true,
 	}
 
 	var resultsReturned, searchReceipts, resultSelections, actionInterests int
@@ -358,10 +359,9 @@ func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string
 	summary := map[string]any{
 		"organic_results_returned": resultsReturned,
 		"search_receipts":          searchReceipts,
-		"result_selections":        resultSelections,
-		"result_selection_rate":    selectionRate,
 		"average_organic_position": averagePosition,
 	}
+	applyProviderDemandSelectionPrivacy(summary, resultSelections, &selectionRate)
 	if actionInterests >= ProviderDemandPrivacyThreshold {
 		summary["action_interest_receipts"] = actionInterests
 		summary["action_interest_rate"] = actionInterestRate
@@ -408,8 +408,8 @@ func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string
 		entry := map[string]any{
 			"surface":                  surface,
 			"organic_results_returned": returned,
-			"result_selections":        selections,
 		}
+		applyProviderDemandSelectionPrivacy(entry, selections, nil)
 		if interests >= ProviderDemandPrivacyThreshold {
 			entry["action_interest_receipts"] = interests
 			entry["action_interest_suppressed"] = false
@@ -468,9 +468,9 @@ func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string
 		entry := map[string]any{
 			"topic":                    topic,
 			"search_receipts":          receipts,
-			"result_selections":        selections,
 			"average_organic_position": avgPosition,
 		}
+		applyProviderDemandSelectionPrivacy(entry, selections, nil)
 		if interests >= ProviderDemandPrivacyThreshold {
 			entry["action_interest_receipts"] = interests
 			entry["action_interest_suppressed"] = false
@@ -534,4 +534,24 @@ func GetProviderDemandAnalytics(db *sql.DB, domain string, days int) (map[string
 		return nil, err
 	}
 	return result, nil
+}
+
+// applyProviderDemandSelectionPrivacy prevents a provider from learning that
+// one thin cohort selected its result. Search-return counts remain useful for
+// availability, but behavior counts and rates appear only at the same minimum
+// aggregate threshold used by the rest of the provider demand report.
+func applyProviderDemandSelectionPrivacy(entry map[string]any, selections int, rate *float64) {
+	if selections >= ProviderDemandPrivacyThreshold {
+		entry["result_selections"] = selections
+		entry["result_selection_suppressed"] = false
+		if rate != nil {
+			entry["result_selection_rate"] = *rate
+		}
+		return
+	}
+	entry["result_selections"] = nil
+	entry["result_selection_suppressed"] = true
+	if rate != nil {
+		entry["result_selection_rate"] = nil
+	}
 }

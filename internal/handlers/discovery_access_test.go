@@ -231,6 +231,176 @@ func TestMCPAnalyticsArgumentsNeverRetainSearchText(t *testing.T) {
 	}
 }
 
+func TestMCPAnalyticsCategoryBrowseRetainsOnlyControlledTopics(t *testing.T) {
+	for _, tool := range []string{"get_top_sites", "recent_additions"} {
+		t.Run(tool+"/recognized_category", func(t *testing.T) {
+			got := mcpAnalyticsArguments(tool, map[string]any{
+				"query":    "private payment query for buyer@example.com",
+				"category": "developer",
+			})
+			if _, exists := got["query"]; exists {
+				t.Fatalf("analytics arguments retained query text: %#v", got)
+			}
+			if _, exists := got["category"]; exists {
+				t.Fatalf("analytics arguments retained raw category: %#v", got)
+			}
+			if want := []string{"developer-tools"}; !reflect.DeepEqual(got["demand_topics"], want) {
+				t.Fatalf("demand_topics = %#v, want %#v", got["demand_topics"], want)
+			}
+		})
+
+		t.Run(tool+"/unfiltered", func(t *testing.T) {
+			got := mcpAnalyticsArguments(tool, map[string]any{
+				"query": "private payment query for buyer@example.com",
+			})
+			if _, exists := got["query"]; exists {
+				t.Fatalf("analytics arguments retained query text: %#v", got)
+			}
+			if _, exists := got["category"]; exists {
+				t.Fatalf("analytics arguments retained raw category: %#v", got)
+			}
+			if want := []string{"other"}; !reflect.DeepEqual(got["demand_topics"], want) {
+				t.Fatalf("demand_topics = %#v, want %#v", got["demand_topics"], want)
+			}
+		})
+	}
+}
+
+func TestMCPPublicCategoryAcceptsOnlyThePublicTaxonomy(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		raw          string
+		wantCategory string
+		wantBound    bool
+	}{
+		{name: "trim_and_normalize", raw: " Developer ", wantCategory: "developer", wantBound: true},
+		{name: "empty_is_unbound", raw: "  ", wantCategory: "", wantBound: false},
+		{name: "audit_other_rejected", raw: "other", wantCategory: "", wantBound: false},
+		{name: "audit_spam_rejected", raw: "spam", wantCategory: "", wantBound: false},
+		{name: "unknown_rejected", raw: "private-category", wantCategory: "", wantBound: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotCategory, gotBound := mcpPublicCategory(tc.raw)
+			if gotCategory != tc.wantCategory || gotBound != tc.wantBound {
+				t.Fatalf("mcpPublicCategory(%q) = (%q, %t), want (%q, %t)", tc.raw, gotCategory, gotBound, tc.wantCategory, tc.wantBound)
+			}
+		})
+	}
+}
+
+func TestFindMCPServersRejectsAuditCategoryBeforeQuery(t *testing.T) {
+	handler := NewMCPHandler(nil, "https://nothumansearch.ai")
+	for _, category := range []string{"other", "spam", "private-category"} {
+		t.Run(category, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			handler.toolFindMCPServers(recorder, json.RawMessage(`1`), map[string]any{
+				"query":    "payments",
+				"category": category,
+			}, false)
+			if !strings.Contains(recorder.Body.String(), "unsupported public category") {
+				t.Fatalf("audit category %q reached the database path: %s", category, recorder.Body.String())
+			}
+		})
+	}
+}
+
+func TestMCPDiscoveryCategoryTypesFailClosedBeforeQuery(t *testing.T) {
+	handler := NewMCPHandler(nil, "https://nothumansearch.ai")
+	calls := []struct {
+		name string
+		call func(http.ResponseWriter, map[string]any)
+	}{
+		{name: "get_top_sites", call: func(w http.ResponseWriter, args map[string]any) {
+			handler.toolGetTopSites(w, json.RawMessage(`1`), args, false)
+		}},
+		{name: "recent_additions", call: func(w http.ResponseWriter, args map[string]any) {
+			handler.toolRecentAdditions(w, json.RawMessage(`1`), args, false)
+		}},
+		{name: "find_mcp_servers", call: func(w http.ResponseWriter, args map[string]any) {
+			handler.toolFindMCPServers(w, json.RawMessage(`1`), args, false)
+		}},
+	}
+	for _, call := range calls {
+		t.Run(call.name, func(t *testing.T) {
+			for _, category := range []any{float64(1), true, nil, []any{"developer"}} {
+				recorder := httptest.NewRecorder()
+				call.call(recorder, map[string]any{"category": category})
+				if !strings.Contains(recorder.Body.String(), "category must be a string") {
+					t.Fatalf("category type %T reached the database path: %s", category, recorder.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestMCPRecentWindowDaysMatchesTheReportedQueryWindow(t *testing.T) {
+	for _, tc := range []struct {
+		raw  any
+		want int
+	}{
+		{raw: nil, want: 7},
+		{raw: float64(-1), want: 7},
+		{raw: float64(30), want: 30},
+		{raw: float64(365), want: 90},
+	} {
+		if got := mcpRecentWindowDays(tc.raw); got != tc.want {
+			t.Fatalf("mcpRecentWindowDays(%#v) = %d, want %d", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestMCPExchangeSchemasReferenceEveryReceiptBearingDiscoveryTool(t *testing.T) {
+	definitions := NewMCPHandler(nil, "https://nothumansearch.ai").toolDefinitions()
+	byName := map[string]map[string]any{}
+	for _, definition := range definitions {
+		name, _ := definition["name"].(string)
+		byName[name] = definition
+	}
+	property := func(tool, name string) map[string]any {
+		t.Helper()
+		schema, ok := byName[tool]["inputSchema"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s input schema unavailable", tool)
+		}
+		properties, ok := schema["properties"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s properties unavailable", tool)
+		}
+		value, ok := properties[name].(map[string]any)
+		if !ok {
+			t.Fatalf("%s.%s definition unavailable", tool, name)
+		}
+		return value
+	}
+
+	interestDescription, _ := property("record_action_interest", "search_id")["description"].(string)
+	if !strings.Contains(interestDescription, "receipt-bearing NHS discovery tool") {
+		t.Fatalf("record_action_interest search_id description is surface-specific: %q", interestDescription)
+	}
+	offerDescription, _ := property("prepare_provider_action", "offer_id")["description"].(string)
+	if !strings.Contains(offerDescription, "receipt-bearing NHS discovery result") {
+		t.Fatalf("prepare_provider_action offer_id description is surface-specific: %q", offerDescription)
+	}
+	if got := property("find_mcp_servers", "category")["enum"]; !reflect.DeepEqual(got, publicSearchCategories) {
+		t.Fatalf("find_mcp_servers category enum = %#v, want public categories", got)
+	}
+}
+
+func TestMCPAnalyticsCanonicalizeUnknownToolNames(t *testing.T) {
+	hostile := strings.Repeat("private-token-", 10_000)
+	if got := mcpAnalyticsToolName(hostile); got != "unknown_tool" {
+		t.Fatalf("unknown analytics tool name = %q", got)
+	}
+	if got := mcpAnalyticsToolName("search_agents"); got != "search_agents" {
+		t.Fatalf("known analytics tool name = %q", got)
+	}
+	if got := mcpAnalyticsArguments(mcpAnalyticsToolName(hostile), map[string]any{
+		"query": hostile,
+	}); len(got) != 0 {
+		t.Fatalf("unknown tool retained arguments: %#v", got)
+	}
+}
+
 func TestActiveProbeToolsUseTheStrictBucket(t *testing.T) {
 	for _, tool := range []string{"check_url", "verify_mcp", "submit_site", "register_monitor"} {
 		if !isNHSActiveProbeTool(tool) {

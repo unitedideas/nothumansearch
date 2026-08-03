@@ -235,9 +235,15 @@ func TestRecordActionInterestBypassesMCPIdentityAndPaidUsageTelemetry(t *testing
 	if !strings.Contains(server, `"/api/v1/action-interests", // receipt table only; never bind interest invocation to IP/UA telemetry`) {
 		t.Fatal("REST action-interest route is not excluded from page-view identity telemetry")
 	}
-	if !strings.Contains(server, `p == "/api/v1/action-interests" || p == "/mcp" || strings.HasPrefix(p, "/mcp/")`) ||
-		!strings.Contains(server, `if !suppressRequestLineIdentityTelemetry(r.URL.Path)`) {
-		t.Fatal("REST and MCP action-interest surfaces are not excluded from outer request-line user-agent logging")
+	for _, required := range []string{
+		`func suppressRequestLineIdentityTelemetry(p string) bool`,
+		`"/api/v1/action-interests"`,
+		`"/mcp"`,
+		`if !suppressRequestLineIdentityTelemetry(r.URL.Path)`,
+	} {
+		if !strings.Contains(server, required) {
+			t.Fatalf("REST and MCP action-interest surfaces are not excluded from outer request-line user-agent logging; missing %q", required)
+		}
 	}
 }
 

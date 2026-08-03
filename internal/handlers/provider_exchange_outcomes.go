@@ -13,7 +13,11 @@ import (
 )
 
 type providerOutcomeRequest struct {
-	TicketID         string `json:"ticket_id"`
+	// TicketID is accepted only for pre-pilot client compatibility. The signed
+	// attribution token is authoritative, so normal providers never need to
+	// decode the bearer or obtain optional controlled-intent disclosure just to
+	// report an outcome.
+	TicketID         string `json:"ticket_id,omitempty"`
 	AttributionToken string `json:"attribution_token"`
 	Outcome          string `json:"outcome"`
 }
@@ -53,7 +57,8 @@ func (h *ProviderExchangeHandler) ProviderOutcomes(w http.ResponseWriter, r *htt
 		providerWriteJSON(w, status, map[string]string{"error": "invalid or expired NHS attribution token"})
 		return
 	}
-	if !constantTimeStringEqual(strings.ToLower(strings.TrimSpace(request.TicketID)), claims.TicketID) {
+	request.TicketID, err = providerOutcomeTicketID(request.TicketID, claims.TicketID)
+	if err != nil {
 		providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "attribution token does not match ticket"})
 		return
 	}
@@ -103,6 +108,15 @@ func (h *ProviderExchangeHandler) ProviderOutcomes(w http.ResponseWriter, r *htt
 		"provider_mor_contract_required": true,
 		"principal_charged_by_nhs":       false,
 	})
+}
+
+func providerOutcomeTicketID(asserted, signed string) (string, error) {
+	asserted = strings.ToLower(strings.TrimSpace(asserted))
+	signed = strings.ToLower(strings.TrimSpace(signed))
+	if signed == "" || (asserted != "" && !constantTimeStringEqual(asserted, signed)) {
+		return "", errors.New("signed provider ticket mismatch")
+	}
+	return signed, nil
 }
 
 func (h *ProviderExchangeHandler) resolveProviderOutcomeKey(w http.ResponseWriter, r *http.Request, outcome, ticketID string) *models.ProviderAPIKey {

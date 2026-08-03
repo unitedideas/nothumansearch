@@ -153,10 +153,14 @@ func TestProviderDemandReportsExcludeSyntheticReceiptsAndUseReceiptTerms(t *test
 	if got := strings.Count(reportSource, `"action_interest_suppressed"`); got < 3 {
 		t.Fatalf("provider report action-interest suppression branches = %d, want summary, surface, and topic protection", got)
 	}
+	if got := strings.Count(reportSource, "applyProviderDemandSelectionPrivacy("); got != 4 {
+		t.Fatalf("provider report selection privacy applications = %d, want helper plus summary, surface, and topic", got)
+	}
 	for _, required := range []string{
 		`if actionInterests >= ProviderDemandPrivacyThreshold`,
 		`if interests >= ProviderDemandPrivacyThreshold`,
 		`"action_interest_receipt_threshold"`,
+		`"result_selection_receipt_threshold"`,
 	} {
 		if !strings.Contains(reportSource, required) {
 			t.Fatalf("provider report missing privacy suppression contract %s", required)
@@ -166,6 +170,24 @@ func TestProviderDemandReportsExcludeSyntheticReceiptsAndUseReceiptTerms(t *test
 		if !strings.Contains(reportSource, required) {
 			t.Fatalf("provider report missing truthful 30-day retention contract %s", required)
 		}
+	}
+}
+
+func TestProviderDemandSelectionPrivacySuppressesThinBehaviorCohorts(t *testing.T) {
+	rate := 0.5
+	below := map[string]any{}
+	applyProviderDemandSelectionPrivacy(below, ProviderDemandPrivacyThreshold-1, &rate)
+	if below["result_selections"] != nil || below["result_selection_rate"] != nil ||
+		below["result_selection_suppressed"] != true {
+		t.Fatalf("below-threshold selection projection = %#v", below)
+	}
+
+	atThreshold := map[string]any{}
+	applyProviderDemandSelectionPrivacy(atThreshold, ProviderDemandPrivacyThreshold, &rate)
+	if atThreshold["result_selections"] != ProviderDemandPrivacyThreshold ||
+		atThreshold["result_selection_rate"] != rate ||
+		atThreshold["result_selection_suppressed"] != false {
+		t.Fatalf("at-threshold selection projection = %#v", atThreshold)
 	}
 }
 
@@ -227,6 +249,20 @@ func TestRetentionAndSmokeTelemetryGuards(t *testing.T) {
 	for _, line := range strings.Split(string(smokeSource), "\n") {
 		if strings.Contains(line, "/usr/bin/curl") && !strings.Contains(line, `-H "$SYNTHETIC_HEADER"`) {
 			t.Fatalf("smoke curl omitted synthetic marker: %s", line)
+		}
+	}
+	for _, required := range []string{
+		"EXPECTED_REVISION",
+		"EXPECTED_EXCHANGE_MODE",
+		"check_release_revision",
+		"check_synthetic_paid_sidecar_empty",
+		"check_invalid_action_interest_receipt",
+		"prepare_provider_action",
+		"handoff_provider_action",
+		"/api/v1/action-tickets/handoff",
+	} {
+		if !strings.Contains(string(smokeSource), required) {
+			t.Fatalf("release smoke test missing %q", required)
 		}
 	}
 }

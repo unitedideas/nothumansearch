@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,22 +26,69 @@ import (
 
 var releaseRevision = "development"
 
+const (
+	providerExchangeModeEnv      = "NHS_PROVIDER_EXCHANGE_MODE"
+	providerExchangeModePilot    = "pilot"
+	providerExchangeModeDisabled = "disabled"
+)
+
+func configuredProviderExchangeMode() (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv(providerExchangeModeEnv)))
+	if mode == "" {
+		return "", fmt.Errorf("%s must be explicitly set to %q or %q", providerExchangeModeEnv, providerExchangeModePilot, providerExchangeModeDisabled)
+	}
+	switch mode {
+	case providerExchangeModePilot, providerExchangeModeDisabled:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("%s must be %q or %q", providerExchangeModeEnv, providerExchangeModePilot, providerExchangeModeDisabled)
+	}
+}
+
+func configuredListenAddress(port string) (string, error) {
+	host := strings.TrimSpace(os.Getenv("NHS_LISTEN_HOST"))
+	if host == "" {
+		return ":" + port, nil
+	}
+	if net.ParseIP(host) == nil {
+		return "", errors.New("NHS_LISTEN_HOST must be an IP address")
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+func providerExchangeDisabledHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Retry-After", "3600")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error": "provider exchange writes are disabled; free discovery and action-interest observation remain available",
+	})
+}
+
 type databasePinger interface {
 	Ping() error
 }
 
 type healthPayload struct {
-	Status          string `json:"status"`
-	Database        string `json:"db"`
-	ReleaseRevision string `json:"release_revision"`
+	Status           string `json:"status"`
+	Database         string `json:"db"`
+	ReleaseRevision  string `json:"release_revision"`
+	ProviderExchange string `json:"provider_exchange"`
 }
 
-func healthHandler(db databasePinger) http.Handler {
+func healthHandler(db databasePinger, configuredMode ...string) http.Handler {
+	mode := providerExchangeModeDisabled
+	if len(configuredMode) > 0 && configuredMode[0] != "" {
+		mode = configuredMode[0]
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		response := healthPayload{
 			Status: "ok", Database: "ok", ReleaseRevision: releaseRevision,
+			ProviderExchange: mode,
 		}
 		if db == nil || db.Ping() != nil {
 			response.Status = "degraded"
@@ -67,19 +116,30 @@ func main() {
 			projectRoot = "."
 		}
 	}
+	providerExchangeMode, err := configuredProviderExchangeMode()
+	if err != nil {
+		log.Fatalf("provider exchange mode: %v", err)
+	}
 	// Fail before touching the database when the dedicated exchange signer is
 	// absent or malformed. NewProviderExchangeHandler later verifies retained
 	// persisted proof material after migrations are known current.
-	if err := handlers.ValidateProviderExchangeSigningConfiguration(); err != nil {
-		log.Fatalf("provider exchange signing preflight: %v", err)
+	if providerExchangeMode == providerExchangeModePilot {
+		if err := handlers.ValidateProviderExchangeSigningConfiguration(); err != nil {
+			log.Fatalf("provider exchange signing preflight: %v", err)
+		}
 	}
 
-	if err := database.Connect(); err != nil {
+	connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := database.ConnectWithReleaseRevisionContext(connectContext, releaseRevision); err != nil {
+		cancelConnect()
 		log.Fatalf("database: %v", err)
 	}
+	cancelConnect()
 	log.Println("connected to database")
-
-	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations"), releaseRevision); err != nil {
+	if err := database.RunMigrationsWithPreflight(
+		filepath.Join(projectRoot, "migrations"), releaseRevision,
+		handlers.ProviderExchangeProtectedMigrationPreflight,
+	); err != nil {
 		log.Fatalf("migration: %v", err)
 	}
 
@@ -167,10 +227,13 @@ func main() {
 				log.Printf("sessions prune: deleted %d rows", n)
 			}
 		}
-		// Run once on boot after a short delay, then hourly
-		time.Sleep(2 * time.Minute)
+		// Redact/delete already-expired privacy data as soon as the current schema
+		// is available, then retry hourly. Read paths enforce their own time bounds;
+		// this task performs the separately disclosed physical cleanup.
 		prune()
-		for range time.Tick(1 * time.Hour) {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
 			prune()
 		}
 	}()
@@ -214,36 +277,47 @@ func main() {
 	apiHandler.Auth = authSvc
 	apiKeyHandler.Auth = authSvc
 	webHandler.Auth = authSvc
-	providerExchangeHandler, err := handlers.NewProviderExchangeHandler(database.DB, baseURL, authSvc, templatesDir)
+	var providerExchangeHandler *handlers.ProviderExchangeHandler
+	if providerExchangeMode == providerExchangeModePilot {
+		providerExchangeHandler, err = handlers.NewProviderExchangeHandler(database.DB, baseURL, authSvc, templatesDir)
+	} else {
+		providerExchangeHandler, err = handlers.NewProviderExchangePageHandler(database.DB, baseURL, authSvc, templatesDir)
+	}
 	if err != nil {
 		log.Fatalf("provider exchange init: %v", err)
 	}
-	mcpHandler.ProviderExchange = providerExchangeHandler
+	apiHandler.ProviderExchangeEnabled = providerExchangeMode == providerExchangeModePilot
+	mcpHandler.ProviderExchangeEnabled = providerExchangeMode == providerExchangeModePilot
+	if providerExchangeMode == providerExchangeModePilot {
+		mcpHandler.ProviderExchange = providerExchangeHandler
+	}
 	// Provider DNS ownership is a renewable proof, not a one-time badge. Each
 	// instance may run this worker because PostgreSQL leases due rows with
 	// SKIP LOCKED and per-acquisition lease IDs.
-	go func() {
-		run := func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-			defer cancel()
-			stats, err := providerExchangeHandler.ReverifyDueProviderClaims(ctx, 10)
-			if err != nil {
-				log.Printf("provider DNS reverification: %v (leased=%d matched=%d failed=%d revoked=%d completion_errors=%d)",
-					err, stats.Leased, stats.Matched, stats.Failed, stats.Revoked, stats.CompletionErrors)
-				return
+	if providerExchangeMode == providerExchangeModePilot {
+		go func() {
+			run := func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+				defer cancel()
+				stats, err := providerExchangeHandler.ReverifyDueProviderClaims(ctx, 10)
+				if err != nil {
+					log.Printf("provider DNS reverification: %v (leased=%d matched=%d failed=%d revoked=%d completion_errors=%d)",
+						err, stats.Leased, stats.Matched, stats.Failed, stats.Revoked, stats.CompletionErrors)
+					return
+				}
+				if stats.Leased > 0 {
+					log.Printf("provider DNS reverification: leased=%d matched=%d failed=%d revoked=%d",
+						stats.Leased, stats.Matched, stats.Failed, stats.Revoked)
+				}
 			}
-			if stats.Leased > 0 {
-				log.Printf("provider DNS reverification: leased=%d matched=%d failed=%d revoked=%d",
-					stats.Leased, stats.Matched, stats.Failed, stats.Revoked)
-			}
-		}
-		run()
-		ticker := time.NewTicker(15 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
 			run()
-		}
-	}()
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for range ticker.C {
+				run()
+			}
+		}()
+	}
 
 	mux := http.NewServeMux()
 
@@ -283,7 +357,7 @@ func main() {
 	})
 
 	// SEO / GEO
-	mux.Handle("/health", healthHandler(database.DB))
+	mux.Handle("/health", healthHandler(database.DB, providerExchangeMode))
 	mux.HandleFunc("/robots.txt", seoHandler.Robots)
 	mux.HandleFunc("/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/llm.txt", seoHandler.LLMsTxt)
@@ -394,14 +468,33 @@ func main() {
 	mux.HandleFunc("/api/v1/checkout", fixHandler.AgenticCheckout)
 	mux.HandleFunc("/api/v1/api-keys/subscribe", apiKeyHandler.Subscribe)
 	mux.HandleFunc("/api/v1/api-keys/activate", apiKeyHandler.Activate)
-	mux.HandleFunc("/api/v1/provider/claims", providerExchangeHandler.Claims)
-	mux.HandleFunc("/api/v1/provider/claims/", providerExchangeHandler.ClaimAction)
-	mux.HandleFunc("/api/v1/provider/offers", providerExchangeHandler.Offers)
-	mux.HandleFunc("/api/v1/provider/offers/", providerExchangeHandler.OfferAction)
-	mux.HandleFunc("/api/v1/provider/outcomes", providerExchangeHandler.ProviderOutcomes)
-	mux.HandleFunc("/api/v1/provider/receipts/", providerExchangeHandler.ProviderReceipt)
-	mux.HandleFunc("/api/v1/action-tickets", providerExchangeHandler.ActionTickets)
-	mux.HandleFunc("/api/v1/action-receipts/verify", providerExchangeHandler.VerifyOutcomeReceipt)
+	if providerExchangeMode == providerExchangeModePilot {
+		mux.HandleFunc("/api/v1/provider/claims", providerExchangeHandler.Claims)
+		mux.HandleFunc("/api/v1/provider/claims/", providerExchangeHandler.ClaimAction)
+		mux.HandleFunc("/api/v1/provider/offers", providerExchangeHandler.Offers)
+		mux.HandleFunc("/api/v1/provider/offers/", providerExchangeHandler.OfferAction)
+		mux.HandleFunc("/api/v1/provider/commercial-acceptances", providerExchangeHandler.ProviderCommercialAcceptances)
+		mux.HandleFunc("/api/v1/provider/pilot-status", providerExchangeHandler.ProviderPilotStatus)
+		mux.HandleFunc("/api/v1/provider/demand", providerExchangeHandler.ProviderDemand)
+		mux.HandleFunc("/api/v1/provider/action-tickets/resolve", providerExchangeHandler.ResolveProviderControlledIntent)
+		mux.HandleFunc("/api/v1/provider/outcomes", providerExchangeHandler.ProviderOutcomes)
+		mux.HandleFunc("/api/v1/provider/receipts/", providerExchangeHandler.ProviderReceipt)
+		mux.HandleFunc("/api/v1/action-tickets", providerExchangeHandler.ActionTickets)
+		mux.HandleFunc("/api/v1/action-tickets/handoff", providerExchangeHandler.ActionTicketHandoff)
+		mux.HandleFunc("/api/v1/action-receipts/verify", providerExchangeHandler.VerifyOutcomeReceipt)
+	} else {
+		for _, path := range []string{
+			"/api/v1/provider/claims", "/api/v1/provider/claims/",
+			"/api/v1/provider/offers", "/api/v1/provider/offers/",
+			"/api/v1/provider/commercial-acceptances", "/api/v1/provider/pilot-status",
+			"/api/v1/provider/demand", "/api/v1/provider/action-tickets/resolve",
+			"/api/v1/provider/outcomes",
+			"/api/v1/provider/receipts/", "/api/v1/action-tickets",
+			"/api/v1/action-tickets/handoff", "/api/v1/action-receipts/verify",
+		} {
+			mux.HandleFunc(path, providerExchangeDisabledHandler)
+		}
+	}
 	mux.HandleFunc("/api/v1/action-interests", actionInterestHandler.Record)
 	mux.HandleFunc("/providers", providerExchangeHandler.ProvidersPage)
 	mux.HandleFunc("/privacy", providerExchangeHandler.PrivacyPage)
@@ -427,7 +520,23 @@ func main() {
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
 	mux.HandleFunc("/api/v1/admin/demand", apiHandler.ProviderDemandAnalytics)
 	mux.HandleFunc("/api/v1/admin/demand-stage1", actionInterestHandler.Stage1DemandProof)
-	mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeHandler.AdminOfferAction)
+	if providerExchangeMode == providerExchangeModePilot {
+		mux.HandleFunc("/api/v1/admin/provider-pilot/action", providerExchangeHandler.AdminProviderPilotEpochAction)
+		mux.HandleFunc("/api/v1/admin/provider-pilot/epoch", providerExchangeHandler.AdminProviderPilotEpochStatus)
+		mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeHandler.AdminOfferAction)
+		mux.HandleFunc("/api/v1/admin/provider-commercial/action", providerExchangeHandler.AdminCommercialAction)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-queue", providerExchangeHandler.AdminProviderPilotQueue)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-review", providerExchangeHandler.AdminProviderPilotReview)
+		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeHandler.AdminProviderProofManifest)
+	} else {
+		mux.HandleFunc("/api/v1/admin/provider-pilot/action", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-pilot/epoch", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-commercial/action", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-queue", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-review", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeDisabledHandler)
+	}
 	mux.HandleFunc("/api/v1/admin/provider-proof", providerExchangeHandler.AdminProof)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
 	mux.HandleFunc("/api/v1/admin/geo-jobs/action", fixHandler.AdminAction)
@@ -461,9 +570,13 @@ func main() {
 	// noncanonical capability URLs receive the response-hardening contract.
 	handler := loggingMiddleware(securityHeadersMiddleware(domainRedirectMiddleware(corsMiddleware(gzipMiddleware(mux)))))
 
-	log.Printf("Not Human Search starting on :%s", *port)
+	listenAddress, err := configuredListenAddress(*port)
+	if err != nil {
+		log.Fatalf("listen address: %v", err)
+	}
+	log.Printf("Not Human Search starting on %s", listenAddress)
 	srv := &http.Server{
-		Addr:         ":" + *port,
+		Addr:         listenAddress,
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -506,9 +619,11 @@ var botPatterns = []string{
 var noLogPathPrefixes = []string{
 	"/mcp",                     // JSON-RPC endpoint — logged to mcp_requests table, except privacy-bypassed tools
 	"/api/v1/action-interests", // receipt table only; never bind interest invocation to IP/UA telemetry
-	"/health",                  // internal Consul/Fly health checks
-	"/metrics",                 // Prometheus scrapers
-	"/webhook/stripe",          // Stripe retries/probes are monitored separately
+	"/api/v1/action-tickets",   // ticket/handoff tables only; do not timestamp-correlate principal or agent network telemetry
+	"/api/v1/provider/action-tickets/resolve", // free read-only resolver; its contract forbids analytics and identity/network collection
+	"/health",         // internal Consul/Fly health checks
+	"/metrics",        // Prometheus scrapers
+	"/webhook/stripe", // Stripe retries/probes are monitored separately
 }
 
 // shouldLogPageView returns false for paths we explicitly exclude.
@@ -521,8 +636,25 @@ func shouldLogPageView(p string) bool {
 	return true
 }
 
+// pageViewReferer intentionally drops the caller-controlled Referer value.
+// It can contain query text, credentials, or private capability URLs, while
+// ordinary discovery analytics need only the bounded route and status fields.
+func pageViewReferer(_ *http.Request) string {
+	return ""
+}
+
 func suppressRequestLineIdentityTelemetry(p string) bool {
-	return p == "/api/v1/action-interests" || p == "/mcp" || strings.HasPrefix(p, "/mcp/")
+	for _, prefix := range []string{
+		"/api/v1/action-interests",
+		"/api/v1/action-tickets",
+		"/api/v1/provider/action-tickets/resolve",
+		"/mcp",
+	} {
+		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func isBotUA(ua string) bool {
@@ -616,7 +748,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 				h := sha256.Sum256([]byte(ip))
 				ipHash := hex.EncodeToString(h[:16])
 				ua := r.UserAgent()
-				ref := r.Referer()
+				ref := pageViewReferer(r)
 				go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 					r.URL.Path, r.Method, http.StatusGone, ipHash, ua, ref, dur.Milliseconds(), true)
 			}
@@ -640,7 +772,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			h := sha256.Sum256([]byte(ip))
 			ipHash := hex.EncodeToString(h[:16])
 			ua := r.UserAgent()
-			ref := r.Referer()
+			ref := pageViewReferer(r)
 			bot := isBotUA(ua) || isScannerPath(r.URL.Path)
 			go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 				r.URL.Path, r.Method, sw.status, ipHash, ua, ref, dur.Milliseconds(), bot)
@@ -873,10 +1005,10 @@ const installScript = `#!/bin/sh
 # copy-paste snippets for Cursor, Cline, and Continue.
 #
 # NHS endpoint: https://nothumansearch.ai/mcp (streamable-http, no auth)
-# 13 tools: search_agents, get_site_details, get_stats, list_categories,
+# 14 tools: search_agents, get_site_details, get_stats, list_categories,
 # get_top_sites, submit_site, register_monitor, verify_mcp,
 # check_url, find_mcp_servers, recent_additions, record_action_interest,
-# prepare_provider_action
+# prepare_provider_action, handoff_provider_action
 
 set -eu
 ENDPOINT="https://nothumansearch.ai/mcp"

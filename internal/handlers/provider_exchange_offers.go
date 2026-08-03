@@ -76,7 +76,7 @@ func (h *ProviderExchangeHandler) Offers(w http.ResponseWriter, r *http.Request)
 		providerWriteJSON(w, http.StatusCreated, map[string]any{
 			"offer":             offer,
 			"commercial_status": "draft",
-			"note":              "A draft cannot appear beside organic results until NHS records real prepaid funding or exact CPA terms and an administrator activates it.",
+			"note":              "A draft cannot appear beside organic results until the provider accepts its exact capped CPA terms, the owner verifies that acceptance, and an administrator activates it.",
 		})
 	default:
 		w.Header().Set("Allow", "GET, POST")
@@ -172,11 +172,7 @@ func (h *ProviderExchangeHandler) providerOfferInput(request providerOfferReques
 	if request.Currency != "usd" || request.PrincipalCurrency != "usd" {
 		return models.ProviderOfferInput{}, models.ErrInvalidProviderExchange
 	}
-	if request.BillingMode == "prepaid" {
-		if request.TermsCreditLimitCents != nil || request.TermsPeriodDays != nil {
-			return models.ProviderOfferInput{}, models.ErrInvalidProviderExchange
-		}
-	} else if request.BillingMode == "terms" {
+	if request.BillingMode == models.ProviderPilotBillingMode {
 		if request.TermsCreditLimitCents == nil || request.TermsPeriodDays == nil ||
 			*request.TermsCreditLimitCents < request.BountyCents || *request.TermsCreditLimitCents > providerMaximumTermsCreditCents ||
 			*request.TermsPeriodDays < 1 || *request.TermsPeriodDays > 90 {

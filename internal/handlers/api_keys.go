@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -24,6 +25,58 @@ func NewAPIKeyHandler(db *sql.DB, baseURL string) *APIKeyHandler {
 	return &APIKeyHandler{DB: db, BaseURL: baseURL}
 }
 
+func apiSubscribeMetadataValue(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 500 {
+		return value[:500]
+	}
+	return value
+}
+
+func apiSubscribeAttributionFromRequest(r *http.Request) map[string]string {
+	values := map[string]string{}
+	for _, key := range []string{"qc", "utm_source", "utm_medium", "utm_campaign"} {
+		if value := apiSubscribeMetadataValue(r.FormValue(key)); value != "" {
+			values[key] = value
+		}
+	}
+	return values
+}
+
+func apiSubscribeMetadata(email string, plan models.APIPlan, attribution map[string]string) map[string]string {
+	metadata := map[string]string{
+		"tenant":        "nothumansearch",
+		"product":       "nhs_api_subscription",
+		"product_id":    "nhs_api_" + plan.Name,
+		"source":        "api_key_subscribe",
+		"plan":          plan.Name,
+		"monthly_limit": fmt.Sprintf("%d", plan.MonthlyLimit),
+		"email":         email,
+	}
+	for key, value := range attribution {
+		if clean := apiSubscribeMetadataValue(value); clean != "" {
+			metadata[key] = clean
+		}
+	}
+	return metadata
+}
+
+func (h *APIKeyHandler) subscribeCancelURL(email string, attribution map[string]string) string {
+	values := url.Values{}
+	if email = strings.TrimSpace(email); email != "" {
+		values.Set("email", email)
+	}
+	for _, key := range []string{"qc", "utm_source", "utm_medium", "utm_campaign"} {
+		if value := attribution[key]; value != "" {
+			values.Set(key, value)
+		}
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return h.BaseURL + "/subscribe?" + encoded
+	}
+	return h.BaseURL + "/subscribe"
+}
+
 func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -36,8 +89,12 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Email string `json:"email"`
-		Plan  string `json:"plan"`
+		Email       string `json:"email"`
+		Plan        string `json:"plan"`
+		QC          string `json:"qc"`
+		UTMSource   string `json:"utm_source"`
+		UTMMedium   string `json:"utm_medium"`
+		UTMCampaign string `json:"utm_campaign"`
 	}
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -57,12 +114,18 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metadata := map[string]string{
-		"product":       "nhs_api_subscription",
-		"plan":          plan.Name,
-		"monthly_limit": fmt.Sprintf("%d", plan.MonthlyLimit),
-		"email":         req.Email,
+	attribution := apiSubscribeAttributionFromRequest(r)
+	for key, value := range map[string]string{
+		"qc":           req.QC,
+		"utm_source":   req.UTMSource,
+		"utm_medium":   req.UTMMedium,
+		"utm_campaign": req.UTMCampaign,
+	} {
+		if clean := apiSubscribeMetadataValue(value); clean != "" {
+			attribution[key] = clean
+		}
 	}
+	metadata := apiSubscribeMetadata(req.Email, plan, attribution)
 	params := &gostripe.CheckoutSessionParams{
 		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
@@ -80,7 +143,7 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		}},
 		Mode:          gostripe.String(string(gostripe.CheckoutSessionModeSubscription)),
 		SuccessURL:    gostripe.String(h.BaseURL + "/api/v1/api-keys/activate?session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:     gostripe.String(h.BaseURL + "/"),
+		CancelURL:     gostripe.String(h.subscribeCancelURL(req.Email, attribution)),
 		CustomerEmail: gostripe.String(req.Email),
 		Metadata:      metadata,
 		SubscriptionData: &gostripe.CheckoutSessionSubscriptionDataParams{

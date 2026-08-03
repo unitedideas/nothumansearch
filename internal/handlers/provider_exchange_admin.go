@@ -16,8 +16,6 @@ type providerAdminActionRequest struct {
 	EvidenceReference string `json:"evidence_reference"`
 }
 
-const providerMaximumAdminLedgerCents int64 = models.ProviderMoneyMaximumCents
-
 func (h *ProviderExchangeHandler) AdminOfferAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
@@ -41,46 +39,12 @@ func (h *ProviderExchangeHandler) AdminOfferAction(w http.ResponseWriter, r *htt
 	}
 	switch request.Action {
 	case "fund":
-		if request.AmountCents < 1 || request.AmountCents > providerMaximumAdminLedgerCents || strings.ToLower(strings.TrimSpace(request.Currency)) != "usd" {
-			providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "fund amount must be 1..100000000 cents in usd"})
-			return
-		}
-		entry, err := models.FundProviderOffer(h.DB, request.OfferID, request.AmountCents, request.Currency, request.EvidenceReference)
-		if err != nil {
-			status, message := providerExchangeStatus(err)
-			providerWriteJSON(w, status, map[string]string{"error": message})
-			return
-		}
-		status := http.StatusCreated
-		if entry.Replayed {
-			status = http.StatusOK
-		}
-		providerWriteJSON(w, status, map[string]any{
-			"budget_entry":      entry,
-			"created":           !entry.Replayed,
-			"idempotent_replay": entry.Replayed,
-			"evidence_scope":    "operator-recorded external funding evidence; this endpoint does not move money",
+		providerWriteJSON(w, http.StatusConflict, map[string]string{
+			"error": "prepaid and legacy funding writes are disabled for the terms-only pilot",
 		})
 	case "adjust":
-		if request.AmountCents == 0 || request.AmountCents < -providerMaximumAdminLedgerCents || request.AmountCents > providerMaximumAdminLedgerCents || strings.ToLower(strings.TrimSpace(request.Currency)) != "usd" {
-			providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "adjustment must be non-zero, within +/-100000000 cents, and in usd"})
-			return
-		}
-		entry, err := models.AdjustProviderOfferBudget(h.DB, request.OfferID, request.AmountCents, request.Currency, request.EvidenceReference)
-		if err != nil {
-			status, message := providerExchangeStatus(err)
-			providerWriteJSON(w, status, map[string]string{"error": message})
-			return
-		}
-		status := http.StatusCreated
-		if entry.Replayed {
-			status = http.StatusOK
-		}
-		providerWriteJSON(w, status, map[string]any{
-			"budget_entry":      entry,
-			"created":           !entry.Replayed,
-			"idempotent_replay": entry.Replayed,
-			"evidence_scope":    "operator-recorded adjustment; this endpoint does not move money",
+		providerWriteJSON(w, http.StatusConflict, map[string]string{
+			"error": "prepaid and legacy funding writes are disabled for the terms-only pilot",
 		})
 	case "activate":
 		offer, err := models.ActivateProviderOffer(h.DB, request.OfferID, request.OperatorReference, request.EvidenceReference)
@@ -90,8 +54,9 @@ func (h *ProviderExchangeHandler) AdminOfferAction(w http.ResponseWriter, r *htt
 			return
 		}
 		providerWriteJSON(w, http.StatusOK, map[string]any{
-			"offer":          offer,
-			"evidence_scope": "operator-recorded prepaid funding or exact CPA terms; not independently audited by NHS",
+			"offer":                    offer,
+			"commercial_proof_created": false,
+			"evidence_scope":           "Operational activation only; separate provider-authenticated and owner-verified commercial evidence is required and operator references alone cannot count as proof.",
 		})
 	case "pause":
 		offer, err := models.AdminPauseProviderOffer(h.DB, request.OfferID, request.OperatorReference, request.EvidenceReference)
@@ -106,7 +71,7 @@ func (h *ProviderExchangeHandler) AdminOfferAction(w http.ResponseWriter, r *htt
 			"evidence_reference": request.EvidenceReference,
 		})
 	default:
-		providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "action must be fund, adjust, activate, or pause"})
+		providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "action must be activate or pause; prepaid and legacy funding writes are disabled"})
 	}
 }
 
@@ -119,7 +84,12 @@ func (h *ProviderExchangeHandler) AdminProof(w http.ResponseWriter, r *http.Requ
 	if !h.requireAdmin(w, r) {
 		return
 	}
-	proof, err := models.GetProviderExchangeProof(h.DB)
+	pilotID := strings.TrimSpace(r.URL.Query().Get("pilot_id"))
+	if pilotID == "" {
+		providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "exact pilot_id required"})
+		return
+	}
+	proof, err := models.GetProviderExchangeProof(h.DB, pilotID, h.Signer)
 	if err != nil {
 		status, message := providerExchangeStatus(err)
 		providerWriteJSON(w, status, map[string]string{"error": message})
@@ -128,14 +98,15 @@ func (h *ProviderExchangeHandler) AdminProof(w http.ResponseWriter, r *http.Requ
 	providerWriteJSON(w, http.StatusOK, map[string]any{
 		"proof": proof,
 		"targets": map[string]int{
-			"operator_recorded_provider_budgets":  3,
-			"provider_reported_accepted_handoffs": 5,
-			"provider_reported_activations":       2,
-			"post_charge_provider_replenishments": 1,
+			"verified_provider_companies":             3,
+			"verified_provider_accepted_handoffs":     5,
+			"verified_provider_confirmed_activations": 2,
+			"verified_provider_renewals":              1,
 		},
-		"evidence_scope":        "Budgets and CPA terms are operator-recorded external evidence. Outcomes are provider-authenticated callbacks. Signed receipts prove NHS recorded those claims and budget effects; they do not independently audit the provider's business event.",
-		"organic_rank_sold":     false,
-		"raw_queries_sold":      false,
-		"agent_identities_sold": false,
+		"evidence_scope":             "pilot_thresholds_met is scoped to the exact requested pilot_id and uses only its enrolled verified companies, epoch-bound offers and tickets, observed handoffs, provider-authenticated outcomes, owner-verified funding or exact terms, and nonreversed renewal evidence.",
+		"operational_progress_scope": "operator_recorded and provider_reported legacy fields remain diagnostic observations and cannot satisfy pilot_thresholds_met.",
+		"organic_rank_sold":          false,
+		"raw_queries_sold":           false,
+		"agent_identities_sold":      false,
 	})
 }

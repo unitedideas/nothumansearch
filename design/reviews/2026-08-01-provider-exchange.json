@@ -1,8 +1,10 @@
 {
   "schema_version": 1,
   "skill": "$design-director",
-  "reviewed_at": "2026-08-02T03:28:14-07:00",
-  "base_revision": "122b5293e286148ed73b64930fd6978a38ca5edb",
+  "reviewed_at": "2026-08-02T11:09:45-07:00",
+  "base_revision": "267435481c6885bf3d0e035092dfa2ed423ca509",
+  "review_scope": "working tree: NHS provider and privacy templates only",
+  "review_scope_sha256": "f3fd4c703e1174c69ca902547fdef705c5b1c040f2f57976d45e3cb8f2c8281d",
   "discover": [
     "templates/providers.html",
     "templates/privacy.html"
@@ -11,16 +13,16 @@
     {
       "id": "provider-exchange-onboarding",
       "source": "templates/providers.html",
-      "category": "paid product",
-      "audience": "verified service providers and the humans operating their NHS provider accounts",
-      "primary_conversion": "current DNS-verified indexed-domain claim followed by one accurate draft provider-funded action",
-      "quality_metric": "distinct commercially activated providers followed by accepted handoffs, activations, and meaningful replenishment",
+      "category": "service acquisition",
+      "audience": "verified providers and the humans operating their NHS provider accounts",
+      "primary_conversion": "correct provider setup followed by one safe, consented handoff through the six-step exchange path",
+      "quality_metric": "successful DNS claims and a valid first handoff and controlled-intent resolution without support or security errors",
       "evidence_brief": "design/reviews/2026-08-01-provider-exchange.md",
       "verdict": "approved",
-      "reviewed_source_sha256": "9891c0c18fb09e9acd0375ad9575d39dc4ae977d43c368d08ee1b73c6fd63c97",
+      "reviewed_source_sha256": "8ca054ad176d0902b7342d4314c0ee197fd77e0ebd6e84aba1399b92b017b3ea",
       "renders": {
-        "desktop": "design/reviews/evidence/2026-08-01-provider-desktop.png",
-        "mobile": "design/reviews/evidence/2026-08-01-provider-mobile.png"
+        "desktop": "design/reviews/evidence/2026-08-02-provider-continuity-desktop.png",
+        "mobile": "design/reviews/evidence/2026-08-02-provider-continuity-mobile.png"
       },
       "checks": {
         "five_second": true,
@@ -36,15 +38,15 @@
       "id": "provider-exchange-privacy",
       "source": "templates/privacy.html",
       "category": "high-volume information",
-      "audience": "agent developers, principals, providers, and reviewers evaluating the discovery, consent, ownership, and accounting boundary",
-      "primary_conversion": "informed choice among the free organic link, a noncontacting Stage 1 action-interest receipt, and the separately authorized provider-funded action",
-      "quality_metric": "privacy or authorization disputes, invalid or conflicting receipt attempts, and later consented provider-action conversion rather than raw action-interest volume",
+      "audience": "principals, agents, verified providers, and reviewers evaluating NHS discovery, consent, ownership, and accounting boundaries",
+      "primary_conversion": "safe principal choice among free direct provider access, ticket authorization, a consented handoff, and optional controlled-intent disclosure",
+      "quality_metric": "a valid first handoff and controlled-intent resolution without privacy, authorization, support, or security errors",
       "evidence_brief": "design/reviews/2026-08-01-provider-exchange.md",
       "verdict": "approved",
-      "reviewed_source_sha256": "bb67874cf4ae66a960f04dd638f660db597b9ded02f621c132ed49e742a37c79",
+      "reviewed_source_sha256": "0ac00c147019b4b35410b87e25434556f077072c7abcfa7106f4885d87ad25ff",
       "renders": {
-        "desktop": "design/reviews/evidence/2026-08-02-privacy-desktop.png",
-        "mobile": "design/reviews/evidence/2026-08-02-privacy-mobile.png"
+        "desktop": "design/reviews/evidence/2026-08-02-privacy-handoff-v1-desktop.png",
+        "mobile": "design/reviews/evidence/2026-08-02-privacy-handoff-v1-mobile.png"
       },
       "checks": {
         "five_second": true,
@@ -60,119 +62,125 @@
   "additional_render_evidence": [
     {
       "viewport": "desktop 1440x900",
-      "state": "provider first screen signed out",
-      "file": "design/reviews/evidence/2026-08-01-provider-desktop.png",
-      "sha256": "599dc3de4aa24972a3236e74655364bcd75d1669bda26d1eb1729e9753277362"
+      "state": "provider first screen with free-discovery and provider-funded-action boundary",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-desktop.png",
+      "sha256": "784276c7f9eb7b4cf87c8a8e0aad75745bcc6dff58016cb9780dcddfb8a36169"
     },
     {
       "viewport": "mobile 390x844 CSS pixels",
-      "state": "provider first screen signed out",
-      "file": "design/reviews/evidence/2026-08-01-provider-mobile.png",
-      "sha256": "9d6f715e8d3253ba27de4af8961b3b9f40181d4268b740d920d6e69f0241dade"
+      "state": "provider first screen with free-discovery and provider-funded-action boundary",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-mobile.png",
+      "sha256": "933c870d95e58c3122297d3fe3272e5d1ebade9102b964c99b306f19ad86ecb0"
+    },
+    {
+      "viewport": "desktop 1440x900 isolated section capture",
+      "state": "complete six-step provider decision path from verification through outcome recording",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-path-desktop.png",
+      "sha256": "a335516d0f75b7ebaaf4c94908159cb75924de03f4c2f17736545efe8d7f8aba"
+    },
+    {
+      "viewport": "mobile 390x844 isolated section capture",
+      "state": "ordered reflowed provider decision path at a realistic mobile viewport",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-path-mobile.png",
+      "sha256": "34c81731372c6f2afbe72eefc6d33a6783877f5d51e0aa19229ca1088599394d"
+    },
+    {
+      "viewport": "desktop 1440x900 isolated section capture",
+      "state": "signed-in empty-account claim and terms-only draft setup with provider status and demand continuity copy",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-setup-desktop.png",
+      "sha256": "26825f64de888479801aa978bf45ce465c9a9226a41d7957513426f3bbe5aa3e"
+    },
+    {
+      "viewport": "mobile 390x844 isolated section capture",
+      "state": "signed-in empty-account claim setup with returned-once key continuity copy",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-setup-mobile.png",
+      "sha256": "b17bea6b30b42d3219a1eb1912b36c1c8ed3d72d63e2b6a26e4588cc876ebee4"
+    },
+    {
+      "viewport": "desktop 1440x900 isolated section capture",
+      "state": "agent-facing organic separation, consented handoff, and provider callback contract",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-contract-desktop.png",
+      "sha256": "6431a6ee180690d3d55e07ad18d99ee96c391bd48e004911d7b6a161bbf55002"
+    },
+    {
+      "viewport": "mobile 390x844 isolated section capture",
+      "state": "agent-facing contract reflow at a realistic mobile viewport",
+      "file": "design/reviews/evidence/2026-08-02-provider-continuity-contract-mobile.png",
+      "sha256": "18914bb77c77e4c49615c8f69745bce625b987d408cf1d03ff653d6ae4e81afb"
     },
     {
       "viewport": "desktop 1440x900",
-      "state": "signed-in provider setup with current DNS proof",
-      "file": "design/reviews/evidence/2026-08-01-provider-dashboard-desktop.png",
-      "sha256": "b107e338efcee6162d9096e6312c1d030ed1469331054734ab278c6bc227e331"
+      "state": "privacy first screen with free discovery and separate authorization boundaries",
+      "file": "design/reviews/evidence/2026-08-02-privacy-handoff-v1-desktop.png",
+      "sha256": "c8b0d7147bccc9be099d6e997d08b155865f7648e9d09735ee3830ab43f6f6d0"
     },
     {
       "viewport": "mobile 390x844 CSS pixels",
-      "state": "signed-in provider setup with current DNS proof",
-      "file": "design/reviews/evidence/2026-08-01-provider-dashboard-mobile.png",
-      "sha256": "3ee55b9a93caaa968d1050a9959cee660071796bb7fd8a4c4443c8c108a1712a"
+      "state": "privacy first screen with free discovery and separate authorization boundaries",
+      "file": "design/reviews/evidence/2026-08-02-privacy-handoff-v1-mobile.png",
+      "sha256": "c9365adaa2136d407b12328b77c7bf67d4b9cccec3df56e391f07e14d64e88d1"
     },
     {
-      "viewport": "desktop 1440x900",
-      "state": "privacy first screen",
-      "file": "design/reviews/evidence/2026-08-01-privacy-desktop.png",
-      "sha256": "bf6677b6369ed14346a70fe194620e17a7ef14e242e0bf6fba9934d0e6f6c471"
+      "viewport": "desktop 1440x900; 1040x1084 section capture",
+      "state": "action-interest eligibility, boot or hourly physical deletion, and cleanup-delay disclosure",
+      "file": "design/reviews/evidence/2026-08-02-privacy-physical-retention-desktop.png",
+      "sha256": "8b4bc35031c9a651304acc602c48b5a83b52a6e29fb700f86245d32a46bde112"
     },
     {
-      "viewport": "mobile 390x844 CSS pixels",
-      "state": "privacy first screen",
-      "file": "design/reviews/evidence/2026-08-01-privacy-mobile.png",
-      "sha256": "01b9537074564efcdb877c1cdd4e3ab15e2c99f9a0e385a255aec6a097946e4d"
+      "viewport": "mobile 390x844; 362x2155 section capture",
+      "state": "action-interest eligibility, boot or hourly physical deletion, and cleanup-delay disclosure",
+      "file": "design/reviews/evidence/2026-08-02-privacy-physical-retention-mobile.png",
+      "sha256": "675649e8d97dac6334174a4a1585daf2f08acabc52f9c1941be05a08876d6ed8"
     },
     {
-      "viewport": "desktop 1440x900",
-      "state": "privacy exact returned-offer disclosure",
-      "file": "design/reviews/evidence/2026-08-01-privacy-discovery-desktop.png",
-      "sha256": "22055de46dcedb780ebe7fdf1714cbcb0ae576c7f62b5f4685cae3402aaff9f2"
+      "viewport": "desktop 1440x900; 1040x1195 section capture",
+      "state": "exact handoff consent, stored fields, and excluded fields",
+      "file": "design/reviews/evidence/2026-08-02-privacy-handoff-section-desktop.png",
+      "sha256": "9c03dccf5c30a6ad336952d24959abaad011c22931d1f6f367f0d61cbbc193c0"
     },
     {
-      "viewport": "mobile 390x844 CSS pixels",
-      "state": "privacy exact returned-offer disclosure",
-      "file": "design/reviews/evidence/2026-08-01-privacy-discovery-mobile.png",
-      "sha256": "3ec98b3d79afce6247929e4769ff50be0436a3d3287a37827ba56816a116e6ac"
+      "viewport": "mobile 390x844; 362x2500 section capture",
+      "state": "exact handoff consent, stored fields, and excluded fields",
+      "file": "design/reviews/evidence/2026-08-02-privacy-handoff-section-mobile.png",
+      "sha256": "8154d04829da2920a2c7507262b9467826293914d40e0869b43d60748477bb90"
     },
     {
-      "viewport": "desktop 1440x900",
-      "state": "privacy operational and DNS ownership disclosure",
-      "file": "design/reviews/evidence/2026-08-01-privacy-dns-desktop.png",
-      "sha256": "fc6b4d665975cd72a26f1a21b859585774df57ebd672260939c5baea90a2c3ae"
+      "viewport": "desktop 1440x900; 1040x1247 section capture",
+      "state": "optional controlled-intent disclosure, resolver allowlist, exclusions, and exact consent",
+      "file": "design/reviews/evidence/2026-08-02-privacy-controlled-intent-desktop.png",
+      "sha256": "2418c3cd86ca4384bb81c5798193ef174579b2514f51fb27641c4714b4bcfb12"
     },
     {
-      "viewport": "mobile 390x844 CSS pixels",
-      "state": "privacy operational and DNS ownership disclosure",
-      "file": "design/reviews/evidence/2026-08-01-privacy-dns-mobile.png",
-      "sha256": "42c3ba0b1c21a5dc8c86cd85e67e8c430c2afad8278c0b8529a0698bb6beaced"
+      "viewport": "mobile 390x844; 362x2608 section capture",
+      "state": "optional controlled-intent disclosure, resolver allowlist, exclusions, and exact consent",
+      "file": "design/reviews/evidence/2026-08-02-privacy-controlled-intent-mobile.png",
+      "sha256": "35c03389b73f7814da90e09cdebeb5660f3beb3198ee93a6d2d693353688fbf9"
     },
     {
-      "viewport": "desktop 1440x900",
-      "state": "privacy first screen with the three-stage discovery and authorization boundary",
-      "file": "design/reviews/evidence/2026-08-02-privacy-desktop.png",
-      "sha256": "78a1836a57d5515cd898c00ec770924ac5ab19167175d74618e5cc1d2dc50d0d"
+      "viewport": "desktop 1440x8297 full page",
+      "state": "complete privacy, authorization, retention, and accounting surface",
+      "file": "design/reviews/evidence/2026-08-02-privacy-handoff-v1-full-desktop.png",
+      "sha256": "8319b34aa60226d00f1e78de1c2d09cfe7263f093ccfa95219e915ad30a9c4cc"
     },
     {
-      "viewport": "mobile 390x844 CSS pixels",
-      "state": "privacy first screen with the three-stage discovery and authorization boundary",
-      "file": "design/reviews/evidence/2026-08-02-privacy-mobile.png",
-      "sha256": "29f5872cb1d29635d2e412de3b5189385bcab9200c58a70d4b4a06a558c3f905"
-    },
-    {
-      "viewport": "desktop 1440x900",
-      "state": "complete noncontacting action-interest contract and attestation",
-      "file": "design/reviews/evidence/2026-08-02-privacy-action-interest-desktop.png",
-      "sha256": "d6033a2f948c20932fd6edebabdb61ee2a4ad13052776f65a96d1f6f782e4c88"
-    },
-    {
-      "viewport": "mobile 390x844 CSS pixels",
-      "state": "noncontacting action-interest receipt boundary",
-      "file": "design/reviews/evidence/2026-08-02-privacy-action-interest-mobile.png",
-      "sha256": "b86a26cce32a07fb0207a240afd038e9913c650fe65ee74edd4ab45962841194"
-    },
-    {
-      "viewport": "mobile 390x844 CSS pixels",
-      "state": "action-interest attestation opening and retention boundary",
-      "file": "design/reviews/evidence/2026-08-02-privacy-action-interest-consent-mobile.png",
-      "sha256": "87f501f3d3559dfa4fa62d991656aa1961e344729340567cfd9bae76d8b02a70"
-    },
-    {
-      "viewport": "desktop 1440 CSS pixels full page",
-      "state": "complete privacy and authorization surface",
-      "file": "design/reviews/evidence/2026-08-02-privacy-full-desktop.png",
-      "sha256": "a97a0d30877d1f81f96dcd93a71f5f0d6521c288ec83d6589ffd4e7e6ae03084"
-    },
-    {
-      "viewport": "mobile 390 CSS pixels full page",
-      "state": "complete privacy and authorization surface",
-      "file": "design/reviews/evidence/2026-08-02-privacy-full-mobile.png",
-      "sha256": "23b1590b93b85469b13265db4bba8fc72a38a8527bff441ee5e21d17ad93054f"
+      "viewport": "mobile 390x15146 full page",
+      "state": "complete privacy, authorization, retention, and accounting surface",
+      "file": "design/reviews/evidence/2026-08-02-privacy-handoff-v1-full-mobile.png",
+      "sha256": "629731e18c55125892dbe961893adf00ca5b22bfd7bcb5f3fe4a6f29f3e04b46"
     }
   ],
   "measured": {
-    "provider_review_desktop_widths": {
+    "provider_refresh_desktop_widths": {
       "inner": 1440,
-      "client": 1425,
-      "document": 1425,
-      "body": 1425
+      "client": 1440,
+      "document": 1440,
+      "body": 1440
     },
-    "provider_review_mobile_widths": {
+    "provider_refresh_mobile_widths": {
       "inner": 390,
-      "client": 375,
-      "document": 375,
-      "body": 375
+      "client": 390,
+      "document": 390,
+      "body": 390
     },
     "privacy_refresh_desktop_widths": {
       "inner": 1440,
@@ -186,27 +194,44 @@
       "document": 390,
       "body": 390
     },
-    "privacy_full_page_css_heights": {
-      "desktop": 5023,
-      "mobile": 8535
+    "full_page_css_heights": {
+      "provider_signed_out_desktop": 4200,
+      "provider_signed_out_mobile": 6555,
+      "provider_signed_in_desktop": 5208,
+      "provider_signed_in_mobile": 8442,
+      "privacy_desktop": 8301,
+      "privacy_mobile": 15151
     },
     "contrast_ratios": {
-      "primary_text_on_background": 16.02,
-      "muted_text_on_background": 7.05,
-      "muted_text_on_surface": 6.62,
-      "accent_text_on_background": 9.37,
+      "provider_primary_text_on_background": 15.88,
+      "provider_muted_text_on_background": 6.62,
+      "provider_muted_text_on_surface": 6.27,
       "button_text_on_accent": 6.07,
-      "green_signal_on_surface": 10.47,
-      "action_interest_consent_text": 10.60,
-      "action_interest_version_label": 8.16
+      "green_signal_on_surface": 10.56,
+      "privacy_primary_text_on_background": 16.02,
+      "privacy_muted_text_on_background": 7.05,
+      "controlled_intent_consent_text": 10.60,
+      "controlled_intent_version_label": 8.16,
+      "physical_retention_label": 15.04
+    },
+    "accessibility_structure": {
+      "one_h1_and_one_main_per_surface": true,
+      "html_language": "en",
+      "unlabeled_fields": 0,
+      "broken_aria_labelledby_references": 0,
+      "empty_links_without_accessible_name": 0,
+      "minimum_primary_control_height_css_pixels": 44,
+      "visible_focus_outline_css_pixels": 3,
+      "reflow_width_tested_css_pixels": 320,
+      "horizontal_overflow_at_reflow_width": false
     },
     "browser_errors": 0,
-    "privacy_refresh_renderer": "Chromium headless shell 1217 through the Chrome DevTools Protocol; exact rendered template captured at realistic viewports, with unchanged DOM scrolled to section-specific evidence"
+    "renderer": "Chromium 147.0.7727.15 headless shell from the Playwright bundle; exact working-tree templates rendered at 1440x900 and 390x844. Section evidence locally hides unrelated sibling sections without changing reviewed target markup or styles; the signed-in empty-account layout receives only a local empty claims response."
   },
   "unresolved_release_findings": [
     "Dedicated provider-exchange signing key reference is not provisioned.",
     "Final security reread, owner-authorized deployment, and production smoke remain pending.",
-    "No real provider budget, handoff, activation, collection, replenishment, or renewal evidence exists yet."
+    "No real provider acceptance, handoff, activation, collection, or renewal evidence exists yet."
   ],
   "status": "visual_approval_for_exact_hashes_preproduction"
 }

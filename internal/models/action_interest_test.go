@@ -111,6 +111,21 @@ func TestActionInterestMigrationPrivacyAndBindingContract(t *testing.T) {
 			t.Fatalf("action-interest migration retained forbidden concept %q", forbidden)
 		}
 	}
+	stage1IntegritySource, err := os.ReadFile("../../migrations/025_stage1_fact_integrity.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage1Integrity := string(stage1IntegritySource)
+	for _, required := range []string{
+		"CONSTRAINT result_selections_returned_result_fk",
+		"FOREIGN KEY (search_receipt_id, site_domain_snapshot)",
+		"REFERENCES public.organic_results_returned(search_receipt_id, site_domain_snapshot)",
+		"WHERE name = '025_stage1_fact_integrity.sql'",
+	} {
+		if !strings.Contains(stage1Integrity, required) {
+			t.Fatalf("Stage 1 integrity migration missing %q", required)
+		}
+	}
 }
 
 func TestActionInterestReplayLookupPrecedesFreshEntropy(t *testing.T) {
@@ -144,24 +159,62 @@ func TestStage1DemandProofSourceIsAggregateAndSyntheticSafe(t *testing.T) {
 	}
 	report := text[start:]
 	for _, required := range []string{
+		"Isolation: sql.LevelRepeatableRead",
+		"ReadOnly:  true",
+		"SELECT clock_timestamp()",
+		"AsOf:                             cohortAsOf",
 		"COUNT(DISTINCT interest.search_receipt_id)",
 		"COUNT(DISTINCT selection.search_receipt_id)",
+		"name='025_stage1_fact_integrity.sql'",
+		"ELSE '020_action_interest_receipts.sql'",
+		"receipt.stage1_integrity_generation=1",
+		"returned.stage1_integrity_generation=1",
+		"selection.stage1_integrity_generation=1",
+		"interest.stage1_integrity_generation=1",
+		"eligible_searches AS",
+		"EXISTS (\n\t\t\t\tSELECT 1 FROM organic_results_returned returned",
+		"returned.returned_at >= cohort_window.started_at",
+		"returned.returned_at <= cohort_window.now_at",
+		"returned.returned_at >= GREATEST(",
+		"returned.returned_at <= clock.now_at",
+		"returned.returned_at >= receipt.returned_started_at",
+		"returned.returned_at <= receipt.returned_as_of",
+		"JOIN eligible_searches receipt ON receipt.id=selection.search_receipt_id",
+		"returned.site_domain_snapshot=selection.site_domain_snapshot",
+		"JOIN eligible_searches receipt ON receipt.id=interest.search_receipt_id",
 		"HAVING COUNT(DISTINCT receipt.id) >= $2",
+		"COUNT(DISTINCT returned.site_domain_snapshot) >= $5",
+		"site.category<>'spam'",
 		"HAVING COUNT(DISTINCT interest.search_receipt_id) >= $2",
 		"CountsAreReceiptsNotUniqueAgents: true",
 		"CommercialProof:                  false",
 		"Stage1ObservationWindowDays",
+		"Stage1CandidateTopicReceipts",
+		"Stage1CandidateTopicDomains",
+		"bucket.Value != \"other\"",
+		"topic = ANY($4::text[])",
+		"stage1ControlledDemandTopics()",
+		"proof.PilotCandidateTopicAvailable",
 		"proof.SearchReceiptsWithSelection >= proof.Targets[\"search_receipts_with_selection\"]",
 	} {
 		if !strings.Contains(report, required) {
 			t.Fatalf("Stage 1 demand proof missing %q", required)
 		}
 	}
-	if got := strings.Count(report, "NOT receipt.is_synthetic"); got < 8 {
-		t.Fatalf("Stage 1 demand proof synthetic exclusions = %d, want at least 8", got)
+	if got := strings.Count(report, "NOT receipt.is_synthetic"); got < 3 {
+		t.Fatalf("Stage 1 eligible-cohort synthetic exclusions = %d, want at least 3", got)
 	}
-	if got := strings.Count(report, "interest.expires_at > NOW()"); got != 4 {
-		t.Fatalf("Stage 1 live action-interest filters = %d, want 4", got)
+	if got := strings.Count(report, "returned.returned_at >="); got < 5 {
+		t.Fatalf("Stage 1 participating-result lower bounds = %d, want at least 5", got)
+	}
+	if got := strings.Count(report, "returned.returned_at <="); got < 5 {
+		t.Fatalf("Stage 1 participating-result cutoffs = %d, want at least 5", got)
+	}
+	if strings.Contains(report, "receipt.result_count > 0") {
+		t.Fatal("Stage 1 meaningful-search proof trusts total matches instead of returned rows")
+	}
+	if got := strings.Count(report, "interest.expires_at >"); got != 2 {
+		t.Fatalf("Stage 1 live action-interest filters = %d, want 2 cohort queries", got)
 	}
 	for _, forbidden := range []string{"SELECT receipt.public_id", "SELECT interest.public_id", "agent_identity", "raw_query"} {
 		if strings.Contains(report, forbidden) {

@@ -3,14 +3,15 @@ package handlers
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
-// The MCP endpoint is a hard wall: a tools/call with no API key must be rejected
-// with key_required, before any DB access (so this is safe with a nil DB).
-func TestConsumeMCPHardWallNoKey(t *testing.T) {
+// The legacy quota helper still fails closed without a key. Public MCP
+// discovery no longer routes through this helper.
+func TestLegacyConsumeMCPNoKey(t *testing.T) {
 	g := NewUsageGate(nil, "https://nothumansearch.ai")
 	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
 	_, _, _, _, err := g.ConsumeMCP(req, "search_agents")
@@ -19,9 +20,7 @@ func TestConsumeMCPHardWallNoKey(t *testing.T) {
 	}
 }
 
-// An unauthenticated request (no session, no API key) is not entitled to full
-// search results.
-func TestSearchEntitledAnonymous(t *testing.T) {
+func TestLegacySearchEntitledAnonymous(t *testing.T) {
 	a := NewAuthService(nil, "https://nothumansearch.ai")
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=payments", nil)
 	entitled, via, key := a.SearchEntitled(req)
@@ -44,5 +43,29 @@ func TestAPIPlanForUnlimited(t *testing.T) {
 	}
 	if got := models.APIPlans(); len(got) != 1 {
 		t.Fatalf("APIPlans() len = %d, want 1", len(got))
+	}
+}
+
+func TestSubscribePagePreservesCampaignAttributionInCheckoutPayload(t *testing.T) {
+	a := NewAuthService(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodGet, "/subscribe?email=buyer@example.com&qc=campaign-123&utm_source=linkedin&utm_medium=qlimit&utm_campaign=campaign-123", nil)
+	rr := httptest.NewRecorder()
+
+	a.SubscribePage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("subscribe page status = %d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	for _, want := range []string{
+		`value="buyer@example.com"`,
+		`id="qc" value="campaign-123"`,
+		`id="utm_source" value="linkedin"`,
+		`id="utm_medium" value="qlimit"`,
+		`"qc":document.getElementById("qc").value`,
+		`"utm_campaign":document.getElementById("utm_campaign").value`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("subscribe page missing %q: %s", want, body)
+		}
 	}
 }

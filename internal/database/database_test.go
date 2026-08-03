@@ -1,12 +1,46 @@
 package database
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
 )
+
+func TestDatabaseDSNIncludesExactReleaseApplicationName(t *testing.T) {
+	const revision = "0123456789abcdef0123456789abcdef01234567"
+	got, err := databaseDSNWithReleaseApplicationName(
+		"postgres://db.example.test/nhs?sslmode=require&application_name=stale",
+		revision,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value := parsed.Query().Get("application_name"); value != "nhs-server:"+revision {
+		t.Fatalf("application_name=%q", value)
+	}
+	if value := parsed.Query().Get("sslmode"); value != "require" {
+		t.Fatalf("sslmode=%q", value)
+	}
+
+	keyword, err := databaseDSNWithReleaseApplicationName("host=db.example.test dbname=nhs", revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(keyword, " application_name='nhs-server:"+revision+"'") {
+		t.Fatalf("keyword DSN did not receive bounded application identity")
+	}
+	if _, err := databaseDSNWithReleaseApplicationName("postgres://db.example.test/nhs", "short"); err == nil {
+		t.Fatal("invalid release identity was accepted for database sessions")
+	}
+}
 
 func TestMigrationStatementsIgnoresSemicolonsInLineComments(t *testing.T) {
 	data := `-- Created at /fix/{host} intake; paid_at set by Stripe webhook;
@@ -354,6 +388,591 @@ func TestProviderCapacityProtectedContractCoversDeclaredDelta(t *testing.T) {
 	}
 }
 
+func TestProviderCommercialProofProtectedContractCoversDeclaredDelta(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "022_provider_commercial_proof.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"Nothing in this migration backfills a qualifying company or commitment",
+		"provider_action_handoff_cutover_inflight",
+		"zero live pre-handoff action tickets",
+		"LOCK TABLE public.action_tickets IN ACCESS EXCLUSIVE MODE",
+		"ALTER COLUMN commercial_terms_contract_version_snapshot DROP DEFAULT",
+		"ALTER COLUMN commercial_terms_sha256_snapshot DROP DEFAULT",
+		"CREATE TABLE IF NOT EXISTS provider_commercial_acceptance_events",
+		"CREATE TABLE IF NOT EXISTS provider_pilot_companies",
+		"CREATE TABLE IF NOT EXISTS provider_commercial_commitment_events",
+		"CREATE TABLE IF NOT EXISTS provider_action_handoff_receipts",
+		"provider_commercial_acceptance_fresh_claim",
+		"provider_pilot_company_exact_acceptance",
+		"provider_commercial_commitment_replenishment",
+		"provider_commercial_commitment_reversal_amount",
+		"provider_commercial_commitment_terms_renewal",
+		"provider_action_handoff_receipt_enforced",
+		"enforce_provider_action_handoff_receipt",
+		"action_ticket_observed_handoff_status_enforced",
+		"action_ticket_observed_handoff_insert_enforced",
+		"enforce_action_ticket_observed_handoff_status",
+		"action_ticket_observed_handoff_required",
+		"principal_handoff_consent",
+		"handoff_consent_version",
+		"source_effective_at <= owner_verified_at",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("022 commercial proof contract is missing %q", required)
+		}
+	}
+	prior := protectedMigrationSpecs["021_provider_capacity_reservations.sql"]
+	current, ok := protectedMigrationSpecs["022_provider_commercial_proof.sql"]
+	if !ok {
+		t.Fatal("provider-commercial-proof migration has no protected schema contract")
+	}
+
+	priorRelations := map[string]bool{}
+	for _, relation := range prior.relations {
+		priorRelations[relation.name] = true
+	}
+	deltaRelations := map[string]migrationRelation{}
+	for _, relation := range current.relations {
+		if !priorRelations[relation.name] {
+			deltaRelations[relation.name] = relation
+		}
+	}
+	declaredRelations := map[string]string{}
+	relationPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?(TABLE|INDEX) IF NOT EXISTS ([a-z0-9_]+)`)
+	for _, match := range relationPattern.FindAllStringSubmatch(migrationSQL, -1) {
+		kind := "i"
+		if match[1] == "TABLE" {
+			kind = "r"
+		}
+		declaredRelations[match[2]] = kind
+	}
+	declaredIndexParents := map[string]string{}
+	indexPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS ([a-z0-9_]+)\s+ON ([a-z0-9_]+)`)
+	for _, match := range indexPattern.FindAllStringSubmatch(migrationSQL, -1) {
+		declaredIndexParents[match[1]] = match[2]
+	}
+	if len(deltaRelations) != len(declaredRelations) {
+		t.Fatalf("022 relation delta has %d entries, migration declares %d", len(deltaRelations), len(declaredRelations))
+	}
+	for name, relation := range deltaRelations {
+		if want, present := declaredRelations[name]; !present || relation.relkind != want {
+			t.Fatalf("022 relation delta mismatch for %s: kind=%q declared=%q present=%t", name, relation.relkind, want, present)
+		}
+		if relation.relkind == "i" && relation.parent != declaredIndexParents[name] {
+			t.Fatalf("022 index %s parent=%q, migration declares %q", name, relation.parent, declaredIndexParents[name])
+		}
+		if !current.footprintRelations[name] {
+			t.Fatalf("022 relation delta %s is not marked as its new footprint", name)
+		}
+	}
+	for name := range current.footprintRelations {
+		if _, present := deltaRelations[name]; !present {
+			t.Fatalf("022 marks inherited/unknown relation %s as a new footprint", name)
+		}
+	}
+
+	priorRules := map[string]bool{}
+	for _, rule := range prior.rules {
+		priorRules[rule.name] = true
+	}
+	deltaRules := map[string]migrationRule{}
+	for _, rule := range current.rules {
+		if !priorRules[rule.name] {
+			deltaRules[rule.name] = rule
+		}
+	}
+	declaredRules := map[string]string{}
+	rulePattern := regexp.MustCompile(`(?m)^CREATE OR REPLACE RULE ([a-z0-9_]+) AS\s+ON (?:UPDATE|DELETE) TO ([a-z0-9_]+)`)
+	for _, match := range rulePattern.FindAllStringSubmatch(migrationSQL, -1) {
+		declaredRules[match[1]] = match[2]
+	}
+	if len(deltaRules) != len(declaredRules) {
+		t.Fatalf("022 rule delta has %d entries, migration declares %d", len(deltaRules), len(declaredRules))
+	}
+	for name, rule := range deltaRules {
+		if want, present := declaredRules[name]; !present || rule.relation != want {
+			t.Fatalf("022 rule delta mismatch for %s: relation=%q declared=%q present=%t", name, rule.relation, want, present)
+		}
+		if !current.footprintRules[name] {
+			t.Fatalf("022 rule delta %s is not marked as its new footprint", name)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
+func TestControlledIntentDisclosureProtectedContractCarries022(t *testing.T) {
+	prior := protectedMigrationSpecs["022_provider_commercial_proof.sql"]
+	current, ok := protectedMigrationSpecs["023_provider_controlled_intent_disclosure.sql"]
+	if !ok {
+		t.Fatal("controlled-intent disclosure migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations) || len(current.rules) != len(prior.rules) ||
+		len(current.footprintRelations) != 0 || len(current.footprintRules) != 0 ||
+		len(current.footprintProbes) != 4 {
+		t.Fatalf("023 cumulative contract shape relations=%d/%d rules=%d/%d relation_delta=%d rule_delta=%d probes=%d",
+			len(current.relations), len(prior.relations), len(current.rules), len(prior.rules),
+			len(current.footprintRelations), len(current.footprintRules), len(current.footprintProbes))
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "023_provider_controlled_intent_disclosure.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		"Existing handoffs are deliberately backfilled as declined",
+		"principal_controlled_intent_disclosure_consent",
+		"controlled_intent_disclosure_consent_version",
+		"nhs-provider-controlled-intent-disclosure-consent-v1",
+		"provider_handoff_intent_disclosure_consent_pair",
+		"action_ticket_controlled_intent_immutability_enforced",
+		"enforce_action_ticket_controlled_intent_immutability",
+		"only allowed change is the existing one-way privacy redaction transition",
+	} {
+		if !strings.Contains(string(data), required) {
+			t.Fatalf("023 disclosure contract is missing %q", required)
+		}
+	}
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
+func TestProviderPilotBoundaryProtectedContractCarries023(t *testing.T) {
+	prior := protectedMigrationSpecs["023_provider_controlled_intent_disclosure.sql"]
+	current, ok := protectedMigrationSpecs["024_provider_pilot_boundary.sql"]
+	if !ok {
+		t.Fatal("provider-pilot boundary migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations)+8 ||
+		len(current.rules) != len(prior.rules)+5 ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions)+2 ||
+		len(current.footprintRelations) != 8 ||
+		len(current.footprintRules) != 5 ||
+		len(current.footprintFunctions) != 2 ||
+		len(current.footprintProbes) != 21 {
+		t.Fatalf(
+			"024 cumulative contract shape relations=%d/%d rules=%d/%d fingerprint_functions=%d/%d+2 relation_delta=%d rule_delta=%d function_delta=%d probes=%d",
+			len(current.relations), len(prior.relations)+8,
+			len(current.rules), len(prior.rules)+5,
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintRelations), len(current.footprintRules),
+			len(current.footprintFunctions),
+			len(current.footprintProbes),
+		)
+	}
+	for _, function := range []string{
+		"provider_pilot_stage1_eligibility_snapshot_sha256(text,uuid,text,timestamptz,timestamptz,uuid,uuid,uuid,text,timestamptz)",
+		"provider_pilot_enrollment_eligibility_is_current(uuid,uuid)",
+	} {
+		if !current.footprintFunctions[function] {
+			t.Fatalf("024 standalone function %q is not protected as migration footprint", function)
+		}
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "024_provider_pilot_boundary.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"provider_pilot_epoch_insert_enforced",
+		"provider_pilot_stage1_evidence_window",
+		"provider_pilot_stage1_thresholds",
+		"provider_pilot_stage1_snapshot_hash",
+		"provider_pilot_stage1_eligibility_snapshot_sha256",
+		"provider_pilot_enrollment_eligibility_is_current",
+		"provider_pilot_enrollment_enforced",
+		"FOR UPDATE",
+		"provider_pilot_enrollment_cohort_cap",
+		"provider_pilot_epoch_event_enforced",
+		"provider_pilot_event_snapshot_hash",
+		"provider_offer_pilot_enrollment_claim",
+		"provider_pilot_returned_offer_enforced",
+		"provider_returned_offer_exact_snapshot",
+		"provider_returned_offer_organic_result",
+		"provider_returned_offer_receipt_window",
+		"action_ticket_pilot_insert_enforced",
+		"action_ticket_pilot_exact_snapshot",
+		"action_ticket_pilot_returned_offer",
+		"action_ticket_pilot_provider_cap",
+		"action_ticket_pilot_total_cap",
+		"action_ticket_pilot_snapshot_immutable",
+		"zz_provider_action_handoff_pilot_boundary_enforced",
+		"provider_pilot_handoff_active_epoch",
+		"provider_pilot_epoch_enrollment_freshness",
+		"NEW.activated_at := statement_timestamp()",
+		"NEW.closed_at := statement_timestamp()",
+		"NEW.enrolled_at := statement_timestamp()",
+		"NEW.returned_at := statement_timestamp()",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("024 pilot boundary contract is missing %q", required)
+		}
+	}
+
+	priorRelations := map[string]bool{}
+	for _, relation := range prior.relations {
+		priorRelations[relation.name] = true
+	}
+	declaredRelations := map[string]bool{}
+	relationPattern := regexp.MustCompile(`(?m)^CREATE (?:UNIQUE )?(?:TABLE|INDEX) IF NOT EXISTS ([a-z0-9_]+)`)
+	for _, match := range relationPattern.FindAllStringSubmatch(migrationSQL, -1) {
+		declaredRelations[match[1]] = true
+	}
+	for _, relation := range current.relations {
+		if priorRelations[relation.name] {
+			continue
+		}
+		if !declaredRelations[relation.name] {
+			t.Fatalf("024 protected relation delta %s is not declared by the migration", relation.name)
+		}
+		if !current.footprintRelations[relation.name] {
+			t.Fatalf("024 protected relation delta %s is not marked as footprint", relation.name)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
+func TestStage1FactIntegrityProtectedContractCarries024(t *testing.T) {
+	prior := protectedMigrationSpecs["024_provider_pilot_boundary.sql"]
+	current, ok := protectedMigrationSpecs["025_stage1_fact_integrity.sql"]
+	if !ok {
+		t.Fatal("Stage 1 fact-integrity migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations) ||
+		len(current.rules) != len(prior.rules)+2 ||
+		len(current.fingerprintTables) != 5 ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions) ||
+		len(current.footprintRelations) != 0 ||
+		len(current.footprintRules) != 2 ||
+		len(current.footprintProbes) != 15 {
+		t.Fatalf(
+			"025 cumulative contract shape relations=%d/%d rules=%d/%d fingerprint_tables=%d fingerprint_functions=%d/%d relation_delta=%d rule_delta=%d probes=%d",
+			len(current.relations), len(prior.relations),
+			len(current.rules), len(prior.rules)+2,
+			len(current.fingerprintTables),
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintRelations),
+			len(current.footprintRules), len(current.footprintProbes),
+		)
+	}
+	if !reflect.DeepEqual(current.fingerprintFunctions, prior.fingerprintFunctions) {
+		t.Fatalf("025 did not carry forward inherited fingerprint functions: prior=%v current=%v", prior.fingerprintFunctions, current.fingerprintFunctions)
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "025_stage1_fact_integrity.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"nhs_schema_migrations_no_update",
+		"nhs_schema_migrations_no_delete",
+		"result_selections_returned_result_fk",
+		"stage1_integrity_generation",
+		"search_receipt_stage1_immutability_enforced",
+		"organic_result_stage1_immutability_enforced",
+		"result_selection_stage1_immutability_enforced",
+		"stage1_search_receipt_insert_timestamp_owned",
+		"stage1_organic_result_insert_timestamp_owned",
+		"stage1_result_selection_insert_timestamp_owned",
+		"stage1_action_interest_insert_timestamp_owned",
+		"NEW.created_at := clock_timestamp()",
+		"NEW.returned_at := clock_timestamp()",
+		"NEW.selected_at := clock_timestamp()",
+		"INTO NEW.expires_at",
+		"aa_provider_pilot_stage1_epoch_anchor_locked",
+		"lock_provider_pilot_stage1_epoch_anchor",
+		"ab_provider_pilot_stage1_generation_enforced",
+		"enforce_provider_pilot_stage1_generation",
+		"provider_pilot_stage1_integrity_generation",
+		"FOR UPDATE",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("025 Stage 1 fact-integrity contract is missing %q", required)
+		}
+	}
+	wantFingerprintTables := map[string]bool{
+		"nhs_schema_migrations":    true,
+		"search_receipts":          true,
+		"organic_results_returned": true,
+		"result_selections":        true,
+		"action_interest_receipts": true,
+	}
+	for _, table := range current.fingerprintTables {
+		if !wantFingerprintTables[table] {
+			t.Fatalf("025 fingerprints unexpected inherited table %q", table)
+		}
+		delete(wantFingerprintTables, table)
+	}
+	if len(wantFingerprintTables) != 0 {
+		t.Fatalf("025 missing inherited fingerprint tables: %v", wantFingerprintTables)
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A concurrent successor may already exist in the shared worktree. The
+	// chain check still proves 025 registration as long as every successor has
+	// carried this contract forward.
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
+func TestProviderPilotProofIntegrityProtectedContractCarries025(t *testing.T) {
+	prior := protectedMigrationSpecs["025_stage1_fact_integrity.sql"]
+	current, ok := protectedMigrationSpecs["026_provider_pilot_proof_integrity.sql"]
+	if !ok {
+		t.Fatal("provider-pilot proof-integrity migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations) ||
+		len(current.rules) != len(prior.rules) ||
+		len(current.fingerprintTables) != len(prior.fingerprintTables) ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions) ||
+		len(current.footprintRelations) != 0 ||
+		len(current.footprintRules) != 0 ||
+		len(current.footprintProbes) != 6 {
+		t.Fatalf(
+			"026 cumulative contract shape relations=%d/%d rules=%d/%d fingerprint_tables=%d/%d fingerprint_functions=%d/%d relation_delta=%d rule_delta=%d probes=%d",
+			len(current.relations), len(prior.relations),
+			len(current.rules), len(prior.rules),
+			len(current.fingerprintTables), len(prior.fingerprintTables),
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintRelations), len(current.footprintRules),
+			len(current.footprintProbes),
+		)
+	}
+	if !reflect.DeepEqual(current.fingerprintTables, prior.fingerprintTables) {
+		t.Fatalf("026 did not carry forward inherited fingerprint tables: prior=%v current=%v", prior.fingerprintTables, current.fingerprintTables)
+	}
+	if !reflect.DeepEqual(current.fingerprintFunctions, prior.fingerprintFunctions) {
+		t.Fatalf("026 did not carry forward inherited fingerprint functions: prior=%v current=%v", prior.fingerprintFunctions, current.fingerprintFunctions)
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "026_provider_pilot_proof_integrity.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"provider_pilot_outcome_receipt_enforced",
+		"enforce_provider_pilot_outcome_receipt",
+		"provider_pilot_outcome_database_clock",
+		"provider_pilot_outcome_canonical_row",
+		"provider_pilot_outcome_exact_ticket",
+		"provider_pilot_outcome_exact_handoff",
+		"provider_pilot_epoch_created_event_required",
+		"provider_pilot_enrollment_event_required",
+		"provider_pilot_epoch_transition_event_required",
+		"require_provider_pilot_lifecycle_event",
+		"provider_pilot_lifecycle_legacy_incomplete",
+		"IN SHARE ROW EXCLUSIVE MODE",
+		"DEFERRABLE INITIALLY DEFERRED",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("026 provider-pilot proof-integrity contract is missing %q", required)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
+func TestProviderPilotReviewEvidenceProtectedContractCarries026(t *testing.T) {
+	prior := protectedMigrationSpecs["026_provider_pilot_proof_integrity.sql"]
+	current, ok := protectedMigrationSpecs["027_provider_pilot_review_evidence.sql"]
+	if !ok {
+		t.Fatal("provider-pilot review-evidence migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations)+3 ||
+		len(current.rules) != len(prior.rules)+2 ||
+		len(current.fingerprintTables) != len(prior.fingerprintTables) ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions)+1 ||
+		len(current.footprintRelations) != 3 ||
+		len(current.footprintRules) != 2 ||
+		len(current.footprintFunctions) != 1 ||
+		len(current.footprintProbes) != 8 {
+		t.Fatalf(
+			"027 cumulative contract shape relations=%d/%d+3 rules=%d/%d+2 fingerprint_tables=%d/%d fingerprint_functions=%d/%d+1 relation_delta=%d rule_delta=%d function_delta=%d probes=%d",
+			len(current.relations), len(prior.relations),
+			len(current.rules), len(prior.rules),
+			len(current.fingerprintTables), len(prior.fingerprintTables),
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintRelations), len(current.footprintRules),
+			len(current.footprintFunctions), len(current.footprintProbes),
+		)
+	}
+	if !reflect.DeepEqual(current.relations[:len(prior.relations)], prior.relations) {
+		t.Fatal("027 did not carry forward the exact 026 relation contract")
+	}
+	if !reflect.DeepEqual(current.rules[:len(prior.rules)], prior.rules) {
+		t.Fatal("027 did not carry forward the exact 026 rule contract")
+	}
+	if !reflect.DeepEqual(current.fingerprintTables, prior.fingerprintTables) {
+		t.Fatalf("027 did not carry forward inherited fingerprint tables: prior=%v current=%v", prior.fingerprintTables, current.fingerprintTables)
+	}
+	if len(prior.fingerprintFunctions) > 0 &&
+		!reflect.DeepEqual(current.fingerprintFunctions[:len(prior.fingerprintFunctions)], prior.fingerprintFunctions) {
+		t.Fatal("027 did not carry forward the exact 026 standalone-function fingerprint contract")
+	}
+	const snapshotFunction = "provider_pilot_review_snapshot_sha256(uuid,text,uuid)"
+	if current.fingerprintFunctions[len(current.fingerprintFunctions)-1] != snapshotFunction ||
+		!current.footprintFunctions[snapshotFunction] {
+		t.Fatalf("027 standalone snapshot function contract=%v footprint=%v", current.fingerprintFunctions, current.footprintFunctions)
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "027_provider_pilot_review_evidence.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"CREATE TABLE IF NOT EXISTS provider_pilot_review_events",
+		"idx_provider_pilot_reviews_pilot_type",
+		"idx_provider_pilot_reviews_claim_type",
+		"provider_pilot_review_snapshot_sha256",
+		"enforce_provider_pilot_review_event",
+		"provider_pilot_review_event_enforced",
+		"enforce_provider_pilot_epoch_provider_reviews",
+		"provider_pilot_activation_provider_reviews",
+		"enforce_provider_offer_pre_activation_review",
+		"provider_offer_activation_review",
+		"enforce_provider_handoff_ticket_review",
+		"provider_handoff_ticket_review",
+		"provider_pilot_review_events_no_update",
+		"provider_pilot_review_events_no_delete",
+		"provider_pilot_review_snapshot_hash",
+		"provider_pilot_review_subject",
+		"nhs-provider-pilot-review-v1",
+		"nhs-provider-pilot-review-snapshot-v1",
+		"BEFORE INSERT ON public.provider_pilot_review_events",
+		"DO INSTEAD NOTHING",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("027 provider-pilot review-evidence contract is missing %q", required)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
+func TestProviderCommercialProofManifestProtectedContractCarries027(t *testing.T) {
+	prior := protectedMigrationSpecs["027_provider_pilot_review_evidence.sql"]
+	current, ok := protectedMigrationSpecs["028_provider_commercial_proof_manifest.sql"]
+	if !ok {
+		t.Fatal("provider commercial-proof manifest migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations)+3 ||
+		len(current.rules) != len(prior.rules)+2 ||
+		len(current.fingerprintTables) != len(prior.fingerprintTables) ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions) ||
+		len(current.footprintRelations) != 3 ||
+		len(current.footprintRules) != 2 ||
+		len(current.footprintFunctions) != 0 ||
+		len(current.footprintProbes) != 2 {
+		t.Fatalf(
+			"028 cumulative contract shape relations=%d/%d+3 rules=%d/%d+2 fingerprint_tables=%d/%d fingerprint_functions=%d/%d relation_delta=%d rule_delta=%d function_delta=%d probes=%d",
+			len(current.relations), len(prior.relations),
+			len(current.rules), len(prior.rules),
+			len(current.fingerprintTables), len(prior.fingerprintTables),
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintRelations), len(current.footprintRules),
+			len(current.footprintFunctions), len(current.footprintProbes),
+		)
+	}
+	if !reflect.DeepEqual(current.relations[:len(prior.relations)], prior.relations) {
+		t.Fatal("028 did not carry forward the exact 027 relation contract")
+	}
+	if !reflect.DeepEqual(current.rules[:len(prior.rules)], prior.rules) {
+		t.Fatal("028 did not carry forward the exact 027 rule contract")
+	}
+	if !reflect.DeepEqual(current.fingerprintTables, prior.fingerprintTables) {
+		t.Fatalf("028 did not carry forward inherited fingerprint tables: prior=%v current=%v", prior.fingerprintTables, current.fingerprintTables)
+	}
+	if !reflect.DeepEqual(current.fingerprintFunctions, prior.fingerprintFunctions) {
+		t.Fatalf("028 did not carry forward standalone-function fingerprints: prior=%v current=%v", prior.fingerprintFunctions, current.fingerprintFunctions)
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "028_provider_commercial_proof_manifest.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"CREATE TABLE IF NOT EXISTS provider_commercial_proof_manifests",
+		"idx_provider_proof_manifests_issued",
+		"idx_provider_proof_manifests_key",
+		"enforce_provider_commercial_proof_manifest",
+		"provider_commercial_proof_manifest_enforced",
+		"provider_commercial_proof_manifests_no_update",
+		"provider_commercial_proof_manifests_no_delete",
+		"provider_proof_manifest_contract",
+		"provider_proof_manifest_closed_pilot",
+		"provider_proof_manifest_json_binding",
+		"provider_proof_manifest_json_shape",
+		"provider_proof_manifest_json_types",
+		"provider_proof_manifest_privacy_shape",
+		"provider_proof_manifest_review_shape",
+		"provider_proof_manifest_aggregate_relationships",
+		"provider_proof_manifest_issued_at",
+		"review_evidence_sha256",
+		"nhs-provider-proof-review-root-v1",
+		"nhs-free-organic-provider-funded-v1",
+		"nhs-private-keyring",
+		"monetary_amounts_withheld_for_privacy",
+		"REVOKE INSERT, UPDATE, DELETE, TRUNCATE",
+		"nhs-provider-proof-manifest-v1",
+		"date_trunc('second', transaction_timestamp())",
+		"BEFORE INSERT ON public.provider_commercial_proof_manifests",
+		"DO INSTEAD NOTHING",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("028 provider commercial-proof manifest contract is missing %q", required)
+		}
+	}
+
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("repository protected migration chain: %v", err)
+	}
+}
+
 func TestProtectedMigrationStateFailsClosed(t *testing.T) {
 	migration := migrationFile{name: "019_provider_exchange.sql", sha256: strings.Repeat("a", 64)}
 	for _, test := range []struct {
@@ -404,6 +1023,31 @@ func TestProtectedMigrationRequiresExactReleaseRevision(t *testing.T) {
 		if _, err := protectedMigrationRevision(invalid); err == nil {
 			t.Fatalf("invalid release revision %q was accepted", invalid)
 		}
+	}
+}
+
+func TestRequiredProtectedMigrationSetIsExactThrough028(t *testing.T) {
+	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateRequiredProtectedMigrationSet(migrations); err != nil {
+		t.Fatalf("repository protected migration set: %v", err)
+	}
+	withoutTerminal := make([]migrationFile, 0, len(migrations)-1)
+	for _, migration := range migrations {
+		if migration.name != "028_provider_commercial_proof_manifest.sql" {
+			withoutTerminal = append(withoutTerminal, migration)
+		}
+	}
+	if err := validateRequiredProtectedMigrationSet(withoutTerminal); err == nil ||
+		!strings.Contains(err.Error(), "required protected migration is missing: 028_provider_commercial_proof_manifest.sql") {
+		t.Fatalf("missing terminal protected migration error=%v", err)
+	}
+	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "029_unreviewed.sql"})
+	if err := validateRequiredProtectedMigrationSet(withUnknown); err == nil ||
+		!strings.Contains(err.Error(), "protected migration set is not exact through 028_provider_commercial_proof_manifest.sql") {
+		t.Fatalf("extra protected migration error=%v", err)
 	}
 }
 
@@ -466,5 +1110,60 @@ func TestProtectedMigrationFootprintsAreExactNewDelta(t *testing.T) {
 	protectedMigrationSpecs["021_future.sql"] = omittedNew
 	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "omits new relation") {
 		t.Fatalf("omitted new footprint error = %v", err)
+	}
+}
+
+func TestProtectedMigrationFingerprintFunctionsAreCumulativeAndExactNewDelta(t *testing.T) {
+	const baseName = "900_test_function_base.sql"
+	const futureName = "901_test_function_future.sql"
+	const inheritedFunction = "provider_pilot_review_snapshot_sha256(uuid,text,uuid)"
+	const futureFunction = "future_snapshot_sha256(uuid)"
+	base := protectedMigrationSpec{
+		allObjectsAreFootprint: true,
+		fingerprintFunctions:   []string{inheritedFunction},
+		footprintFunctions:     map[string]bool{inheritedFunction: true},
+	}
+	valid := protectedMigrationSpec{
+		relations:            append([]migrationRelation(nil), base.relations...),
+		rules:                append([]migrationRule(nil), base.rules...),
+		fingerprintTables:    append([]string(nil), base.fingerprintTables...),
+		fingerprintFunctions: append(append([]string(nil), base.fingerprintFunctions...), futureFunction),
+		footprintRelations:   map[string]bool{},
+		footprintRules:       map[string]bool{},
+		footprintFunctions:   map[string]bool{futureFunction: true},
+	}
+	protectedMigrationSpecs[baseName] = base
+	protectedMigrationSpecs[futureName] = valid
+	t.Cleanup(func() {
+		delete(protectedMigrationSpecs, baseName)
+		delete(protectedMigrationSpecs, futureName)
+	})
+	migrations := []migrationFile{{name: baseName}, {name: futureName}}
+	if err := validateProtectedMigrationSpecChain(migrations); err != nil {
+		t.Fatalf("exact future standalone-function delta rejected: %v", err)
+	}
+
+	markedInherited := valid
+	markedInherited.footprintFunctions = map[string]bool{
+		futureFunction:    true,
+		inheritedFunction: true,
+	}
+	protectedMigrationSpecs[futureName] = markedInherited
+	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "marks inherited fingerprint function") {
+		t.Fatalf("inherited standalone-function footprint marker error = %v", err)
+	}
+
+	omittedNew := valid
+	omittedNew.footprintFunctions = map[string]bool{}
+	protectedMigrationSpecs[futureName] = omittedNew
+	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "omits new fingerprint function") {
+		t.Fatalf("omitted standalone-function footprint error = %v", err)
+	}
+
+	droppedInherited := valid
+	droppedInherited.fingerprintFunctions = []string{futureFunction}
+	protectedMigrationSpecs[futureName] = droppedInherited
+	if err := validateProtectedMigrationSpecChain(migrations); err == nil || !strings.Contains(err.Error(), "does not carry forward fingerprint function") {
+		t.Fatalf("dropped inherited standalone-function error = %v", err)
 	}
 }

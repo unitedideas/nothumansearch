@@ -169,8 +169,8 @@ func (h *ActionInterestHandler) Stage1DemandProof(w http.ResponseWriter, r *http
 	days := models.ActionInterestRetentionDays
 	if raw := strings.TrimSpace(r.URL.Query().Get("days")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed < 1 || parsed > models.ActionInterestRetentionDays {
-			providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("days must be 1..%d", models.ActionInterestRetentionDays)})
+		if err != nil || parsed < models.Stage1ReportMinimumDays || parsed > models.ActionInterestRetentionDays {
+			providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("days must be %d..%d", models.Stage1ReportMinimumDays, models.ActionInterestRetentionDays)})
 			return
 		}
 		days = parsed

@@ -18,7 +18,7 @@
     .actions{display:flex;gap:12px;flex-wrap:wrap}.button{display:inline-flex;min-height:46px;padding:0 18px;align-items:center;justify-content:center;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-weight:700;text-decoration:none;cursor:pointer}.button.primary{background:var(--accent);border-color:var(--accent);color:#160f0d}.button:hover{filter:brightness(1.08)}.button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
     .value-card{border:1px solid var(--border);border-radius:14px;background:linear-gradient(145deg,#171719,#111113);padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.25)}.value-card .label{color:var(--muted);font:500 11px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase;letter-spacing:.08em}.value-card .price{font-size:36px;font-weight:800;letter-spacing:-.04em;margin:8px 0 3px}.value-card .price span{font-size:13px;color:var(--muted);font-weight:500;letter-spacing:0}.value-card ul{padding:18px 0 0;margin:18px 0 0;border-top:1px solid var(--border);list-style:none}.value-card li{display:flex;gap:9px;margin:9px 0;color:var(--muted);font-size:13px}.value-card li:before{content:"✓";color:var(--green);font-weight:800}
     .trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:84px}.trust-card,.step,.panel{border:1px solid var(--border);background:var(--surface);border-radius:10px}.trust-card{padding:20px}.trust-card strong{display:block;font-size:15px;margin-bottom:6px}.trust-card p{margin:0;color:var(--muted);font-size:13px}.trust-card code{color:var(--green);font-size:12px}
-    section{padding:70px 0;border-top:1px solid var(--border)}h2{font-size:clamp(28px,4vw,42px);letter-spacing:-.04em;margin:0 0 12px}.section-copy{color:var(--muted);max-width:680px;margin:0 0 30px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.step{padding:20px;min-height:190px}.step-num{color:var(--accent);font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace}.step h3{font-size:16px;margin:25px 0 8px}.step p{font-size:13px;color:var(--muted);margin:0}
+    section{padding:70px 0;border-top:1px solid var(--border)}h2{font-size:clamp(28px,4vw,42px);letter-spacing:-.04em;margin:0 0 12px}.section-copy{color:var(--muted);max-width:720px;margin:0 0 30px}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.step{padding:20px;min-height:190px}.step-num{color:var(--accent);font:700 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace}.step h3{font-size:16px;margin:25px 0 8px}.step p{font-size:13px;color:var(--muted);margin:0}
     .dashboard{display:grid;grid-template-columns:.8fr 1.2fr;gap:16px;align-items:start}.panel{padding:24px}.panel h3{font-size:17px;margin:0 0 4px}.panel>p{color:var(--muted);font-size:13px;margin:0 0 20px}.field{margin:14px 0}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:6px}.field small{display:block;color:var(--muted);font-size:11px;margin-top:5px}.field input,.field select,.field textarea{width:100%;border:1px solid var(--border);background:#0f0f11;color:var(--text);border-radius:6px;padding:11px 12px;font:inherit}.field textarea{min-height:86px;resize:vertical}.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.status{min-height:22px;color:var(--muted);font-size:12px;margin-top:12px}.status.error{color:var(--red)}.status.good{color:var(--green)}
     .claim-list,.offer-list{display:grid;gap:10px;margin-top:18px}.item{border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--surface-2)}.item-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.item-title{font-weight:700;overflow-wrap:anywhere}.tag{border-radius:999px;padding:4px 8px;background:#222228;color:var(--muted);font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace;text-transform:uppercase}.tag.verified,.tag.active{background:#13261a;color:var(--green)}.tag.pending,.tag.draft{background:#29230f;color:var(--yellow)}.item-meta{color:var(--muted);font-size:11px;margin-top:8px}.item-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.mini{border:1px solid var(--border);background:#101012;color:var(--text);border-radius:5px;padding:7px 9px;font-size:11px;font-weight:650;cursor:pointer}.mini.danger{color:var(--red)}
     .secret{display:none;margin-top:14px;border:1px solid #37543f;background:#102016;border-radius:8px;padding:14px}.secret.show{display:block}.secret strong{color:var(--green);display:block;margin-bottom:7px}.secret code{display:block;color:#c7f9d5;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}.secret p{font-size:11px;color:var(--muted);margin:8px 0 0}.signed-in{color:var(--muted);font-size:12px;margin-bottom:16px}.signed-in strong{color:var(--text)}
@@ -42,7 +42,7 @@
         <div>
           <div class="eyebrow">Provider-funded agent actions</div>
           <h1>Get chosen by agents. <em>Pay for outcomes.</em></h1>
-          <p class="hero-copy">Claim your indexed domain, publish one machine-readable action, and fund the event that matters—an accepted handoff, activation, or conversion. Search stays free. Organic rank stays neutral.</p>
+          <p class="hero-copy">Claim your indexed domain, publish one machine-readable action, and accept capped terms for the event that matters—an accepted handoff, activation, or conversion. Search stays free. Organic rank stays neutral.</p>
           <div class="actions">
             {{if .SignedIn}}<a class="button primary" href="#dashboard">Open provider setup</a>{{else}}<a class="button primary" href="/login">Sign in to claim a domain</a>{{end}}
             <a class="button" href="#contract">See the machine contract</a>
@@ -53,7 +53,7 @@
           <div class="price">$0 <span>for search, rank, views, and clicks</span></div>
           <ul>
             <li>You choose the billable outcome and bounty.</li>
-            <li>Prepaid budget or capped exact CPA terms are required.</li>
+            <li>The launch pilot uses capped exact CPA terms only.</li>
             <li>Duplicate or invalid charged actions are credited.</li>
             <li>Pilot terms require your company to remain Merchant of Record.</li>
           </ul>
@@ -63,17 +63,29 @@
       <div class="trust-grid" aria-label="Exchange guarantees">
         <article class="trust-card"><code>FREE_DISCOVERY</code><strong>Agents never pay to search.</strong><p>Organic results and canonical provider links remain available without an action ticket.</p></article>
         <article class="trust-card"><code>NEUTRAL_RANK</code><strong>Money cannot buy score or order.</strong><p>Provider-funded actions appear in a separate, disclosed object beside an already-returned organic result.</p></article>
-        <article class="trust-card"><code>OUTCOME_ONLY</code><strong>No fee for machine traffic.</strong><p>NHS records a charge only after your authenticated callback reports the configured outcome.</p></article>
+        <article class="trust-card"><code>OUTCOME_ONLY</code><strong>No fee for machine traffic.</strong><p>A positive outcome can count only after NHS observes the separately consented handoff; NHS records a charge only after your authenticated callback reports the configured outcome.</p></article>
       </div>
 
       <section aria-labelledby="how-title">
         <h2 id="how-title">The layer between discovery and action</h2>
-        <p class="section-copy">NHS makes the handoff more useful than a raw click: verified provider ownership, structured commercial terms, a caller’s versioned principal-authorization attestation, signed attribution, and an idempotent outcome receipt.</p>
+        <p class="section-copy">NHS makes the handoff more useful than a raw click: verified provider ownership, structured commercial terms, separate versioned attestations for ticket preparation and provider handoff, optional principal-controlled routing context, signed attribution, and an idempotent outcome receipt.</p>
         <div class="steps">
           <article class="step"><div class="step-num">01 / VERIFY</div><h3>Keep DNS ownership verified</h3><p>Publish the DNS TXT value and keep it in place. NHS stores only a SHA-256 hash of the challenge token, rechecks ownership every {{.DNSRecheckHours}} hours, and stops paid actions after {{.DNSFailureLimit}} consecutive failed checks or {{.DNSVerificationFreshnessDays}} days without a successful check.</p></article>
           <article class="step"><div class="step-num">02 / DECLARE</div><h3>Publish a draft action</h3><p>Specify the action, principal price, NHS bounty, and accepted outcome in machine-readable fields.</p></article>
-          <article class="step"><div class="step-num">03 / AUTHORIZE</div><h3>The caller attests authorization</h3><p>The caller must attest it is authorized by the principal. A ticket accepts only controlled fields after your site appeared organically—no direct identity, contact, or raw-prompt fields.</p></article>
-          <article class="step"><div class="step-num">04 / RECORD</div><h3>You report the result</h3><p>Your callback records the disclosed accounting effect and receives a signed, replay-safe receipt.</p></article>
+          <article class="step"><div class="step-num">03 / PREPARE</div><h3>The caller attests ticket authorization</h3><p>The caller must attest it is authorized by the principal. A ticket accepts only controlled fields after your site appeared organically—no direct identity, contact, or raw-prompt fields—and returns no provider action URL.</p></article>
+          <article class="step"><div class="step-num">04 / HAND OFF</div><h3>The caller separately consents to continue</h3><p>The exact ticket bearer plus <code>nhs-provider-handoff-consent-v1</code> creates one privacy-safe NHS observation. Only then does NHS return the attributed provider action URL. This handoff charges neither party.</p></article>
+          <article class="step"><div class="step-num">05 / RESOLVE</div><h3>Read only principal-approved routing context</h3><p>If the principal separately opts in at handoff, your active claim-scoped key can resolve only the ticket’s controlled topic, optional region, USD budget band, urgency, and allowlisted requirements. Declining this disclosure never blocks handoff. Resolution is free and creates no charge or proof.</p></article>
+          <article class="step"><div class="step-num">06 / RECORD</div><h3>You report the result</h3><p>Your authenticated callback can report the configured positive outcome only after that observed handoff, then receives a signed, replay-safe receipt for the recorded accounting effect.</p></article>
+        </div>
+      </section>
+
+      <section id="pilot-activation" aria-labelledby="pilot-activation-title">
+        <h2 id="pilot-activation-title">What makes a draft pilot-eligible</h2>
+        <p class="section-copy">A saved draft is not inventory and cannot become billable from dashboard activity alone. The controlled pilot requires provider-authenticated acceptance plus separate owner verification of the company and those exact terms.</p>
+        <div class="trust-grid">
+          <article class="trust-card"><code>EXACT_TERMS</code><strong>Accept the version you actually reviewed.</strong><p>For capped CPA terms or a renewal, submit the current offer version and exact commercial-terms SHA-256 with the claim-scoped provider key. NHS rejects the acceptance if the draft changed.</p></article>
+          <article class="trust-card"><code>OWNER_VERIFY</code><strong>Authentication is not commercial proof.</strong><p>NHS separately verifies one externally deduplicated legal or billing company and owner-held evidence for the exact accepted terms. A provider acceptance, checkout start, draft, or callback key alone does not count.</p></article>
+          <article class="trust-card"><code>OUTCOME_BINDING</code><strong>Only the configured event can earn the fee.</strong><p>The same active claim key, exact signed bearer, observed handoff, offer version, terms hash, and authenticated downstream outcome must agree. Invalid or duplicate charged actions are credited.</p></article>
         </div>
       </section>
 
@@ -84,7 +96,7 @@
         <div class="dashboard">
           <div class="panel">
             <h3>1. Claim an indexed domain</h3>
-            <p>Keep the TXT record published after verification. NHS compares DNS answers in memory, stores only the challenge-token hash, and rechecks ownership automatically. Paid actions stop after {{.DNSFailureLimit}} consecutive failures or when the last successful check reaches {{.DNSVerificationFreshnessDays}} days old.</p>
+            <p>Keep the TXT record published after verification. NHS compares DNS answers in memory, stores only the challenge-token hash, and rechecks ownership automatically. Paid actions stop after {{.DNSFailureLimit}} consecutive failures or when the last successful check reaches {{.DNSVerificationFreshnessDays}} days old. The returned-once claim key also reads your continuity status and privacy-thresholded demand report; NHS never stores the raw key.</p>
             <form id="claim-form">
               <div class="field"><label for="claim-domain">Domain</label><input id="claim-domain" name="domain" placeholder="example.com" autocomplete="url" required><small>The domain must already appear in Not Human Search.</small></div>
               <button class="button primary" type="submit">Create DNS challenge</button>
@@ -96,7 +108,7 @@
 
           <div class="panel">
             <h3>2. Draft a provider-funded action</h3>
-            <p>This does not make the offer live. NHS activates it only after recording prepaid funding or exact, hard-capped CPA terms.</p>
+            <p>This does not make the offer live. The bounded launch pilot is terms-only: NHS activates a draft only after the provider authenticates its exact, hard-capped CPA terms and the owner verifies that acceptance. Prepaid collection is not launched. An acceptance or renewal must carry the current offer version and commercial-terms SHA-256; a changed draft is rejected.</p>
             <form id="offer-form">
               <div class="field"><label for="offer-claim">Verified domain</label><select id="offer-claim" required><option value="">Verify a claim first</option></select></div>
               <div class="field"><label for="offer-name">Offer name</label><input id="offer-name" maxlength="80" placeholder="Start a supported API trial" required></div>
@@ -108,11 +120,11 @@
               </div>
               <div class="field-row">
                 <div class="field"><label for="bounty">NHS fee (USD)</label><input id="bounty" type="number" min="0.01" max="10000" step="0.01" value="25.00" required></div>
-                <div class="field"><label for="billing-mode">Provider funding</label><select id="billing-mode"><option value="prepaid">Prepaid budget</option><option value="terms">Capped exact CPA terms</option></select></div>
+                <div class="field"><label for="billing-mode">Provider funding</label><select id="billing-mode"><option value="terms">Capped exact CPA terms (pilot)</option></select></div>
               </div>
-              <div class="field-row" id="terms-wrap" hidden>
-                <div class="field"><label for="terms-limit">CPA credit cap (USD)</label><input id="terms-limit" type="number" min="1" max="100000" step="0.01"><small>Maximum receivable allowed in each term period.</small></div>
-                <div class="field"><label for="terms-days">Term period (days)</label><input id="terms-days" type="number" min="1" max="90" step="1" value="30"></div>
+              <div class="field-row" id="terms-wrap">
+                <div class="field"><label for="terms-limit">CPA credit cap (USD)</label><input id="terms-limit" type="number" min="1" max="100000" step="0.01" required><small>Maximum receivable allowed in each term period.</small></div>
+                <div class="field"><label for="terms-days">Term period (days)</label><input id="terms-days" type="number" min="1" max="90" step="1" value="30" required></div>
               </div>
               <div class="field-row">
                 <div class="field"><label for="price-mode">Principal price</label><select id="price-mode"><option value="free">Free</option><option value="fixed">Fixed</option><option value="quote">Quoted later</option><option value="provider_pricing">Provider pricing page</option></select></div>
@@ -147,8 +159,41 @@ prepare_provider_action({
   "demand_topic": "developer-tools",
   "principal_consent": true,
   "consent_version": "nhs-principal-consent-v1"
-})</pre>
-        <p class="fine-print">The exact <a href="/privacy#consent-v1">v1 authorization wording</a> is public and immutable. Provider callbacks are authenticated and idempotent. Signed receipts prove what NHS recorded and the recorded accounting effect; they do not independently audit the provider-reported business event. See the <a href="/privacy">privacy boundary</a>.</p>
+})
+
+// Ticket preparation returns a bearer and handoff endpoint, not the provider URL.
+handoff_provider_action({
+  "ticket_id": "...", "attribution_token": "...",
+  "principal_handoff_consent": true,
+  "handoff_consent_version": "nhs-provider-handoff-consent-v1",
+  "principal_controlled_intent_disclosure_consent": true,
+  "controlled_intent_disclosure_consent_version":
+    "nhs-provider-controlled-intent-disclosure-consent-v1"
+})
+
+// Optional provider-side REST read after that exact consented handoff.
+POST /api/v1/provider/action-tickets/resolve
+X-NHS-Provider-Key: &lt;claim-scoped key&gt;
+{ "attribution_token": "..." }
+
+// Outcome reporting works even when controlled-intent disclosure was declined.
+POST /api/v1/provider/outcomes
+X-NHS-Provider-Key: &lt;claim-scoped key&gt;
+Idempotency-Key: &lt;provider event id&gt;
+{ "attribution_token": "...", "outcome": "accepted" }
+
+// The same returned-once key reads only this claim's pilot continuity.
+GET /api/v1/provider/pilot-status?limit=25
+X-NHS-Provider-Key: &lt;claim-scoped key&gt;
+
+// Demand is aggregate and privacy-thresholded; the domain comes from the key.
+GET /api/v1/provider/demand?days=30
+X-NHS-Provider-Key: &lt;claim-scoped key&gt;
+
+// Returns nhs-provider-controlled-intent-resolver-v1 with only:
+// ticket/offer binding, action type, controlled topic, optional region,
+// USD budget band, urgency, allowlisted requirements, and availability times.</pre>
+        <p class="fine-print">The exact <a href="/privacy#consent-v1">ticket-authorization wording</a>, separate <a href="/privacy#handoff-consent-v1">handoff-consent wording</a>, and optional <a href="/privacy#controlled-intent-disclosure-consent-v1">controlled-intent disclosure wording</a> are public and immutable. Declining the optional disclosure does not block handoff or free direct provider access. Ticket preparation, observed handoff, and controlled-intent resolution charge neither party. The resolver is REST-only, read-only, and creates no analytics, outcome, charge, or commercial proof. Provider callbacks are authenticated and idempotent. Signed receipts prove what NHS recorded and the recorded accounting effect; they do not independently audit the provider-reported business event. See the <a href="/privacy">privacy boundary</a>.</p>
       </section>
     </main>
 
@@ -238,16 +283,13 @@ prepare_provider_action({
     });
     $('offer-claim').addEventListener('change',event=>loadOffers(event.target.value));
     $('price-mode').addEventListener('change',event=>{$('principal-amount-wrap').hidden=event.target.value!=='fixed'});
-    $('billing-mode').addEventListener('change',event=>{
-      const terms=event.target.value==='terms';$('terms-wrap').hidden=!terms;$('terms-limit').required=terms;$('terms-days').required=terms;
-    });
     $('offer-form').addEventListener('submit',async(event)=>{
       event.preventDefault(); const mode=$('price-mode').value; let principal=null; if(mode==='free')principal=0; if(mode==='fixed')principal=moneyToCents($('principal-amount').value);
       const body={claim_id:$('offer-claim').value,name:$('offer-name').value,summary:$('offer-summary').value,action_type:$('action-type').value,action_url:$('action-url').value,charge_event:$('charge-event').value,bounty_cents:moneyToCents($('bounty').value),currency:'usd',principal_price_mode:mode,principal_currency:'usd',billing_mode:$('billing-mode').value};
       if(principal!==null)body.principal_price_cents=principal;
       if(body.billing_mode==='terms'){body.terms_credit_limit_cents=moneyToCents($('terms-limit').value);body.terms_period_days=Number($('terms-days').value)}
       setStatus('offer-status','Saving draft…');
-      try{await api('/api/v1/provider/offers',{method:'POST',body:JSON.stringify(body)});setStatus('offer-status','Draft saved. It is not live or billable until NHS records commercial evidence.','good');event.target.reset();$('bounty').value='25.00';$('principal-amount-wrap').hidden=true;$('terms-wrap').hidden=true;$('terms-limit').required=false;$('terms-days').required=false;await loadOffers(body.claim_id);}
+      try{await api('/api/v1/provider/offers',{method:'POST',body:JSON.stringify(body)});setStatus('offer-status','Draft saved. It is not live or billable until its exact provider acceptance is owner-verified.','good');event.target.reset();$('bounty').value='25.00';$('terms-days').value='30';$('principal-amount-wrap').hidden=true;await loadOffers(body.claim_id);}
       catch(error){setStatus('offer-status',error.message,'error')}
     });
     async function loadOffers(claimID){
@@ -256,7 +298,8 @@ prepare_provider_action({
     function renderOffers(){
       const root=$('offers');root.replaceChildren();state.offers.forEach(offer=>{
         const item=document.createElement('article');item.className='item';const head=document.createElement('div');head.className='item-head';const title=text(document.createElement('div'),offer.name);title.className='item-title';const tag=text(document.createElement('span'),offer.status);tag.className='tag '+offer.status;head.append(title,tag);item.append(head);
-        const fee=(offer.bounty_cents/100).toLocaleString(undefined,{style:'currency',currency:offer.currency.toUpperCase()});const meta=text(document.createElement('div'),`${offer.action_type} · NHS earns ${fee} on ${offer.charge_event} · balance ${(offer.budget_balance_cents/100).toLocaleString(undefined,{style:'currency',currency:offer.currency.toUpperCase()})}`);meta.className='item-meta';item.append(meta);
+        const fee=(offer.bounty_cents/100).toLocaleString(undefined,{style:'currency',currency:offer.currency.toUpperCase()});const cap=(offer.terms_credit_limit_cents/100).toLocaleString(undefined,{style:'currency',currency:offer.currency.toUpperCase()});const meta=text(document.createElement('div'),`${offer.action_type} · NHS earns ${fee} on ${offer.charge_event} · ${cap} cap / ${offer.terms_period_days} days`);meta.className='item-meta';item.append(meta);
+        const contract=document.createElement('div');contract.className='item-meta';contract.append(text(document.createElement('div'),`Offer ID: ${offer.id}`),text(document.createElement('div'),`Version: ${offer.version} · Contract: ${offer.commercial_terms_contract_version}`),text(document.createElement('div'),`Terms SHA-256: ${offer.commercial_terms_sha256}`),text(document.createElement('div'),`Credit: ${offer.credit_rule}`),text(document.createElement('div'),`Callback: ${offer.response_expectation}`),text(document.createElement('div'),`Period anchor: ${offer.terms_period_anchor_rule}`),text(document.createElement('div'),'Merchant of Record acknowledgement is required in the exact accepted contract.'));item.append(contract);
         if(offer.status==='active'){const actions=document.createElement('div');actions.className='item-actions';actions.append(button('Pause',async()=>{try{await api(`/api/v1/provider/offers/${offer.id}/pause`,{method:'POST'});await loadOffers(offer.provider_claim_id)}catch(error){setStatus('offer-status',error.message,'error')}}));item.append(actions)}root.append(item);
       });if(!root.children.length){const empty=text(document.createElement('p'),'No draft actions for this domain.');empty.className='status';root.append(empty)}
     }

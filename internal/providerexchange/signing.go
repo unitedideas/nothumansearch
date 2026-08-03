@@ -30,7 +30,17 @@ const (
 	// OutcomeReceiptVersion is the only outcome-receipt version accepted by
 	// this package. Version changes must use a new signing domain.
 	OutcomeReceiptVersion = 1
-	DefaultSigningKeyID   = "nhs-provider-signing-v1"
+
+	// CommercialProofManifestVersion is the only privacy-redacted commercial
+	// proof manifest accepted by this package. It has an independent signing
+	// domain: an attribution or outcome signature can never authenticate it.
+	CommercialProofManifestVersion     = 1
+	DefaultSigningKeyID                = "nhs-provider-signing-v1"
+	CommercialProofManifestContractV1  = "nhs-provider-proof-manifest-v1"
+	CommercialProofMarketPolicyV1      = "nhs-free-organic-provider-funded-v1"
+	CommercialProofReviewEvidenceV1    = "nhs-provider-proof-review-root-v1"
+	CommercialProofVerificationScopeV1 = "nhs-private-keyring"
+	CommercialProofManifestScopeV1     = "NHS-recorded exact closed-pilot aggregate; HMAC-signed and verifiable only by NHS; not independent proof of provider truth, cash collection, or agent identity."
 
 	// AllowedClockSkew tolerates small clock differences while still rejecting
 	// tokens and receipts whose trusted timestamp is materially in the future.
@@ -44,6 +54,7 @@ const (
 	keyDerivationDomain = "nothumansearch/provider-exchange/key-derivation/v1"
 	attributionDomain   = "nothumansearch/provider-exchange/attribution-token/v1"
 	outcomeDomain       = "nothumansearch/provider-exchange/outcome-receipt/v1"
+	proofManifestDomain = "nothumansearch/provider-exchange/commercial-proof-manifest/v1"
 )
 
 var (
@@ -113,15 +124,87 @@ type OutcomeReceipt struct {
 	ChargeStatus       ChargeStatus `json:"charge_status"`
 }
 
-type signingKeyMaterial struct {
-	attributionKey [sha256.Size]byte
-	outcomeKey     [sha256.Size]byte
+// CommercialProofReviewCount reports aggregate owner-review coverage without
+// exposing any provider, offer, ticket, handoff, callback, principal, or agent
+// identifier. An issuable manifest requires Valid == Required for every
+// category.
+type CommercialProofReviewCount struct {
+	Required int `json:"required"`
+	Valid    int `json:"valid"`
 }
 
-// Signer derives independent attribution and outcome keys from a dedicated
-// provider-exchange signing secret. A bounded keyring lets a rotated active key
-// coexist with retained previous keys, so outstanding tickets and historical
-// receipts do not silently fail verification after rotation.
+// CommercialProofReviewCoverage is deliberately fixed-shape. It has no map or
+// extension field where row-level or free-form information can be inserted.
+type CommercialProofReviewCoverage struct {
+	Providers CommercialProofReviewCount `json:"providers"`
+	Offers    CommercialProofReviewCount `json:"offers"`
+	Tickets   CommercialProofReviewCount `json:"tickets"`
+	Handoffs  CommercialProofReviewCount `json:"handoffs"`
+	Callbacks CommercialProofReviewCount `json:"callbacks"`
+}
+
+// CommercialProofCurrencyAmount is a canonical aggregate accounting bucket.
+// Callers must sort buckets by Currency and omit zero amounts.
+type CommercialProofCurrencyAmount struct {
+	Currency    string `json:"currency"`
+	AmountMinor int64  `json:"amount_minor"`
+}
+
+// CommercialProofManifest is the complete signed, privacy-redacted statement
+// NHS can issue for one exact closed pilot. It contains aggregate counters and
+// controlled contract fields only. It deliberately excludes company/provider
+// IDs, offer/ticket/handoff/callback IDs, raw queries, search receipts, bearer
+// material, principal or agent identity, and owner evidence references.
+type CommercialProofManifest struct {
+	Version                           int                             `json:"v"`
+	KeyID                             string                          `json:"kid"`
+	SignatureVerificationScope        string                          `json:"signature_verification_scope"`
+	ManifestContractVersion           string                          `json:"manifest_contract_version"`
+	ManifestID                        string                          `json:"manifest_id"`
+	ProviderPilotEpochID              string                          `json:"provider_pilot_epoch_id"`
+	ProviderPilotContractVersion      string                          `json:"provider_pilot_contract_version"`
+	ReviewContractVersion             string                          `json:"review_contract_version"`
+	ReviewEvidenceContractVersion     string                          `json:"review_evidence_contract_version"`
+	MarketPolicyContractVersion       string                          `json:"market_policy_contract_version"`
+	ProofSnapshotSHA256               string                          `json:"proof_snapshot_sha256"`
+	ReviewEvidenceSHA256              string                          `json:"review_evidence_sha256"`
+	PilotDemandTopic                  string                          `json:"pilot_demand_topic"`
+	PilotStatus                       string                          `json:"pilot_status"`
+	IssuedAt                          int64                           `json:"issued_at"`
+	OutcomeReceiptIntegrityValid      bool                            `json:"outcome_receipt_integrity_valid"`
+	ReviewIntegrityValid              bool                            `json:"review_integrity_valid"`
+	VerifiedOutcomeReceipts           int                             `json:"verified_outcome_receipts"`
+	RejectedOutcomeReceipts           int                             `json:"rejected_outcome_receipts"`
+	VerifiedOutcomeLedgerEntries      int                             `json:"verified_outcome_ledger_entries"`
+	RejectedOutcomeLedgerEntries      int                             `json:"rejected_outcome_ledger_entries"`
+	VerifiedProviderCompanies         int                             `json:"verified_provider_companies"`
+	VerifiedProviderAcceptedHandoffs  int                             `json:"verified_provider_accepted_handoffs"`
+	VerifiedProviderActivations       int                             `json:"verified_provider_confirmed_activations"`
+	VerifiedProviderRenewals          int                             `json:"verified_provider_renewals"`
+	VerifiedProviderConversions       int                             `json:"verified_provider_confirmed_conversions"`
+	ReviewCoverage                    CommercialProofReviewCoverage   `json:"review_coverage"`
+	MonetaryAmountsWithheldForPrivacy bool                            `json:"monetary_amounts_withheld_for_privacy"`
+	VerifiedPrepaidSettled            []CommercialProofCurrencyAmount `json:"verified_prepaid_settled"`
+	VerifiedPrepaidNetDebited         []CommercialProofCurrencyAmount `json:"verified_prepaid_net_debited"`
+	VerifiedTermsNetReceivable        []CommercialProofCurrencyAmount `json:"verified_terms_net_receivable"`
+	PilotThresholdsMet                bool                            `json:"pilot_thresholds_met"`
+	OrganicRankSold                   bool                            `json:"organic_rank_sold"`
+	RawQueriesSold                    bool                            `json:"raw_queries_sold"`
+	AgentIdentitiesSold               bool                            `json:"agent_identities_sold"`
+	EvidenceScope                     string                          `json:"evidence_scope"`
+}
+
+type signingKeyMaterial struct {
+	attributionKey   [sha256.Size]byte
+	outcomeKey       [sha256.Size]byte
+	proofManifestKey [sha256.Size]byte
+}
+
+// Signer derives independent attribution, outcome, and commercial-proof
+// manifest keys from a dedicated provider-exchange signing secret. A bounded
+// keyring lets a rotated active key coexist with retained previous keys, so
+// outstanding tickets and historical proofs do not silently fail verification
+// after rotation.
 type Signer struct {
 	activeKeyID string
 	keys        map[string]signingKeyMaterial
@@ -156,8 +239,9 @@ func NewSignerKeyring(activeKeyID, activeSecret string, previous map[string]stri
 			return fmt.Errorf("%w: duplicate signing key id", ErrInvalidClaims)
 		}
 		keys[keyID] = signingKeyMaterial{
-			attributionKey: deriveKey([]byte(secret), attributionDomain),
-			outcomeKey:     deriveKey([]byte(secret), outcomeDomain),
+			attributionKey:   deriveKey([]byte(secret), attributionDomain),
+			outcomeKey:       deriveKey([]byte(secret), outcomeDomain),
+			proofManifestKey: deriveKey([]byte(secret), proofManifestDomain),
 		}
 		return nil
 	}
@@ -384,6 +468,239 @@ func (s *Signer) VerifyOutcomeReceiptSignature(canonical, signature string) (Out
 		return OutcomeReceipt{}, fmt.Errorf("%w: non-canonical outcome receipt", ErrMalformed)
 	}
 	return receipt, nil
+}
+
+// CanonicalCommercialProofManifest returns the exact deterministic bytes
+// covered by a proof-manifest signature. Struct declaration order fixes field
+// order; currency buckets must already be sorted and unique.
+func CanonicalCommercialProofManifest(manifest CommercialProofManifest) ([]byte, error) {
+	if err := validateCommercialProofManifestStructure(manifest); err != nil {
+		return nil, err
+	}
+	payload, err := json.Marshal(manifest)
+	if err != nil {
+		return nil, fmt.Errorf("%w: encode commercial proof manifest: %v", ErrMalformed, err)
+	}
+	if len(payload) > maxCompactTokenBytes*4 {
+		return nil, fmt.Errorf("%w: commercial proof manifest is too large", ErrMalformed)
+	}
+	return payload, nil
+}
+
+// SignCommercialProofManifest signs a final aggregate proof statement under a
+// dedicated domain and returns canonical JSON plus an unpadded base64url MAC.
+func (s *Signer) SignCommercialProofManifest(manifest CommercialProofManifest) (canonical string, signature string, err error) {
+	if s == nil {
+		return "", "", ErrSecretRequired
+	}
+	if manifest.KeyID == "" {
+		manifest.KeyID = s.activeKeyID
+	}
+	keys, ok := s.keys[manifest.KeyID]
+	if !ok {
+		return "", "", ErrUnknownKeyID
+	}
+	payload, err := CanonicalCommercialProofManifest(manifest)
+	if err != nil {
+		return "", "", err
+	}
+	mac := signMAC(keys.proofManifestKey, proofManifestDomain, payload)
+	return string(payload), base64.RawURLEncoding.EncodeToString(mac[:]), nil
+}
+
+// VerifyCommercialProofManifest authenticates a canonical manifest and
+// rejects a materially future NHS issue time. Manifests do not expire: they
+// are immutable historical statements for an exact closed pilot.
+func (s *Signer) VerifyCommercialProofManifest(canonical, signature string, now time.Time) (CommercialProofManifest, error) {
+	manifest, err := s.VerifyCommercialProofManifestSignature(canonical, signature)
+	if err != nil {
+		return CommercialProofManifest{}, err
+	}
+	if now.IsZero() {
+		return CommercialProofManifest{}, fmt.Errorf("%w: verification time required", ErrInvalidClaims)
+	}
+	if manifest.IssuedAt > now.Add(AllowedClockSkew).Unix() {
+		return CommercialProofManifest{}, ErrNotYetValid
+	}
+	return manifest, nil
+}
+
+// VerifyCommercialProofManifestSignature verifies immutable historical proof
+// without applying a wall-clock freshness decision.
+func (s *Signer) VerifyCommercialProofManifestSignature(canonical, signature string) (CommercialProofManifest, error) {
+	if s == nil {
+		return CommercialProofManifest{}, ErrSecretRequired
+	}
+	if len(canonical) == 0 || len(canonical) > maxCompactTokenBytes*4 {
+		return CommercialProofManifest{}, ErrMalformed
+	}
+	providedMAC, err := base64.RawURLEncoding.Strict().DecodeString(signature)
+	if err != nil || len(providedMAC) != sha256.Size {
+		return CommercialProofManifest{}, ErrMalformed
+	}
+	payload := []byte(canonical)
+	var manifest CommercialProofManifest
+	if err := decodeCanonicalJSON(payload, &manifest); err != nil {
+		return CommercialProofManifest{}, err
+	}
+	keys, ok := s.keys[manifest.KeyID]
+	if !ok {
+		return CommercialProofManifest{}, ErrUnknownKeyID
+	}
+	expectedMAC := signMAC(keys.proofManifestKey, proofManifestDomain, payload)
+	if subtle.ConstantTimeCompare(providedMAC, expectedMAC[:]) != 1 {
+		return CommercialProofManifest{}, ErrInvalidSignature
+	}
+	reencoded, err := CanonicalCommercialProofManifest(manifest)
+	if err != nil {
+		return CommercialProofManifest{}, err
+	}
+	if !bytes.Equal(payload, reencoded) {
+		return CommercialProofManifest{}, fmt.Errorf("%w: non-canonical commercial proof manifest", ErrMalformed)
+	}
+	return manifest, nil
+}
+
+func validateCommercialProofManifestStructure(manifest CommercialProofManifest) error {
+	if manifest.Version != CommercialProofManifestVersion ||
+		manifest.ManifestContractVersion != CommercialProofManifestContractV1 ||
+		manifest.ProviderPilotContractVersion != "nhs-provider-pilot-v1" ||
+		manifest.ReviewContractVersion != "nhs-provider-pilot-review-v1" ||
+		manifest.ReviewEvidenceContractVersion != CommercialProofReviewEvidenceV1 ||
+		manifest.MarketPolicyContractVersion != CommercialProofMarketPolicyV1 {
+		return fmt.Errorf("%w: invalid commercial proof contract", ErrInvalidClaims)
+	}
+	if !isKeyID(manifest.KeyID) || !isCanonicalUUID(manifest.ManifestID) ||
+		!isCanonicalUUID(manifest.ProviderPilotEpochID) ||
+		!isSHA256Hex(manifest.ProofSnapshotSHA256) ||
+		!isSHA256Hex(manifest.ReviewEvidenceSHA256) {
+		return fmt.Errorf("%w: invalid commercial proof identity", ErrInvalidClaims)
+	}
+	if !commercialProofDemandTopics[manifest.PilotDemandTopic] ||
+		manifest.PilotStatus != "closed" || manifest.IssuedAt <= 0 {
+		return fmt.Errorf("%w: invalid commercial proof pilot scope", ErrInvalidClaims)
+	}
+	if !manifest.OutcomeReceiptIntegrityValid || !manifest.ReviewIntegrityValid ||
+		!manifest.PilotThresholdsMet || manifest.OrganicRankSold ||
+		manifest.RawQueriesSold || manifest.AgentIdentitiesSold ||
+		manifest.SignatureVerificationScope != CommercialProofVerificationScopeV1 ||
+		manifest.EvidenceScope != CommercialProofManifestScopeV1 {
+		return fmt.Errorf("%w: commercial proof is not issuable", ErrInvalidClaims)
+	}
+	counts := []int{
+		manifest.VerifiedOutcomeReceipts,
+		manifest.RejectedOutcomeReceipts,
+		manifest.VerifiedOutcomeLedgerEntries,
+		manifest.RejectedOutcomeLedgerEntries,
+		manifest.VerifiedProviderCompanies,
+		manifest.VerifiedProviderAcceptedHandoffs,
+		manifest.VerifiedProviderActivations,
+		manifest.VerifiedProviderRenewals,
+		manifest.VerifiedProviderConversions,
+	}
+	for _, count := range counts {
+		if count < 0 {
+			return fmt.Errorf("%w: negative commercial proof count", ErrInvalidClaims)
+		}
+	}
+	if manifest.VerifiedProviderCompanies < 3 ||
+		manifest.VerifiedProviderAcceptedHandoffs < 5 ||
+		manifest.VerifiedProviderActivations < 2 ||
+		manifest.VerifiedProviderRenewals < 1 {
+		return fmt.Errorf("%w: commercial proof thresholds are not met", ErrInvalidClaims)
+	}
+	if manifest.RejectedOutcomeReceipts != 0 || manifest.RejectedOutcomeLedgerEntries != 0 {
+		return fmt.Errorf("%w: commercial proof contains rejected integrity evidence", ErrInvalidClaims)
+	}
+	if manifest.VerifiedProviderRenewals > manifest.VerifiedProviderCompanies ||
+		manifest.VerifiedProviderAcceptedHandoffs > manifest.VerifiedOutcomeReceipts ||
+		manifest.VerifiedProviderActivations > manifest.VerifiedProviderAcceptedHandoffs ||
+		manifest.VerifiedProviderConversions > manifest.VerifiedProviderActivations ||
+		manifest.VerifiedOutcomeLedgerEntries > manifest.VerifiedOutcomeReceipts {
+		return fmt.Errorf("%w: inconsistent commercial proof outcome aggregates", ErrInvalidClaims)
+	}
+	reviews := []CommercialProofReviewCount{
+		manifest.ReviewCoverage.Providers,
+		manifest.ReviewCoverage.Offers,
+		manifest.ReviewCoverage.Tickets,
+		manifest.ReviewCoverage.Handoffs,
+		manifest.ReviewCoverage.Callbacks,
+	}
+	for _, review := range reviews {
+		if review.Required <= 0 || review.Valid != review.Required {
+			return fmt.Errorf("%w: incomplete commercial proof review coverage", ErrInvalidClaims)
+		}
+	}
+	if manifest.ReviewCoverage.Providers.Required != manifest.VerifiedProviderCompanies ||
+		manifest.ReviewCoverage.Offers.Required < manifest.VerifiedProviderCompanies ||
+		manifest.ReviewCoverage.Tickets.Required < manifest.VerifiedProviderAcceptedHandoffs ||
+		manifest.ReviewCoverage.Handoffs.Required != manifest.ReviewCoverage.Tickets.Required ||
+		manifest.ReviewCoverage.Callbacks.Required != manifest.VerifiedOutcomeReceipts {
+		return fmt.Errorf("%w: inconsistent commercial proof review coverage", ErrInvalidClaims)
+	}
+	if !manifest.MonetaryAmountsWithheldForPrivacy ||
+		manifest.VerifiedPrepaidSettled == nil ||
+		manifest.VerifiedPrepaidNetDebited == nil ||
+		manifest.VerifiedTermsNetReceivable == nil ||
+		len(manifest.VerifiedPrepaidSettled) != 0 ||
+		len(manifest.VerifiedPrepaidNetDebited) != 0 ||
+		len(manifest.VerifiedTermsNetReceivable) != 0 {
+		return fmt.Errorf("%w: commercial proof currency aggregates must be arrays", ErrInvalidClaims)
+	}
+	if err := validateCommercialProofCurrencyAmounts(manifest.VerifiedPrepaidSettled); err != nil {
+		return err
+	}
+	for _, amount := range manifest.VerifiedPrepaidSettled {
+		if amount.AmountMinor < 0 {
+			return fmt.Errorf("%w: prepaid settlement aggregate cannot be negative", ErrInvalidClaims)
+		}
+	}
+	if err := validateCommercialProofCurrencyAmounts(manifest.VerifiedPrepaidNetDebited); err != nil {
+		return err
+	}
+	if err := validateCommercialProofCurrencyAmounts(manifest.VerifiedTermsNetReceivable); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateCommercialProofCurrencyAmounts(amounts []CommercialProofCurrencyAmount) error {
+	previous := ""
+	for _, amount := range amounts {
+		if len(amount.Currency) != 3 || amount.Currency <= previous || amount.AmountMinor == 0 {
+			return fmt.Errorf("%w: invalid commercial proof currency aggregate", ErrInvalidClaims)
+		}
+		for i := 0; i < len(amount.Currency); i++ {
+			if amount.Currency[i] < 'a' || amount.Currency[i] > 'z' {
+				return fmt.Errorf("%w: invalid commercial proof currency aggregate", ErrInvalidClaims)
+			}
+		}
+		previous = amount.Currency
+	}
+	return nil
+}
+
+var commercialProofDemandTopics = map[string]bool{
+	"payments": true, "commerce": true, "jobs": true, "data": true,
+	"search": true, "weather": true, "maps": true, "email": true,
+	"messaging": true, "image": true, "video": true, "audio": true,
+	"documents": true, "security": true, "finance": true, "health": true,
+	"education": true, "news": true, "analytics": true, "automation": true,
+	"productivity": true, "identity": true, "storage": true, "ai-tools": true,
+	"developer-tools": true,
+}
+
+func isSHA256Hex(value string) bool {
+	if len(value) != sha256.Size*2 {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if value[i] >= '0' && value[i] <= '9' || value[i] >= 'a' && value[i] <= 'f' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func canonicalAttribution(claims AttributionClaims) ([]byte, error) {

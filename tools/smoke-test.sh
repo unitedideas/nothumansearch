@@ -4,16 +4,32 @@
 set -uo pipefail
 
 BASE="${1:-https://nothumansearch.ai}"
+EXPECTED_REVISION="${2:-${NHS_EXPECTED_RELEASE_REVISION:-}}"
+EXPECTED_EXCHANGE_MODE="${3:-pilot}"
 SYNTHETIC_HEADER="NHS-Synthetic-Test: deploy-smoke"
 FAILED=0
 TOTAL=0
+CURL=(/usr/bin/curl --silent --show-error --proto '=https' --tlsv1.2 --connect-timeout 5 --max-time 15 -H "$SYNTHETIC_HEADER")
+
+if ! [[ "$BASE" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]]; then
+    echo "base_url must be a bare HTTPS origin" >&2
+    exit 2
+fi
+if ! [[ "$EXPECTED_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "usage: $0 [base_url] <expected_40_character_release_revision> [pilot|disabled]" >&2
+    exit 2
+fi
+if [ "$EXPECTED_EXCHANGE_MODE" != "pilot" ] && [ "$EXPECTED_EXCHANGE_MODE" != "disabled" ]; then
+    echo "expected provider exchange mode must be pilot or disabled" >&2
+    exit 2
+fi
 
 check() {
     local name="$1"
     local expected="$2"
     local url="$3"
     TOTAL=$((TOTAL + 1))
-    local actual=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" -o /dev/null -w '%{http_code}' "$url")
+    local actual=$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$url")
     if [ "$actual" = "$expected" ]; then
         printf "  \033[32m✓\033[0m %-45s %s\n" "$name" "$actual"
     else
@@ -27,8 +43,8 @@ check_contains() {
     local needle="$2"
     local url="$3"
     TOTAL=$((TOTAL + 1))
-    local body=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" "$url")
-    if echo "$body" | grep -q "$needle"; then
+    local body=$("${CURL[@]}" "$url")
+    if printf '%s' "$body" | grep -q "$needle"; then
         printf "  \033[32m✓\033[0m %-45s contains %s\n" "$name" "'$needle'"
     else
         printf "  \033[31m✗\033[0m %-45s missing %s  %s\n" "$name" "'$needle'" "$url"
@@ -39,7 +55,7 @@ check_contains() {
 check_search_selection() {
     TOTAL=$((TOTAL + 1))
     local payload search_id domain headers
-    payload=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" "$BASE/api/v1/search?q=payment&per_page=1")
+    payload=$("${CURL[@]}" "$BASE/api/v1/search?q=payment&per_page=1")
     search_id=$(printf '%s' "$payload" | /usr/bin/jq -r '.search_id // empty')
     domain=$(printf '%s' "$payload" | /usr/bin/jq -r '.results[0].domain // empty')
     if [[ "$search_id" != nhs_sr_* ]] || [ -z "$domain" ]; then
@@ -47,7 +63,7 @@ check_search_selection() {
         FAILED=$((FAILED + 1))
         return
     fi
-    headers=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" -D - -o /dev/null "$BASE/api/v1/site/$domain?search_id=$search_id")
+    headers=$("${CURL[@]}" -D - -o /dev/null "$BASE/api/v1/site/$domain?search_id=$search_id")
     if printf '%s' "$headers" | tr -d '\r' | grep -qi '^NHS-Selection-Recorded: true$'; then
         printf "  \033[32m✓\033[0m %-45s %s\n" "Search-to-detail receipt" "$domain"
     else
@@ -59,7 +75,7 @@ check_search_selection() {
 check_synthetic_action_interest_rejected() {
     TOTAL=$((TOTAL + 1))
     local payload search_id domain code
-    payload=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" "$BASE/api/v1/search?q=payment&per_page=1")
+    payload=$("${CURL[@]}" "$BASE/api/v1/search?q=payment&per_page=1")
     search_id=$(printf '%s' "$payload" | /usr/bin/jq -r '.search_id // empty')
     domain=$(printf '%s' "$payload" | /usr/bin/jq -r '.results[0].domain // empty')
     if [[ "$search_id" != nhs_sr_* ]] || [ -z "$domain" ]; then
@@ -67,7 +83,7 @@ check_synthetic_action_interest_rejected() {
         FAILED=$((FAILED + 1))
         return
     fi
-    code=$(/usr/bin/curl -s -H "$SYNTHETIC_HEADER" -H "Content-Type: application/json" \
+    code=$("${CURL[@]}" -H "Content-Type: application/json" \
         -o /dev/null -w '%{http_code}' -X POST \
         --data "{\"search_id\":\"$search_id\",\"domain\":\"$domain\",\"action_type\":\"quote\",\"caller_attests_principal_interest\":true,\"confirmation_version\":\"nhs-action-interest-v1\"}" \
         "$BASE/api/v1/action-interests")
@@ -79,14 +95,176 @@ check_synthetic_action_interest_rejected() {
     fi
 }
 
+check_release_revision() {
+    TOTAL=$((TOTAL + 1))
+    local health actual mode
+    health=$("${CURL[@]}" "$BASE/health")
+    actual=$(printf '%s' "$health" | /usr/bin/jq -r '.release_revision // empty')
+    mode=$(printf '%s' "$health" | /usr/bin/jq -r '.provider_exchange // empty')
+    if [ "$actual" = "$EXPECTED_REVISION" ] && [ "$mode" = "$EXPECTED_EXCHANGE_MODE" ]; then
+        printf "  \033[32m✓\033[0m %-45s %s %s\n" "Exact release and exchange mode" "$actual" "$mode"
+    else
+        printf "  \033[31m✗\033[0m %-45s expected %s/%s, got %s/%s\n" "Exact release and exchange mode" "$EXPECTED_REVISION" "$EXPECTED_EXCHANGE_MODE" "${actual:-missing}" "${mode:-missing}"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_synthetic_paid_sidecar_empty() {
+    TOTAL=$((TOTAL + 1))
+    local payload
+    payload=$("${CURL[@]}" "$BASE/api/v1/search?q=payment&per_page=1")
+    if printf '%s' "$payload" | /usr/bin/jq -e '
+        .paid_offers_available == false and
+        (.paid_offers | type == "array" and length == 0) and
+        .action_interest.available == false
+    ' >/dev/null; then
+        printf "  \033[32m✓\033[0m %-45s clean\n" "Synthetic paid sidecar"
+    else
+        printf "  \033[31m✗\033[0m %-45s paid or action sidecar present\n" "Synthetic paid sidecar"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_invalid_action_interest_receipt() {
+    TOTAL=$((TOTAL + 1))
+    local code
+    code=$("${CURL[@]}" -H "Content-Type: application/json" \
+        -o /dev/null -w '%{http_code}' -X POST \
+        --data '{"search_id":"nhs_sr_AAAAAAAAAAAAAAAA","domain":"example.com","action_type":"quote","caller_attests_principal_interest":true,"confirmation_version":"nhs-action-interest-v1"}' \
+        "$BASE/api/v1/action-interests")
+    if [ "$code" = "404" ]; then
+        printf "  \033[32m✓\033[0m %-45s %s\n" "Invalid search receipt rejected" "$code"
+    else
+        printf "  \033[31m✗\033[0m %-45s expected 404, got %s\n" "Invalid search receipt rejected" "$code"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_invalid_provider_action_route() {
+    local name="$1"
+    local path="$2"
+    TOTAL=$((TOTAL + 1))
+    local code
+    code=$("${CURL[@]}" -H "Content-Type: application/json" \
+        -o /dev/null -w '%{http_code}' -X POST --data '{}' "$BASE$path")
+    local expected=400
+    if [ "$EXPECTED_EXCHANGE_MODE" = "disabled" ]; then
+        expected=503
+    fi
+    if [ "$code" = "$expected" ]; then
+        printf "  \033[32m✓\033[0m %-45s %s\n" "$name" "$code"
+    else
+        printf "  \033[31m✗\033[0m %-45s expected %s, got %s\n" "$name" "$expected" "$code"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_mcp_initialize() {
+    TOTAL=$((TOTAL + 1))
+    local body
+    body=$("${CURL[@]}" \
+        -H "Content-Type: application/json" -X POST \
+        --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"nhs-deploy-smoke","version":"1"}}}' \
+        "$BASE/mcp")
+    if printf '%s' "$body" | /usr/bin/jq -e '
+        .jsonrpc == "2.0" and .id == 1 and
+        .result.protocolVersion == "2025-06-18" and
+        .result.serverInfo.name == "nothumansearch" and
+        .result.serverInfo.version == "1.1.0"
+    ' >/dev/null; then
+        printf "  \033[32m✓\033[0m %-45s negotiated\n" "MCP initialize"
+    else
+        printf "  \033[31m✗\033[0m %-45s invalid JSON-RPC response\n" "MCP initialize"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_mcp_tools_list() {
+    TOTAL=$((TOTAL + 1))
+    local body
+    body=$("${CURL[@]}" \
+        -H "Content-Type: application/json" -X POST \
+        --data '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+        "$BASE/mcp")
+    if printf '%s' "$body" | /usr/bin/jq -e '
+        .jsonrpc == "2.0" and .id == 2 and
+        (.result.tools | type == "array" and length == 14) and
+        ([.result.tools[].name] | unique | length == 14) and
+        ([.result.tools[].name] | index("search_agents") != null) and
+        ([.result.tools[].name] | index("record_action_interest") != null) and
+        ([.result.tools[].name] | index("prepare_provider_action") != null) and
+        ([.result.tools[].name] | index("handoff_provider_action") != null)
+    ' >/dev/null; then
+        printf "  \033[32m✓\033[0m %-45s 14 tools\n" "MCP tools/list"
+    else
+        printf "  \033[31m✗\033[0m %-45s runtime inventory mismatch\n" "MCP tools/list"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_mcp_free_synthetic_search() {
+    TOTAL=$((TOTAL + 1))
+    local body
+    body=$("${CURL[@]}" \
+        -H "Content-Type: application/json" -X POST \
+        --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_agents","arguments":{"query":"payment","limit":1}}}' \
+        "$BASE/mcp")
+    if printf '%s' "$body" | /usr/bin/jq -e '
+        .jsonrpc == "2.0" and .id == 3 and
+        .result.structuredContent.access == "free" and
+        .result.structuredContent.receipt_recorded == true and
+        (.result.structuredContent.search_id | startswith("nhs_sr_")) and
+        .result.structuredContent.paid_offers_available == false and
+        (.result.structuredContent.paid_offers | type == "array" and length == 0) and
+        .result.structuredContent.action_interest.available == false and
+        (.result.structuredContent.results | type == "array" and length > 0)
+    ' >/dev/null; then
+        printf "  \033[32m✓\033[0m %-45s free synthetic receipt\n" "MCP tools/call search_agents"
+    else
+        printf "  \033[31m✗\033[0m %-45s free/synthetic contract mismatch\n" "MCP tools/call search_agents"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
+check_tampered_receipt_rejected() {
+    TOTAL=$((TOTAL + 1))
+    local response body code expected
+    response=$("${CURL[@]}" -H "Content-Type: application/json" \
+        -w $'\n%{http_code}' -X POST \
+        --data '{"signed_receipt":"{}","signature":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}' \
+        "$BASE/api/v1/action-receipts/verify")
+    code="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    if [ "$EXPECTED_EXCHANGE_MODE" = "disabled" ]; then
+        expected=503
+        if [ "$code" = "$expected" ]; then
+            printf "  \033[32m✓\033[0m %-45s disabled\n" "Tampered signed receipt rejected"
+        else
+            printf "  \033[31m✗\033[0m %-45s expected %s, got %s\n" "Tampered signed receipt rejected" "$expected" "$code"
+            FAILED=$((FAILED + 1))
+        fi
+    elif [ "$code" = "200" ] && printf '%s' "$body" | /usr/bin/jq -e '
+        .signature_valid == false and
+        .within_validity_window == false and
+        .current_state_available == false
+    ' >/dev/null; then
+        printf "  \033[32m✓\033[0m %-45s invalid\n" "Tampered signed receipt rejected"
+    else
+        printf "  \033[31m✗\033[0m %-45s invalid verification response\n" "Tampered signed receipt rejected"
+        FAILED=$((FAILED + 1))
+    fi
+}
+
 echo "NHS smoke test: $BASE"
 echo ""
 echo "Core API"
 check "GET /api/v1/search is free" 200 "$BASE/api/v1/search?q=payment&per_page=1"
 check_contains "Search free-access contract" '"access":"free"' "$BASE/api/v1/search?q=payment&per_page=1"
 check_contains "Search receipt contract" '"search_id":"nhs_sr_' "$BASE/api/v1/search?q=payment&per_page=1"
+check_synthetic_paid_sidecar_empty
 check_search_selection
 check_synthetic_action_interest_rejected
+check_invalid_action_interest_receipt
 check "GET /api/v1/site/{domain} is free" 200 "$BASE/api/v1/site/openai.com"
 check "GET /api/v1/sites/{domain} free alias" 200 "$BASE/api/v1/sites/openai.com"
 check "GET /api/v1/stats" 200 "$BASE/api/v1/stats"
@@ -99,6 +277,19 @@ echo "MCP"
 check "GET /.well-known/mcp.json" 200 "$BASE/.well-known/mcp.json"
 check_contains "MCP manifest name" "nothumansearch" "$BASE/.well-known/mcp.json"
 check_contains "MCP action-interest tool" "record_action_interest" "$BASE/.well-known/mcp.json"
+check_contains "MCP ticket preparation tool" "prepare_provider_action" "$BASE/.well-known/mcp.json"
+check_contains "MCP observed handoff tool" "handoff_provider_action" "$BASE/.well-known/mcp.json"
+check_mcp_initialize
+check_mcp_tools_list
+check_mcp_free_synthetic_search
+
+echo ""
+echo "Provider-funded exchange"
+check "GET /providers" 200 "$BASE/providers"
+check "GET /privacy" 200 "$BASE/privacy"
+check_invalid_provider_action_route "Invalid ticket preparation rejected" "/api/v1/action-tickets"
+check_invalid_provider_action_route "Invalid observed handoff rejected" "/api/v1/action-tickets/handoff"
+check_tampered_receipt_rejected
 
 echo ""
 echo "Landing pages"
@@ -144,6 +335,7 @@ echo ""
 echo "Health"
 check "GET /health" 200 "$BASE/health"
 check "GET /status" 200 "$BASE/status"
+check_release_revision
 
 echo ""
 if [ $FAILED -eq 0 ]; then

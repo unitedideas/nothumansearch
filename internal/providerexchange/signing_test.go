@@ -15,6 +15,8 @@ const (
 	testOfferID    = "22222222-2222-4222-8222-222222222222"
 	testReceiptID  = "33333333-3333-4333-8333-333333333333"
 	testNHSEventID = "44444444-4444-4444-8444-444444444444"
+	testManifestID = "55555555-5555-4555-8555-555555555555"
+	testPilotID    = "66666666-6666-4666-8666-666666666666"
 	testNonce      = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 )
 
@@ -239,6 +241,137 @@ func TestAttributionAndOutcomeDomainsAreNotInterchangeable(t *testing.T) {
 	}
 }
 
+func TestCommercialProofManifestCanonicalRoundTripIsPrivacyRedacted(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	signer := mustSigner(t, "fixture-admin-secret-one-0123456789abcdef")
+	manifest := fixtureCommercialProofManifest(now)
+
+	canonical, signature, err := signer.SignCommercialProofManifest(manifest)
+	if err != nil {
+		t.Fatalf("SignCommercialProofManifest: %v", err)
+	}
+	canonicalAgain, signatureAgain, err := signer.SignCommercialProofManifest(manifest)
+	if err != nil {
+		t.Fatalf("SignCommercialProofManifest again: %v", err)
+	}
+	if canonicalAgain != canonical || signatureAgain != signature {
+		t.Fatal("commercial proof manifest serialization/signature is not deterministic")
+	}
+	if strings.ContainsAny(signature, "+/=") || len(signature) != 43 {
+		t.Fatalf("manifest signature is not an unpadded base64url SHA-256 MAC: %q", signature)
+	}
+	verified, err := signer.VerifyCommercialProofManifest(canonical, signature, now)
+	if err != nil {
+		t.Fatalf("VerifyCommercialProofManifest: %v", err)
+	}
+	if !reflect.DeepEqual(verified, manifest) {
+		t.Fatalf("verified manifest mismatch\n got: %#v\nwant: %#v", verified, manifest)
+	}
+	assertNoForbiddenJSONFields(t, []byte(canonical), []string{
+		"query", "search_receipt", "company_id", "provider_claim_id",
+		"provider_offer_id", "action_ticket_id", "handoff_receipt_id",
+		"outcome_receipt_id", "email", "contact", "principal", "agent_id",
+		"agent_identity", "ip", "network", "user_agent", "owner_reference",
+		"evidence_reference", "signed_receipt", "token", "bearer",
+	})
+	if !strings.Contains(canonical, `"verified_provider_companies":3`) ||
+		!strings.Contains(canonical, `"organic_rank_sold":false`) ||
+		!strings.Contains(canonical, `"raw_queries_sold":false`) ||
+		!strings.Contains(canonical, `"agent_identities_sold":false`) {
+		t.Fatalf("canonical manifest omitted required aggregate/boundary claims: %s", canonical)
+	}
+}
+
+func TestCommercialProofManifestRejectsTamperWrongDomainAndInvalidClaims(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0).UTC()
+	signer := mustSigner(t, "fixture-admin-secret-one-0123456789abcdef")
+	manifest := fixtureCommercialProofManifest(now)
+	canonical, signature, err := signer.SignCommercialProofManifest(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tampered := strings.Replace(canonical, `"verified_provider_companies":3`, `"verified_provider_companies":4`, 1)
+	if _, err := signer.VerifyCommercialProofManifestSignature(tampered, signature); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("tampered manifest error = %v, want ErrInvalidSignature", err)
+	}
+	wrongDomainMAC := signMAC(activeMaterial(t, signer).outcomeKey, outcomeDomain, []byte(canonical))
+	if _, err := signer.VerifyCommercialProofManifestSignature(
+		canonical, base64.RawURLEncoding.EncodeToString(wrongDomainMAC[:]),
+	); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("outcome-domain manifest error = %v, want ErrInvalidSignature", err)
+	}
+	other := mustSigner(t, "fixture-admin-secret-two-0123456789abcdef")
+	if _, err := other.VerifyCommercialProofManifestSignature(canonical, signature); !errors.Is(err, ErrInvalidSignature) {
+		t.Fatalf("wrong-key manifest error = %v, want ErrInvalidSignature", err)
+	}
+	if _, err := signer.VerifyCommercialProofManifest(canonical, signature, now.Add(-AllowedClockSkew-time.Second)); !errors.Is(err, ErrNotYetValid) {
+		t.Fatalf("future manifest error = %v, want ErrNotYetValid", err)
+	}
+	withUnknown := strings.TrimSuffix(canonical, "}") + `,"provider_name":"must-not-fit"}`
+	unknownMAC := signMAC(activeMaterial(t, signer).proofManifestKey, proofManifestDomain, []byte(withUnknown))
+	if _, err := signer.VerifyCommercialProofManifestSignature(
+		withUnknown, base64.RawURLEncoding.EncodeToString(unknownMAC[:]),
+	); !errors.Is(err, ErrMalformed) {
+		t.Fatalf("unknown manifest field error = %v, want ErrMalformed", err)
+	}
+
+	invalid := fixtureCommercialProofManifest(now)
+	invalid.VerifiedProviderCompanies = 2
+	invalid.ReviewCoverage.Providers = CommercialProofReviewCount{Required: 2, Valid: 2}
+	if _, _, err := signer.SignCommercialProofManifest(invalid); !errors.Is(err, ErrInvalidClaims) {
+		t.Fatalf("below-threshold manifest error = %v, want ErrInvalidClaims", err)
+	}
+	invalid = fixtureCommercialProofManifest(now)
+	invalid.ReviewCoverage.Callbacks.Valid--
+	if _, _, err := signer.SignCommercialProofManifest(invalid); !errors.Is(err, ErrInvalidClaims) {
+		t.Fatalf("incomplete-review manifest error = %v, want ErrInvalidClaims", err)
+	}
+	invalid = fixtureCommercialProofManifest(now)
+	invalid.RawQueriesSold = true
+	if _, _, err := signer.SignCommercialProofManifest(invalid); !errors.Is(err, ErrInvalidClaims) {
+		t.Fatalf("raw-query-sale manifest error = %v, want ErrInvalidClaims", err)
+	}
+	invalid = fixtureCommercialProofManifest(now)
+	invalid.VerifiedTermsNetReceivable = []CommercialProofCurrencyAmount{
+		{Currency: "usd", AmountMinor: 2500},
+		{Currency: "eur", AmountMinor: 1000},
+	}
+	if _, _, err := signer.SignCommercialProofManifest(invalid); !errors.Is(err, ErrInvalidClaims) {
+		t.Fatalf("unsorted-currency manifest error = %v, want ErrInvalidClaims", err)
+	}
+	for name, mutate := range map[string]func(*CommercialProofManifest){
+		"renewals exceed companies": func(value *CommercialProofManifest) {
+			value.VerifiedProviderRenewals = value.VerifiedProviderCompanies + 1
+		},
+		"handoffs exceed receipts": func(value *CommercialProofManifest) {
+			value.VerifiedProviderAcceptedHandoffs = value.VerifiedOutcomeReceipts + 1
+			value.ReviewCoverage.Tickets = CommercialProofReviewCount{Required: value.VerifiedProviderAcceptedHandoffs, Valid: value.VerifiedProviderAcceptedHandoffs}
+			value.ReviewCoverage.Handoffs = value.ReviewCoverage.Tickets
+		},
+		"activations exceed handoffs": func(value *CommercialProofManifest) {
+			value.VerifiedProviderActivations = value.VerifiedProviderAcceptedHandoffs + 1
+		},
+		"conversions exceed activations": func(value *CommercialProofManifest) {
+			value.VerifiedProviderConversions = value.VerifiedProviderActivations + 1
+		},
+		"ledger entries exceed receipts": func(value *CommercialProofManifest) {
+			value.VerifiedOutcomeLedgerEntries = value.VerifiedOutcomeReceipts + 1
+		},
+		"negative prepaid settlement": func(value *CommercialProofManifest) {
+			value.VerifiedPrepaidSettled = []CommercialProofCurrencyAmount{{Currency: "usd", AmountMinor: -1}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := fixtureCommercialProofManifest(now)
+			mutate(&invalid)
+			if _, _, err := signer.SignCommercialProofManifest(invalid); !errors.Is(err, ErrInvalidClaims) {
+				t.Fatalf("semantically inconsistent manifest error = %v, want ErrInvalidClaims", err)
+			}
+		})
+	}
+}
+
 func TestSigningInputValidation(t *testing.T) {
 	if _, err := NewSigner(""); !errors.Is(err, ErrSecretRequired) {
 		t.Fatalf("empty secret error = %v, want ErrSecretRequired", err)
@@ -386,6 +519,51 @@ func fixtureReceipt(now time.Time) OutcomeReceipt {
 		ChargedMinor:       2500,
 		Currency:           "usd",
 		ChargeStatus:       ChargeStatusCharged,
+	}
+}
+
+func fixtureCommercialProofManifest(now time.Time) CommercialProofManifest {
+	return CommercialProofManifest{
+		Version:                          CommercialProofManifestVersion,
+		KeyID:                            DefaultSigningKeyID,
+		SignatureVerificationScope:       CommercialProofVerificationScopeV1,
+		ManifestContractVersion:          CommercialProofManifestContractV1,
+		ManifestID:                       testManifestID,
+		ProviderPilotEpochID:             testPilotID,
+		ProviderPilotContractVersion:     "nhs-provider-pilot-v1",
+		ReviewContractVersion:            "nhs-provider-pilot-review-v1",
+		ReviewEvidenceContractVersion:    CommercialProofReviewEvidenceV1,
+		MarketPolicyContractVersion:      CommercialProofMarketPolicyV1,
+		ProofSnapshotSHA256:              strings.Repeat("a", 64),
+		ReviewEvidenceSHA256:             strings.Repeat("b", 64),
+		PilotDemandTopic:                 "developer-tools",
+		PilotStatus:                      "closed",
+		IssuedAt:                         now.Unix(),
+		OutcomeReceiptIntegrityValid:     true,
+		ReviewIntegrityValid:             true,
+		VerifiedOutcomeReceipts:          6,
+		VerifiedOutcomeLedgerEntries:     6,
+		VerifiedProviderCompanies:        3,
+		VerifiedProviderAcceptedHandoffs: 5,
+		VerifiedProviderActivations:      2,
+		VerifiedProviderRenewals:         1,
+		VerifiedProviderConversions:      1,
+		ReviewCoverage: CommercialProofReviewCoverage{
+			Providers: CommercialProofReviewCount{Required: 3, Valid: 3},
+			Offers:    CommercialProofReviewCount{Required: 3, Valid: 3},
+			Tickets:   CommercialProofReviewCount{Required: 5, Valid: 5},
+			Handoffs:  CommercialProofReviewCount{Required: 5, Valid: 5},
+			Callbacks: CommercialProofReviewCount{Required: 6, Valid: 6},
+		},
+		MonetaryAmountsWithheldForPrivacy: true,
+		VerifiedPrepaidSettled:            []CommercialProofCurrencyAmount{},
+		VerifiedPrepaidNetDebited:         []CommercialProofCurrencyAmount{},
+		VerifiedTermsNetReceivable:        []CommercialProofCurrencyAmount{},
+		PilotThresholdsMet:                true,
+		OrganicRankSold:                   false,
+		RawQueriesSold:                    false,
+		AgentIdentitiesSold:               false,
+		EvidenceScope:                     CommercialProofManifestScopeV1,
 	}
 }
 

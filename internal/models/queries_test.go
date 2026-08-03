@@ -40,9 +40,27 @@ func TestMCPAnalyticsUsesControlledDemandAndClientBucketTerms(t *testing.T) {
 			t.Fatalf("legacy MCP analytics contains forbidden metric %s", forbidden)
 		}
 	}
-	for _, required := range []string{`"demand_topics"`, `"distinct_client_buckets"`} {
+	for _, required := range []string{
+		`"demand_topics"`, `"distinct_client_buckets"`,
+		`'get_top_sites'`, `'recent_additions'`,
+	} {
 		if !strings.Contains(analyticsSource, required) {
 			t.Fatalf("MCP analytics missing controlled metric %s", required)
+		}
+	}
+}
+
+func TestMCPAnalyticsToolNameStorageIsAllowlisted(t *testing.T) {
+	if got := normalizeMCPAnalyticsToolName("search_agents"); got != "search_agents" {
+		t.Fatalf("known tool normalized to %q", got)
+	}
+	for _, hostile := range []string{
+		"person@example.com",
+		"private-token-value",
+		strings.Repeat("x", 64<<10),
+	} {
+		if got := normalizeMCPAnalyticsToolName(hostile); got != "unknown_tool" {
+			t.Fatalf("hostile tool name normalized to %q", got)
 		}
 	}
 }

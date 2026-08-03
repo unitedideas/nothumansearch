@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/unitedideas/nothumansearch/internal/providerexchange"
 )
 
 func int64Pointer(value int64) *int64 { return &value }
@@ -252,6 +254,77 @@ func TestProviderChargeResolutionIsTheOnlyLateOutcome(t *testing.T) {
 	}
 }
 
+func TestProviderProofOutcomeRequiresAuthenticExactRow(t *testing.T) {
+	signer, err := providerexchange.NewSigner(strings.Repeat("p", 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	recordedAt := time.Unix(1_800_000_000, 0).UTC()
+	signedReceipt := providerexchange.OutcomeReceipt{
+		Version:            providerexchange.OutcomeReceiptVersion,
+		ReceiptID:          "10000000-0000-4000-8000-000000000001",
+		TicketID:           "10000000-0000-4000-8000-000000000002",
+		OfferID:            "10000000-0000-4000-8000-000000000003",
+		NHSEventID:         "10000000-0000-4000-8000-000000000004",
+		Outcome:            providerexchange.OutcomeAccepted,
+		ProviderReportedAt: recordedAt.Unix(),
+		RecordedAt:         recordedAt.Unix(),
+		ExpiresAt:          recordedAt.Add(OutcomeReceiptValidity).Unix(),
+		ChargedMinor:       2500,
+		Currency:           "usd",
+		ChargeStatus:       providerexchange.ChargeStatusCharged,
+	}
+	canonical, signature, err := signer.SignOutcomeReceipt(signedReceipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := OutcomeReceipt{
+		ID:                 signedReceipt.ReceiptID,
+		NHSEventID:         signedReceipt.NHSEventID,
+		ProviderClaimID:    "10000000-0000-4000-8000-000000000005",
+		ProviderOfferID:    signedReceipt.OfferID,
+		ActionTicketID:     signedReceipt.TicketID,
+		ProviderAPIKeyID:   1,
+		Outcome:            string(signedReceipt.Outcome),
+		BilledCents:        signedReceipt.ChargedMinor,
+		ChargeStatus:       string(signedReceipt.ChargeStatus),
+		Currency:           signedReceipt.Currency,
+		SignedReceipt:      canonical,
+		Signature:          signature,
+		ProviderReportedAt: recordedAt,
+		CreatedAt:          recordedAt,
+	}
+	if _, valid := verifyProviderProofOutcome(signer, &row); !valid {
+		t.Fatal("exact authentic outcome row was rejected")
+	}
+	mutations := []struct {
+		name   string
+		mutate func(*OutcomeReceipt)
+	}{
+		{"receipt ID", func(value *OutcomeReceipt) { value.ID = signedReceipt.NHSEventID }},
+		{"event ID", func(value *OutcomeReceipt) { value.NHSEventID = signedReceipt.ReceiptID }},
+		{"ticket ID", func(value *OutcomeReceipt) { value.ActionTicketID = signedReceipt.OfferID }},
+		{"offer ID", func(value *OutcomeReceipt) { value.ProviderOfferID = signedReceipt.TicketID }},
+		{"outcome", func(value *OutcomeReceipt) { value.Outcome = "activated" }},
+		{"amount", func(value *OutcomeReceipt) { value.BilledCents++ }},
+		{"charge status", func(value *OutcomeReceipt) { value.ChargeStatus = "credited" }},
+		{"currency", func(value *OutcomeReceipt) { value.Currency = "eur" }},
+		{"provider time", func(value *OutcomeReceipt) { value.ProviderReportedAt = value.ProviderReportedAt.Add(time.Second) }},
+		{"recorded time", func(value *OutcomeReceipt) { value.CreatedAt = value.CreatedAt.Add(time.Second) }},
+		{"fractional recorded time", func(value *OutcomeReceipt) { value.CreatedAt = value.CreatedAt.Add(time.Nanosecond) }},
+		{"signature", func(value *OutcomeReceipt) { value.Signature = strings.Repeat("A", 43) }},
+	}
+	for _, test := range mutations {
+		t.Run(test.name, func(t *testing.T) {
+			mutated := row
+			test.mutate(&mutated)
+			if _, valid := verifyProviderProofOutcome(signer, &mutated); valid {
+				t.Fatal("mutated outcome row qualified for proof")
+			}
+		})
+	}
+}
+
 func TestProviderExchangeNilStoresFailClosed(t *testing.T) {
 	if _, _, err := CreateProviderClaim(nil, 1, "123e4567-e89b-42d3-a456-426614174000"); !errors.Is(err, ErrInvalidProviderExchange) {
 		t.Fatalf("CreateProviderClaim nil DB error = %v", err)
@@ -462,7 +535,7 @@ func TestProviderDNSFreshnessSourceContracts(t *testing.T) {
 		{"public offer", "func ListPublicProviderOffersForOrganicResults", "func scanProviderOfferWithPosition", []string{"verification_last_succeeded_at", "ProviderClaimVerificationFreshness"}},
 		{"new action ticket", "func CreateActionTicket", "func ResolveActionTicket", []string{"verification_last_succeeded_at", "ProviderClaimVerificationFreshness"}},
 		{"action-token use", "func ResolveActionTicket", "func ResolveActionTicketForChargeResolution", []string{"verification_last_succeeded_at", "ProviderClaimVerificationFreshness"}},
-		{"redirect", "func MarkActionTicketRedirected", "func RedactExpiredActionTicketIntent", []string{"verification_last_succeeded_at", "ProviderClaimVerificationFreshness"}},
+		{"observed handoff", "func RecordActionTicketHandoff", "func RedactExpiredActionTicketIntent", []string{"verification_last_succeeded_at", "providerClaimVerificationFresh", "ProviderActionHandoffConsentV1"}},
 		{"positive provider outcome", "func RecordProviderOutcome", "func GetOutcomeReceipt", []string{"providerClaimVerificationFresh", "staleClaimResolution", "providerChargeResolutionAllowed"}},
 	} {
 		requireAll(gate.name, section(gate.start, gate.end), gate.required...)
@@ -487,10 +560,14 @@ func TestProviderExchangeSourceKeepsOrganicRankAndMoneyAtomic(t *testing.T) {
 		}
 	}
 	for _, required := range []string{
-		"unnest($1::text[], $2::text[]) WITH ORDINALITY",
+		"unnest($2::text[], $3::text[]) WITH ORDINALITY",
 		"claim.domain_snapshot=organic.domain", "organic.organic_position",
 		"claim.status='verified'", "offer.status='active'", "ChargeEvent:",
 		"claim.verification_last_succeeded_at", "ProviderClaimVerificationFreshness",
+		"provider_pilot_epochs", "pilot.status='active'",
+		"pilot.demand_topic=ANY(receipt.demand_topics)",
+		"offer.provider_pilot_epoch_id=pilot.id", "provider_pilot_enrollments",
+		"provider_pilot_enrollment_eligibility_is_current",
 		"offer.terms_credit_limit_cents >= offer.bounty_cents",
 		"offer.terms_credit_limit_cents-offer.bounty_cents",
 		"ledger.entry_type IN ('charge','credit')", "offer.terms_period_anchor_at",
@@ -511,6 +588,8 @@ func TestProviderExchangeSourceKeepsOrganicRankAndMoneyAtomic(t *testing.T) {
 		"NOT receipt.is_synthetic", "organic.site_id=claim.site_id",
 		"organic.site_domain_snapshot=claim.domain_snapshot",
 		"offer.version=$3", "offer.status='active'",
+		"provider_pilot_epoch_id_snapshot", "pilot.demand_topic=ANY(receipt.demand_topics)",
+		"provider_pilot_enrollment_eligibility_is_current",
 		"pg_advisory_xact_lock", "NOT EXISTS (",
 		"offer_version_snapshot", "tx.Commit()",
 	} {
@@ -531,6 +610,7 @@ func TestProviderExchangeSourceKeepsOrganicRankAndMoneyAtomic(t *testing.T) {
 		"entry_type, amount_cents", "'charge'", "'credit'",
 		"ticket.charge_event_snapshot", "ticket.bounty_cents_snapshot",
 		"ProviderBountyMaximumCents", "settleProviderTicketCapacity",
+		"provider_pilot_enrollment_eligibility_is_current",
 		"Terms capacity was reserved atomically",
 		"balance < -ProviderMoneyMaximumCents+bountyCents",
 		"SignOutcomeReceipt", "tx.Commit()",
@@ -565,10 +645,13 @@ func TestActionTicketCreationSnapshotsTermsAndSupportsSafeRetry(t *testing.T) {
 	for _, required := range []string{
 		"organic.site_id=claim.site_id",
 		"organic.site_domain_snapshot=claim.domain_snapshot",
+		"organic.organic_position",
+		"offer.OrganicPosition = organicPosition",
 		"claim.verification_last_succeeded_at",
 		"ProviderClaimVerificationFreshness",
 		"$3=ANY(receipt.demand_topics)",
 		"JOIN provider_offers_returned returned",
+		"provider_pilot_enrollment_eligibility_is_current",
 		"returned.offer_version_snapshot=offer.version",
 		"existing.CreationRequestHash != requestHash",
 		"Nonce: existing.TokenNonce",
@@ -714,25 +797,42 @@ func TestProviderCapacityUsesOnlyPostLockDatabaseTime(t *testing.T) {
 	}
 }
 
-func TestProviderExchangeProofExcludesSyntheticAndUsesPerCurrencyMoney(t *testing.T) {
+func TestProviderExchangeProofRequiresVerifiedCompanyEvidenceAndUsesPerCurrencyMoney(t *testing.T) {
 	source, err := os.ReadFile("provider_exchange.go")
 	if err != nil {
 		t.Fatalf("read provider exchange model: %v", err)
 	}
 	text := string(source)
-	start := strings.Index(text, "func GetProviderExchangeProof")
+	start := strings.Index(text, "const providerVerifiedCommercialCTEs")
 	if start < 0 {
-		t.Fatal("GetProviderExchangeProof not found")
+		t.Fatal("verified provider proof contract not found")
 	}
 	proofSource := text[start:]
 	for _, required := range []string{
-		"NOT ticket.source_is_synthetic", "GROUP BY ledger.currency",
-		"ticket.authorization_revoked_at IS NULL", "SELECT DISTINCT claim.account_id",
-		"operator_recorded_budgets", "terminal.outcome IN ('duplicate','invalid')",
-		"charged.created_at, charged.id", "funding.created_at, funding.id",
-		"funding.amount_cents >= -charged.amount_cents",
+		"provider_pilot_companies", "provider_commercial_acceptance_events",
+		"pilot_scope", "WHERE id=$4::uuid", "provider_pilot_enrollments",
+		"provider_pilot_enrollment_eligibility_is_current",
+		"offer.provider_pilot_epoch_id=company.pilot_id",
+		"qualified.pilot_id=ticket.provider_pilot_epoch_id",
+		"pilot_tickets", "VerifyOutcomeReceiptSignature",
+		"signed.ReceiptID != receipt.ID", "providerProofLedgerMatches",
+		"OutcomeReceiptIntegrityValid", "RejectedOutcomeLedgerEntries",
+		"verifiedLedgerIDs", "ledger.entry_type IN ('charge','credit')",
+		"action_ticket_id=ANY($5::uuid[])",
+		"provider_commercial_commitment_events", "provider_action_handoff_receipts",
+		"ProviderActionHandoffContractV1", "COUNT(DISTINCT company_id)",
+		"NOT ticket.source_is_synthetic", "ticket.authorization_revoked_at IS NULL",
+		"ticket.commercial_terms_sha256_snapshot", "fund.source_effective_at > charge.created_at",
+		"renewal.source_effective_at > charge.created_at",
+		"fund.residual_cents >= -charge.amount_cents", "unverified.entry_type IN ('fund','adjustment')",
+		"linked.event_type='prepaid_fund'", "linked.event_type='fund_reversal'",
+		"VerifiedProviderCompanies", "VerifiedProviderAcceptedHandoffs",
+		"VerifiedProviderConfirmedActivations", "VerifiedProviderRenewals",
+		"VerifiedPrepaidSettledByCurrency", "VerifiedPrepaidNetDebitedByCurrency",
+		"VerifiedTermsNetReceivableByCurrency",
 		"PrepaidNetDebitedByCurrency", "TermsNetReceivableByCurrency",
-		"OperatorRecordedCollectedByCurrency", "PilotThresholdsMet",
+		"sql.LevelRepeatableRead", "ReadOnly:  true", "tx.QueryRow", "tx.Query",
+		"tx.Commit", "PilotThresholdsMet",
 	} {
 		if !strings.Contains(proofSource, required) {
 			t.Fatalf("provider proof missing truthful aggregate contract %q", required)
@@ -740,6 +840,136 @@ func TestProviderExchangeProofExcludesSyntheticAndUsesPerCurrencyMoney(t *testin
 	}
 	if strings.Contains(proofSource, "NetBilledCents") || strings.Contains(proofSource, "NetBilledByCurrency") {
 		t.Fatal("provider proof sums unlike currencies into one money total")
+	}
+	getProofStart := strings.Index(proofSource, "func GetProviderExchangeProof")
+	if getProofStart < 0 {
+		t.Fatal("provider proof function not found")
+	}
+	getProofSource := proofSource[getProofStart:]
+	if strings.Contains(getProofSource, "db.Query(") || strings.Contains(getProofSource, "db.QueryRow(") {
+		t.Fatal("verified provider proof mixes database snapshots outside its repeatable-read transaction")
+	}
+}
+
+func TestProviderCommercialOwnerVerificationSerializesCompanyAndBindsEvidenceTime(t *testing.T) {
+	source, err := os.ReadFile("provider_exchange.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	companyStart := strings.Index(text, "func VerifyProviderPilotCompany")
+	companyEnd := strings.Index(text[companyStart:], "const providerCommercialCommitmentColumns")
+	termsStart := strings.Index(text, "func RecordVerifiedProviderTerms")
+	termsEnd := strings.Index(text[termsStart:], "func ReverseVerifiedProviderFunding")
+	if companyStart < 0 || companyEnd < 0 || termsStart < 0 || termsEnd < 0 {
+		t.Fatal("could not isolate owner commercial verification boundaries")
+	}
+	companySource := text[companyStart : companyStart+companyEnd]
+	for _, required := range []string{
+		"providerCompanyKeyNamespace", "pg_advisory_xact_lock", "companyKeyHash",
+		"FOR UPDATE", "provider_pilot_companies",
+	} {
+		if !strings.Contains(companySource, required) {
+			t.Fatalf("pilot company verification missing race boundary %q", required)
+		}
+	}
+	if strings.Contains(companySource, "ON CONFLICT DO") {
+		t.Fatal("pilot company verification uses PostgreSQL-incompatible ON CONFLICT on append-only rule table")
+	}
+
+	termsSource := text[termsStart : termsStart+termsEnd]
+	for _, required := range []string{
+		"input.SourceEffectiveAt.IsZero()", "input.SourceEffectiveAt.UTC()",
+		"existing.SourceEffectiveAt.Equal(input.SourceEffectiveAt.UTC())",
+		"input.SourceEffectiveAt.After(verifiedAt)", "input.SourceEffectiveAt",
+	} {
+		if !strings.Contains(termsSource, required) {
+			t.Fatalf("verified terms missing external effective-time contract %q", required)
+		}
+	}
+}
+
+func TestProviderCommercialTermsHashBindsExactMachineReadableContract(t *testing.T) {
+	zero := int64(0)
+	base := ProviderOfferInput{
+		OfferName: "Verified action", OfferSummary: "A bounded provider action.",
+		ActionType: "lead", ActionURL: "https://provider.example/start",
+		ChargeEvent: "accepted", BountyCents: 2500, Currency: "usd",
+		PrincipalPriceMode: "free", PrincipalPriceCents: &zero,
+		PrincipalCurrency: "usd", BillingMode: "prepaid",
+	}
+	offerID := "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+	want := providerCommercialTermsHash(offerID, 1, base)
+	if !providerHashPattern.MatchString(want) {
+		t.Fatalf("commercial terms hash = %q", want)
+	}
+
+	mutations := map[string]func(*ProviderOfferInput){
+		"name":           func(input *ProviderOfferInput) { input.OfferName += " changed" },
+		"summary":        func(input *ProviderOfferInput) { input.OfferSummary += " changed" },
+		"action URL":     func(input *ProviderOfferInput) { input.ActionURL = "https://provider.example/other" },
+		"charge event":   func(input *ProviderOfferInput) { input.ChargeEvent = "activated" },
+		"CPA":            func(input *ProviderOfferInput) { input.BountyCents++ },
+		"principal mode": func(input *ProviderOfferInput) { input.PrincipalPriceMode = "quote"; input.PrincipalPriceCents = nil },
+		"billing mode": func(input *ProviderOfferInput) {
+			limit, days := int64(10000), 30
+			input.BillingMode, input.TermsCreditLimitCents, input.TermsPeriodDays = "terms", &limit, &days
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			changed := base
+			mutate(&changed)
+			if got := providerCommercialTermsHash(offerID, 1, changed); got == want {
+				t.Fatalf("%s did not change exact terms hash", name)
+			}
+		})
+	}
+	if got := providerCommercialTermsHash(offerID, 2, base); got == want {
+		t.Fatal("offer version did not change exact terms hash")
+	}
+
+	source, err := os.ReadFile("provider_exchange.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	start := strings.Index(text, "func providerCommercialTermsHash(")
+	end := strings.Index(text[start:], "func providerCommercialTermsHashFromOffer")
+	if start < 0 || end < 0 {
+		t.Fatal("could not isolate commercial terms hash")
+	}
+	hashSource := text[start : start+end]
+	for _, policy := range []string{
+		"ProviderCommercialTermsContractV1", "ProviderCommercialCreditRuleV1",
+		"ProviderCommercialResponseRuleV1", "ProviderCommercialTermsAnchorRuleV1",
+		"provider_acknowledges_merchant_of_record=true",
+	} {
+		if !strings.Contains(hashSource, policy) {
+			t.Fatalf("commercial terms hash omits policy %q", policy)
+		}
+	}
+}
+
+func TestProviderOfferDraftDoesNotOverstateMerchantOfRecordAcceptance(t *testing.T) {
+	source, err := os.ReadFile("provider_exchange.go")
+	if err != nil {
+		t.Fatalf("read provider exchange model: %v", err)
+	}
+	text := string(source)
+	start := strings.Index(text, "func scanProviderOffer(")
+	end := strings.Index(text[start:], "const providerOfferSelectColumns")
+	if start < 0 || end < 0 {
+		t.Fatal("could not isolate provider-offer scanner")
+	}
+	scanner := text[start : start+end]
+	for _, required := range []string{
+		"offer.ProviderMORAcknowledgementRequired = true",
+		`offer.ProviderAcknowledgesMerchantOfRecord = offer.Status == "active"`,
+	} {
+		if !strings.Contains(scanner, required) {
+			t.Fatalf("provider-offer scanner missing truthful draft acknowledgement rule %q", required)
+		}
 	}
 }
 
@@ -782,8 +1012,10 @@ func TestProviderEmergencyPauseRevokesLiveAuthorizationAndPreservesCreditPath(t 
 		t.Fatal("could not isolate action authorization resolution")
 	}
 	resolveSource := text[resolveStart : resolveStart+resolveEnd]
-	if strings.Count(resolveSource, "expires_at > NOW()") < 2 ||
-		strings.Count(resolveSource, "authorization_revoked_at IS NULL") < 2 {
+	if strings.Count(resolveSource, "expires_at > NOW()") < 1 ||
+		strings.Count(resolveSource, "authorization_revoked_at IS NULL") < 1 ||
+		!strings.Contains(resolveSource, "ticket.ExpiresAt.After(authorizedAt)") ||
+		!strings.Contains(resolveSource, "ticket.AuthorizationRevokedAt != nil") {
 		t.Fatal("late credit exception weakened redirect or action-token authorization")
 	}
 }
@@ -795,7 +1027,7 @@ func TestChargeResolutionResolverOnlyProvesChargedTicketTokenBinding(t *testing.
 	}
 	text := string(source)
 	start := strings.Index(text, "func ResolveActionTicketForChargeResolution")
-	end := strings.Index(text[start:], "func MarkActionTicketRedirected")
+	end := strings.Index(text[start:], "const providerActionHandoffReceiptColumns")
 	if start < 0 || end < 0 {
 		t.Fatal("could not isolate charge-resolution resolver")
 	}
@@ -942,7 +1174,7 @@ func TestPublicOutcomeStateIsStrictAndProviderFree(t *testing.T) {
 	}
 	text := string(source)
 	start := strings.Index(text, "func GetPublicOutcomeReceiptState")
-	end := strings.Index(text[start:], "func GetProviderExchangeProof")
+	end := strings.Index(text[start:], "func getProviderExchangeOperationalProgress")
 	if start < 0 || end < 0 {
 		t.Fatal("could not isolate public outcome state lookup")
 	}
@@ -951,6 +1183,7 @@ func TestPublicOutcomeStateIsStrictAndProviderFree(t *testing.T) {
 		"receipt.id=$1::uuid AND ticket.id=$2::uuid", "current_ticket_status",
 		"original_charge_credited", "superseded_by_later_state",
 		"net_commercial_effect_cents", "authorization_revoked_at",
+		"commercial_terms_contract_version_snapshot", "commercial_terms_sha256_snapshot",
 	} {
 		if !strings.Contains(stateSource, required) {
 			t.Fatalf("public outcome state missing %q", required)
@@ -959,6 +1192,64 @@ func TestPublicOutcomeStateIsStrictAndProviderFree(t *testing.T) {
 	for _, forbidden := range []string{"provider_claims", "provider_api_keys", "account_id", "action_url", "demand_topic"} {
 		if strings.Contains(stateSource, forbidden) {
 			t.Fatalf("public outcome state exposes provider/principal field %q", forbidden)
+		}
+	}
+}
+
+func TestControlledIntentResolverBindsExactObservedSnapshotsAndIsReadOnly(t *testing.T) {
+	source, err := os.ReadFile("provider_exchange.go")
+	if err != nil {
+		t.Fatalf("read provider exchange model: %v", err)
+	}
+	text := string(source)
+	start := strings.Index(text, "func ResolveProviderControlledIntent")
+	end := strings.Index(text[start:], "func RedactExpiredActionTicketIntent")
+	if start < 0 || end < 0 {
+		t.Fatal("could not isolate controlled-intent resolver")
+	}
+	resolver := text[start : start+end]
+	for _, required := range []string{
+		"WITH locked AS MATERIALIZED (",
+		"api_key_status='active'",
+		"claim_status='verified'",
+		"handoff.action_ticket_id=ticket.id",
+		"handoff_claim_id=claim_id",
+		"handoff_offer_id=ticket_provider_offer_id",
+		"handoff_offer_version=ticket_offer_version",
+		"handoff_terms_version=ticket_terms_version",
+		"handoff_terms_sha256=ticket_terms_sha256",
+		"ticket_token_hash=$5",
+		"handoff_token_hash=$5",
+		"NOT ticket_source_is_synthetic",
+		"handoff_intent_consent",
+		"ticket_intent_redacted_at IS NULL",
+		"ticket_authorization_revoked_at IS NULL",
+		"ticket_status IN ('redirected','accepted','activated','converted')",
+		"FOR SHARE OF api_key, claim, ticket, handoff",
+		"FROM locked",
+	} {
+		if !strings.Contains(resolver, required) {
+			t.Fatalf("controlled-intent resolver missing exact binding %q", required)
+		}
+	}
+	outerRead := strings.Index(resolver, "FROM locked")
+	if outerRead < 0 {
+		t.Fatal("controlled-intent resolver missing post-lock authorization read")
+	}
+	for _, postLock := range []string{
+		"clock_timestamp() - $7::bigint",
+		"ticket_expires_at > clock_timestamp()",
+		"ticket_created_at + $6::bigint * INTERVAL '1 second' > clock_timestamp()",
+		"ticket_authorization_revoked_at IS NULL",
+		"ticket_intent_redacted_at IS NULL",
+	} {
+		if position := strings.Index(resolver, postLock); position <= outerRead {
+			t.Fatalf("controlled-intent authorization %q occurs before locked rows are materialized", postLock)
+		}
+	}
+	for _, forbidden := range []string{"INSERT INTO", "UPDATE ", "DELETE FROM", "page_views", "mcp_requests", "intent_events"} {
+		if strings.Contains(resolver, forbidden) {
+			t.Fatalf("controlled-intent resolver contains write/analytics marker %q", forbidden)
 		}
 	}
 }

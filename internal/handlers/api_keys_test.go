@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 func TestAPIKeySubscribeGetDocumentsPlans(t *testing.T) {
@@ -27,6 +30,10 @@ func TestAPIKeySubscribeGetDocumentsPlans(t *testing.T) {
 			Method         string   `json:"method"`
 			Endpoint       string   `json:"endpoint"`
 			RequiredFields []string `json:"required_fields"`
+			AllowedPlans   []string `json:"allowed_plans"`
+			ExampleBody    struct {
+				Plan string `json:"plan"`
+			} `json:"example_body"`
 		} `json:"subscribe"`
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
@@ -52,5 +59,57 @@ func TestAPIKeySubscribeGetDocumentsPlans(t *testing.T) {
 	}
 	if len(payload.Subscribe.RequiredFields) != 2 {
 		t.Fatalf("required fields = %v, want email and plan", payload.Subscribe.RequiredFields)
+	}
+	if len(payload.Subscribe.AllowedPlans) != 1 || payload.Subscribe.AllowedPlans[0] != "unlimited" || payload.Subscribe.ExampleBody.Plan != "unlimited" {
+		t.Fatalf("subscribe plan contract = allowed %v example %q, want unlimited", payload.Subscribe.AllowedPlans, payload.Subscribe.ExampleBody.Plan)
+	}
+}
+
+func TestAPIKeySubscribeMetadataIncludesAttribution(t *testing.T) {
+	metadata := apiSubscribeMetadata("buyer@example.com", models.APIPlanFor("unlimited"), map[string]string{
+		"qc":           "campaign-123",
+		"utm_source":   "linkedin",
+		"utm_medium":   "qlimit",
+		"utm_campaign": "campaign-123",
+	})
+
+	for key, want := range map[string]string{
+		"tenant":        "nothumansearch",
+		"product":       "nhs_api_subscription",
+		"product_id":    "nhs_api_unlimited",
+		"source":        "api_key_subscribe",
+		"plan":          "unlimited",
+		"monthly_limit": "50000",
+		"email":         "buyer@example.com",
+		"qc":            "campaign-123",
+		"utm_source":    "linkedin",
+		"utm_medium":    "qlimit",
+		"utm_campaign":  "campaign-123",
+	} {
+		if metadata[key] != want {
+			t.Fatalf("metadata[%s] = %q, want %q; metadata=%#v", key, metadata[key], want, metadata)
+		}
+	}
+}
+
+func TestAPIKeySubscribeCancelURLPreservesAttribution(t *testing.T) {
+	h := NewAPIKeyHandler(nil, "https://nothumansearch.ai")
+	got := h.subscribeCancelURL("buyer@example.com", map[string]string{
+		"qc":           "campaign-123",
+		"utm_source":   "linkedin",
+		"utm_medium":   "qlimit",
+		"utm_campaign": "campaign-123",
+	})
+	for _, want := range []string{
+		"https://nothumansearch.ai/subscribe?",
+		"email=buyer%40example.com",
+		"qc=campaign-123",
+		"utm_source=linkedin",
+		"utm_medium=qlimit",
+		"utm_campaign=campaign-123",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("cancel URL %q missing %q", got, want)
+		}
 	}
 }

@@ -37,6 +37,21 @@ func TestProviderOutcomePayloadHashDoesNotPersistRawToken(t *testing.T) {
 	}
 }
 
+func TestProviderOutcomeDerivesTicketFromSignedBearer(t *testing.T) {
+	t.Parallel()
+	signed := "4b69ca8e-d61d-47e2-91dd-fecd9f711234"
+	for _, asserted := range []string{"", "  " + strings.ToUpper(signed) + "  "} {
+		if got, err := providerOutcomeTicketID(asserted, signed); err != nil || got != signed {
+			t.Fatalf("providerOutcomeTicketID(%q) = %q, %v", asserted, got, err)
+		}
+	}
+	if _, err := providerOutcomeTicketID(
+		"5c79ca8e-d61d-47e2-91dd-fecd9f711234", signed,
+	); err == nil {
+		t.Fatal("mismatched compatibility ticket assertion was accepted")
+	}
+}
+
 func TestProviderOwnershipFreshnessResponseUsesPersistentDNSContract(t *testing.T) {
 	t.Parallel()
 	lastSucceededAt := time.Unix(1_700_000_000, 0).UTC()
@@ -193,5 +208,30 @@ func TestProviderExchangeConstructorChecksPersistedSigningKeyRetention(t *testin
 		if !strings.Contains(constructor, required) {
 			t.Fatalf("provider exchange constructor missing %q", required)
 		}
+	}
+}
+
+func TestProtectedMigrationSigningPreflightShares022Transaction(t *testing.T) {
+	t.Parallel()
+	source, err := os.ReadFile("provider_exchange_handler.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	start := strings.Index(text, "func ProviderExchangeProtectedMigrationPreflight")
+	if start < 0 {
+		t.Fatal("could not find protected migration signing preflight")
+	}
+	end := strings.Index(text[start:], "func providerWriteJSON")
+	if end < 0 {
+		t.Fatal("could not isolate protected migration signing preflight")
+	}
+	body := text[start : start+end]
+	lock := strings.Index(body, "LOCK TABLE public.action_tickets IN ACCESS EXCLUSIVE MODE")
+	proofs := strings.Index(body, "models.ProviderSigningKeyProofsInUseTx(ctx, tx)")
+	empty := strings.Index(body, "if len(retainedProofs) == 0")
+	signer := strings.Index(body, "providerExchangeSignerFromEnv()")
+	if lock < 0 || proofs <= lock || empty <= proofs || signer <= empty {
+		t.Fatalf("022 signing preflight order lock=%d proofs=%d empty=%d signer=%d", lock, proofs, empty, signer)
 	}
 }

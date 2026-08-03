@@ -23,6 +23,7 @@ type APIHandler struct {
 	DB                        *sql.DB
 	BaseURL                   string
 	Auth                      *AuthService
+	ProviderExchangeEnabled   bool
 	searchRateLimiter         *mcpDiscoveryRateLimiter
 	probeRateLimiter          *mcpDiscoveryRateLimiter
 	prioritySearchRateLimiter *mcpDiscoveryRateLimiter
@@ -115,6 +116,7 @@ func NewAPIHandler(db *sql.DB) *APIHandler {
 	return &APIHandler{
 		DB:                        db,
 		BaseURL:                   "https://nothumansearch.ai",
+		ProviderExchangeEnabled:   true,
 		searchRateLimiter:         newMCPDiscoveryRateLimiter(freeSearchHourlyLimit, time.Hour),
 		probeRateLimiter:          newMCPDiscoveryRateLimiter(freeActiveProbeHourlyLimit, time.Hour),
 		prioritySearchRateLimiter: newMCPDiscoveryRateLimiter(prioritySearchHourlyLimit, time.Hour),
@@ -141,45 +143,71 @@ func (h *APIHandler) Index(w http.ResponseWriter, r *http.Request) {
 		"$schema":            "https://schema.org/WebAPI",
 		"name":               "Not Human Search API v1",
 		"description":        "Free, neutral search for agent-ready sites. Separately disclosed provider-funded actions may be attached only after an organic search receipt and never change rank or score.",
-		"version":            "1.0.0",
+		"version":            "1.1.0",
+		"version_policy":     "Descriptive API release version, not a semantic-compatibility promise for controlled-pilot provider endpoints; provider action contracts carry their own explicit version.",
 		"base_url":           "https://nothumansearch.ai/api/v1",
 		"openapi_spec":       "https://nothumansearch.ai/openapi.yaml",
 		"ai_plugin_manifest": "https://nothumansearch.ai/.well-known/ai-plugin.json",
 		"mcp_endpoint":       "https://nothumansearch.ai/mcp",
 		"endpoints": map[string]string{
-			"search":            "GET /api/v1/search?q=&category=&tag=&min_score=&has_api=&has_mcp=&has_openapi=&has_llms_txt=&page=",
-			"site":              "GET /api/v1/site/{domain}",
-			"submit":            "POST /api/v1/submit",
-			"stats":             "GET /api/v1/stats",
-			"top":               "GET /api/v1/top?category=&has_mcp=&has_openapi=&has_llms_txt=&limit=",
-			"categories":        "GET /api/v1/categories",
-			"check":             "POST /api/v1/check",
-			"verify_mcp":        "GET /api/v1/verify-mcp?url=",
-			"commerce_catalog":  "GET /api/v1/catalog",
-			"commerce_quote":    "POST /api/v1/quote",
-			"commerce_checkout": "POST /api/v1/checkout",
-			"api_key_plans":     "GET /api/v1/api-keys/subscribe",
-			"api_key_subscribe": "POST /api/v1/api-keys/subscribe",
-			"api_key_activate":  "GET /api/v1/api-keys/activate?session_id=",
-			"monitor_register":  "POST /api/v1/monitor/register",
-			"provider_claims":   "GET|POST /api/v1/provider/claims (human session; DNS verification)",
-			"provider_offers":   "GET|POST /api/v1/provider/offers (human session; drafts require NHS commercial activation)",
-			"action_interests":  "POST /api/v1/action-interests (public; exact organic result + caller-attested principal interest; no provider contact)",
-			"action_tickets":    "POST /api/v1/action-tickets (public; exact consent v1; controlled fields only)",
-			"provider_outcomes": "POST /api/v1/provider/outcomes (X-NHS-Provider-Key + Idempotency-Key)",
-			"receipt_verify":    "POST /api/v1/action-receipts/verify (public signature, freshness, and current-state verification)",
+			"search":                          "GET /api/v1/search?q=&category=&tag=&min_score=&has_api=&has_mcp=&has_openapi=&has_llms_txt=&page=",
+			"site":                            "GET /api/v1/site/{domain}",
+			"submit":                          "POST /api/v1/submit",
+			"stats":                           "GET /api/v1/stats",
+			"top":                             "GET /api/v1/top?category=&has_mcp=&has_openapi=&has_llms_txt=&limit=",
+			"categories":                      "GET /api/v1/categories",
+			"check":                           "POST /api/v1/check",
+			"verify_mcp":                      "GET /api/v1/verify-mcp?url=",
+			"commerce_catalog":                "GET /api/v1/catalog",
+			"commerce_quote":                  "POST /api/v1/quote",
+			"commerce_checkout":               "POST /api/v1/checkout",
+			"api_key_plans":                   "GET /api/v1/api-keys/subscribe",
+			"api_key_subscribe":               "POST /api/v1/api-keys/subscribe",
+			"api_key_activate":                "GET /api/v1/api-keys/activate?session_id=",
+			"monitor_register":                "POST /api/v1/monitor/register",
+			"provider_claims":                 "GET|POST /api/v1/provider/claims (human session; DNS verification)",
+			"provider_offers":                 "GET|POST /api/v1/provider/offers (human session; drafts require NHS commercial activation)",
+			"provider_commercial_acceptances": "POST /api/v1/provider/commercial-acceptances (X-NHS-Provider-Key + Idempotency-Key; provider-authenticated acceptance only)",
+			"provider_pilot_status":           "GET /api/v1/provider/pilot-status?limit= (X-NHS-Provider-Key; claim-scoped setup, terms, offer, handoff, and outcome continuity)",
+			"provider_demand":                 "GET /api/v1/provider/demand?days= (X-NHS-Provider-Key; authenticated claim domain only; privacy-thresholded aggregate receipts)",
+			"provider_controlled_intent":      "POST /api/v1/provider/action-tickets/resolve (X-NHS-Provider-Key; optional separately consented controlled intent after observed handoff; no query, identity, contact, charge, or proof)",
+			"action_interests":                "POST /api/v1/action-interests (public; exact organic result + caller-attested principal interest; no provider contact)",
+			"action_tickets":                  "POST /api/v1/action-tickets (public; exact consent v1; returns a bearer token and handoff endpoint, not the provider URL)",
+			"action_ticket_handoff":           "POST /api/v1/action-tickets/handoff (public bearer JSON + nhs-provider-handoff-consent-v1; durable privacy-safe handoff receipt; no charge)",
+			"provider_outcomes":               "POST /api/v1/provider/outcomes (X-NHS-Provider-Key + Idempotency-Key)",
+			"receipt_verify":                  "POST /api/v1/action-receipts/verify (public signature, freshness, and current-state verification)",
 		},
-		"auth":       "none for discovery, action-interest receipts, action-ticket preparation, or receipt verification; provider setup uses a human session; outcome callbacks use a claim-scoped provider key; an optional API key only raises discovery throughput ceilings",
+		"auth":       "none for discovery, action-interest receipts, action-ticket preparation, bearer handoff, or receipt verification; provider setup uses a human session; commercial acceptances, claim-scoped status and privacy-thresholded demand reports, optional post-handoff controlled-intent resolution, and outcome callbacks use a claim-scoped provider key; an optional API key only raises discovery throughput ceilings",
 		"rate_limit": "free: search 240/hour/client and live verification 20/hour/client; priority API key: search 5000/hour/key and live verification 100/hour/key while monthly priority allocation remains",
 		"provider_exchange": map[string]any{
-			"setup_url":                      "https://nothumansearch.ai/providers",
-			"privacy_url":                    "https://nothumansearch.ai/privacy",
-			"consent_contract_url":           "https://nothumansearch.ai/privacy#consent-v1",
-			"organic_rank_sold":              false,
-			"raw_queries_sold":               false,
-			"agent_identities_sold":          false,
-			"direct_provider_access_free":    true,
-			"provider_mor_contract_required": true,
+			"setup_url":                                    "https://nothumansearch.ai/providers",
+			"privacy_url":                                  "https://nothumansearch.ai/privacy",
+			"consent_contract_url":                         "https://nothumansearch.ai/privacy#consent-v1",
+			"organic_rank_sold":                            false,
+			"raw_queries_sold":                             false,
+			"agent_identities_sold":                        false,
+			"direct_provider_access_free":                  true,
+			"provider_mor_contract_required":               true,
+			"provider_status_endpoint":                     "GET /api/v1/provider/pilot-status",
+			"provider_status_scope":                        "authenticated_claim_only",
+			"provider_demand_endpoint":                     "GET /api/v1/provider/demand?days=",
+			"provider_demand_scope":                        "authenticated_claim_domain_only",
+			"provider_demand_privacy_threshold_receipts":   models.ProviderDemandPrivacyThreshold,
+			"provider_demand_returns_individual_receipts":  false,
+			"provider_read_rate_limit":                     "240/hour/provider key per read surface",
+			"ticket_preparation_contract":                  models.ProviderActionTicketPreparationV2,
+			"handoff_contract_version":                     models.ProviderActionHandoffContractV1,
+			"handoff_consent_version":                      models.ProviderActionHandoffConsentV1,
+			"handoff_consent_url":                          "https://nothumansearch.ai/privacy#handoff-consent-v1",
+			"controlled_intent_disclosure_optional":        true,
+			"controlled_intent_disclosure_default":         false,
+			"controlled_intent_disclosure_consent_version": models.ProviderControlledIntentDisclosureConsentV1,
+			"controlled_intent_disclosure_consent_url":     "https://nothumansearch.ai/privacy#controlled-intent-disclosure-consent-v1",
+			"controlled_intent_resolver_contract":          models.ProviderControlledIntentResolverV1,
+			"controlled_intent_resolver_endpoint":          "POST /api/v1/provider/action-tickets/resolve",
+			"controlled_intent_resolver_charge":            false,
+			"controlled_intent_resolver_creates_proof":     false,
+			"ticket_or_handoff_charge":                     false,
 		},
 	})
 }
@@ -314,9 +342,14 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 			"organic_rank_affected": false,
 		},
 	}
+	// The committed receipt belongs to free discovery, not the commercial
+	// exchange. Return it in pilot, disabled recovery, and synthetic smoke mode
+	// whenever the write succeeded; only provider-funded offer lookup is gated.
 	if searchID != "" {
 		response["search_id"] = searchID
-		paidOffers, paidErr := models.ListPublicProviderOffersForOrganicResults(h.DB, sites)
+	}
+	if h.ProviderExchangeEnabled && !synthetic && searchID != "" {
+		paidOffers, paidErr := models.ListPublicProviderOffersForOrganicResults(h.DB, searchID, sites)
 		if paidErr != nil {
 			log.Printf("provider offers REST search: %v", paidErr)
 		} else if returnedErr := models.RecordProviderOffersReturned(h.DB, searchID, paidOffers); returnedErr != nil {

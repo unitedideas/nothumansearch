@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -10,12 +11,17 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 const (
 	ActionInterestConfirmationV1 = "nhs-action-interest-v1"
 	ActionInterestRetentionDays  = 30
 	Stage1ObservationWindowDays  = 14
+	Stage1ReportMinimumDays      = 15
+	Stage1CandidateTopicReceipts = 20
+	Stage1CandidateTopicDomains  = 10
 )
 
 var (
@@ -66,6 +72,9 @@ type Stage1DemandBucket struct {
 type Stage1DemandProof struct {
 	Days                             int                  `json:"days"`
 	RetentionDays                    int                  `json:"retention_days"`
+	AsOf                             time.Time            `json:"as_of"`
+	Stage1StartedAt                  time.Time            `json:"stage1_started_at"`
+	Stage1EpochEnforced              bool                 `json:"stage1_epoch_enforced"`
 	SyntheticExcluded                bool                 `json:"synthetic_excluded"`
 	CountsAreReceiptsNotUniqueAgents bool                 `json:"counts_are_receipts_not_unique_agents"`
 	CommercialProof                  bool                 `json:"commercial_proof"`
@@ -78,8 +87,11 @@ type Stage1DemandProof struct {
 	BucketReceiptThreshold           int                  `json:"bucket_receipt_threshold"`
 	TopicBucketsMayOverlap           bool                 `json:"topic_buckets_may_overlap"`
 	DemandTopics                     []Stage1DemandBucket `json:"demand_topics"`
+	PilotCandidateTopics             []Stage1DemandBucket `json:"pilot_candidate_topics"`
+	PilotCandidateTopicAvailable     bool                 `json:"pilot_candidate_topic_available"`
 	ActionTypes                      []Stage1DemandBucket `json:"action_types"`
 	ObservationWindowDays            int                  `json:"observation_window_days"`
+	ObservationSpanSeconds           int64                `json:"observation_span_seconds"`
 	ObservationSpanDays              int                  `json:"observation_span_days"`
 	ObservationWindowMet             bool                 `json:"observation_window_met"`
 	Stage1Ready                      bool                 `json:"stage1_ready"`
@@ -269,68 +281,110 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 	if db == nil {
 		return nil, ErrActionInterestStoreUnavailable
 	}
-	if days < 1 || days > ActionInterestRetentionDays {
+	if days < Stage1ReportMinimumDays || days > ActionInterestRetentionDays {
 		days = ActionInterestRetentionDays
+	}
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var cohortAsOf time.Time
+	if err := tx.QueryRow(`SELECT clock_timestamp()`).Scan(&cohortAsOf); err != nil {
+		return nil, err
 	}
 	proof := &Stage1DemandProof{
 		Days:                             days,
 		RetentionDays:                    ActionInterestRetentionDays,
+		AsOf:                             cohortAsOf,
+		Stage1EpochEnforced:              true,
 		SyntheticExcluded:                true,
 		CountsAreReceiptsNotUniqueAgents: true,
 		CommercialProof:                  false,
 		BucketReceiptThreshold:           ProviderDemandPrivacyThreshold,
 		TopicBucketsMayOverlap:           true,
 		DemandTopics:                     []Stage1DemandBucket{},
+		PilotCandidateTopics:             []Stage1DemandBucket{},
 		ActionTypes:                      []Stage1DemandBucket{},
 		ObservationWindowDays:            Stage1ObservationWindowDays,
 		Targets: map[string]int{
 			"meaningful_search_receipts":           100,
 			"search_receipts_with_selection":       20,
 			"search_receipts_with_action_interest": 10,
+			"pilot_candidate_topic_receipts":       Stage1CandidateTopicReceipts,
 			"observation_window_days":              Stage1ObservationWindowDays,
 		},
 	}
 
-	err := db.QueryRow(`
+	err = tx.QueryRow(`
+		WITH report_clock AS (
+			SELECT $2::timestamptz AS now_at,
+			       (SELECT applied_at
+			          FROM nhs_schema_migrations
+			         WHERE name=CASE
+			             WHEN EXISTS (
+			                 SELECT 1 FROM nhs_schema_migrations
+			                  WHERE name='025_stage1_fact_integrity.sql'
+			             ) THEN '025_stage1_fact_integrity.sql'
+			             ELSE '020_action_interest_receipts.sql'
+			         END) AS stage1_started_at
+		), report_window AS (
+			SELECT now_at, stage1_started_at,
+			       GREATEST(stage1_started_at, now_at - $1::int * INTERVAL '1 day') AS started_at
+			FROM report_clock
+		), eligible_searches AS (
+			SELECT receipt.id, receipt.created_at
+			FROM search_receipts receipt
+			CROSS JOIN report_window cohort_window
+			WHERE NOT receipt.is_synthetic
+			  AND receipt.stage1_integrity_generation=1
+			  AND receipt.created_at >= cohort_window.started_at
+			  AND receipt.created_at <= cohort_window.now_at
+			  AND EXISTS (
+				SELECT 1 FROM organic_results_returned returned
+				WHERE returned.search_receipt_id=receipt.id
+				  AND returned.stage1_integrity_generation=1
+				  AND returned.returned_at >= cohort_window.started_at
+				  AND returned.returned_at <= cohort_window.now_at
+			  )
+		), eligible_selections AS (
+			SELECT selection.*
+			FROM result_selections selection
+			JOIN eligible_searches receipt ON receipt.id=selection.search_receipt_id
+			JOIN organic_results_returned returned
+			  ON returned.search_receipt_id=selection.search_receipt_id
+			 AND returned.site_domain_snapshot=selection.site_domain_snapshot
+			CROSS JOIN report_window cohort_window
+			WHERE selection.selected_at >= cohort_window.started_at
+			  AND selection.selected_at <= cohort_window.now_at
+			  AND selection.stage1_integrity_generation=1
+			  AND returned.stage1_integrity_generation=1
+			  AND returned.returned_at >= cohort_window.started_at
+			  AND returned.returned_at <= cohort_window.now_at
+		), eligible_interests AS (
+			SELECT interest.*
+			FROM action_interest_receipts interest
+			JOIN eligible_searches receipt ON receipt.id=interest.search_receipt_id
+			CROSS JOIN report_window cohort_window
+			WHERE interest.created_at >= cohort_window.started_at
+			  AND interest.created_at <= cohort_window.now_at
+			  AND interest.expires_at > cohort_window.now_at
+			  AND interest.stage1_integrity_generation=1
+		)
 		SELECT
-		  (SELECT COUNT(*)::int
-		     FROM search_receipts receipt
-		    WHERE NOT receipt.is_synthetic
-		      AND receipt.result_count > 0
-		      AND receipt.created_at >= NOW() - $1::int * INTERVAL '1 day'),
-		  (SELECT COUNT(*)::int
-		     FROM result_selections selection
-		     JOIN search_receipts receipt ON receipt.id=selection.search_receipt_id
-		    WHERE NOT receipt.is_synthetic
-		      AND selection.selected_at >= NOW() - $1::int * INTERVAL '1 day'),
-		  (SELECT COUNT(DISTINCT selection.search_receipt_id)::int
-		     FROM result_selections selection
-		     JOIN search_receipts receipt ON receipt.id=selection.search_receipt_id
-		    WHERE NOT receipt.is_synthetic
-		      AND selection.selected_at >= NOW() - $1::int * INTERVAL '1 day'),
-		  (SELECT COUNT(*)::int
-		     FROM action_interest_receipts interest
-		     JOIN search_receipts receipt ON receipt.id=interest.search_receipt_id
-		    WHERE NOT receipt.is_synthetic
-		      AND interest.created_at >= NOW() - $1::int * INTERVAL '1 day'
-		      AND interest.expires_at > NOW()),
-		  (SELECT COUNT(DISTINCT interest.search_receipt_id)::int
-		     FROM action_interest_receipts interest
-		     JOIN search_receipts receipt ON receipt.id=interest.search_receipt_id
-		    WHERE NOT receipt.is_synthetic
-		      AND interest.created_at >= NOW() - $1::int * INTERVAL '1 day'
-		      AND interest.expires_at > NOW()),
-		  (SELECT COUNT(DISTINCT interest.site_domain_snapshot)::int
-		     FROM action_interest_receipts interest
-		     JOIN search_receipts receipt ON receipt.id=interest.search_receipt_id
-		    WHERE NOT receipt.is_synthetic
-		      AND interest.created_at >= NOW() - $1::int * INTERVAL '1 day'
-		      AND interest.expires_at > NOW()),
-		  (SELECT COALESCE(FLOOR(EXTRACT(EPOCH FROM (MAX(receipt.created_at) - MIN(receipt.created_at))) / 86400), 0)::int
-		     FROM search_receipts receipt
-		    WHERE NOT receipt.is_synthetic
-		      AND receipt.result_count > 0
-		      AND receipt.created_at >= NOW() - $1::int * INTERVAL '1 day')`, days).
+		  (SELECT COUNT(*)::int FROM eligible_searches),
+		  (SELECT COUNT(*)::int FROM eligible_selections),
+		  (SELECT COUNT(DISTINCT selection.search_receipt_id)::int FROM eligible_selections selection),
+		  (SELECT COUNT(*)::int FROM eligible_interests),
+		  (SELECT COUNT(DISTINCT interest.search_receipt_id)::int FROM eligible_interests interest),
+		  (SELECT COUNT(DISTINCT interest.site_domain_snapshot)::int FROM eligible_interests interest),
+		  (SELECT COALESCE(FLOOR(EXTRACT(EPOCH FROM
+		       (MAX(receipt.created_at) - MIN(receipt.created_at)))), 0)::bigint
+		     FROM eligible_searches receipt),
+		  (SELECT stage1_started_at FROM report_window)`, days, cohortAsOf).
 		Scan(
 			&proof.MeaningfulSearchReceipts,
 			&proof.ResultSelections,
@@ -338,22 +392,51 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 			&proof.ActionInterestReceipts,
 			&proof.SearchReceiptsWithActionInterest,
 			&proof.DistinctInterestDomains,
-			&proof.ObservationSpanDays,
+			&proof.ObservationSpanSeconds,
+			&proof.Stage1StartedAt,
 		)
 	if err != nil {
 		return nil, err
 	}
 
-	rows, err := db.Query(`
+	rows, err := tx.Query(`
+		WITH report_clock AS (
+			SELECT $3::timestamptz AS now_at,
+			       (SELECT applied_at FROM nhs_schema_migrations
+			         WHERE name=CASE
+			             WHEN EXISTS (
+			                 SELECT 1 FROM nhs_schema_migrations
+			                  WHERE name='025_stage1_fact_integrity.sql'
+			             ) THEN '025_stage1_fact_integrity.sql'
+			             ELSE '020_action_interest_receipts.sql'
+			         END) AS stage1_started_at
+		), eligible_searches AS (
+			SELECT receipt.id, receipt.demand_topics
+			FROM search_receipts receipt
+			CROSS JOIN report_clock clock
+			WHERE NOT receipt.is_synthetic
+			  AND receipt.stage1_integrity_generation=1
+			  AND receipt.created_at >= GREATEST(
+			      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')
+			  AND receipt.created_at <= clock.now_at
+			  AND EXISTS (
+				SELECT 1 FROM organic_results_returned returned
+				WHERE returned.search_receipt_id=receipt.id
+				  AND returned.stage1_integrity_generation=1
+				  AND returned.returned_at >= GREATEST(
+				      clock.stage1_started_at,
+				      clock.now_at - $1::int * INTERVAL '1 day')
+				  AND returned.returned_at <= clock.now_at
+			  )
+		)
 		SELECT topic, COUNT(DISTINCT receipt.id)::int
-		FROM search_receipts receipt
+		FROM eligible_searches receipt
 		CROSS JOIN LATERAL unnest(receipt.demand_topics) AS topic
-		WHERE NOT receipt.is_synthetic
-		  AND receipt.result_count > 0
-		  AND receipt.created_at >= NOW() - $1::int * INTERVAL '1 day'
+		WHERE topic = ANY($4::text[])
 		GROUP BY topic
 		HAVING COUNT(DISTINCT receipt.id) >= $2
-		ORDER BY COUNT(DISTINCT receipt.id) DESC, topic`, days, ProviderDemandPrivacyThreshold)
+		ORDER BY COUNT(DISTINCT receipt.id) DESC, topic`, days, ProviderDemandPrivacyThreshold,
+		cohortAsOf, pq.Array(stage1ControlledDemandTopics()))
 	if err != nil {
 		return nil, err
 	}
@@ -373,22 +456,125 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 		return nil, err
 	}
 
-	rows, err = db.Query(`
-		SELECT interest.action_type,
-		       COUNT(DISTINCT interest.search_receipt_id)::int
-		FROM action_interest_receipts interest
-		JOIN search_receipts receipt ON receipt.id=interest.search_receipt_id
-		WHERE NOT receipt.is_synthetic
-		  AND interest.created_at >= NOW() - $1::int * INTERVAL '1 day'
-		  AND interest.expires_at > NOW()
-		GROUP BY interest.action_type
-		HAVING COUNT(DISTINCT interest.search_receipt_id) >= $2
-		ORDER BY COUNT(DISTINCT interest.search_receipt_id) DESC,
-		         interest.action_type`, days, ProviderDemandPrivacyThreshold)
+	// Candidate feasibility is stricter than a demand bucket. The displayed
+	// value remains a receipt count, but the topic must also have at least ten
+	// distinct current, non-spam sites that were actually returned organically.
+	// The domain count and domain set are deliberately not selected or exposed.
+	rows, err = tx.Query(`
+		WITH report_clock AS (
+			SELECT $3::timestamptz AS now_at,
+			       (SELECT applied_at FROM nhs_schema_migrations
+			         WHERE name=CASE
+			             WHEN EXISTS (
+			                 SELECT 1 FROM nhs_schema_migrations
+			                  WHERE name='025_stage1_fact_integrity.sql'
+			             ) THEN '025_stage1_fact_integrity.sql'
+			             ELSE '020_action_interest_receipts.sql'
+			         END) AS stage1_started_at
+		), eligible_searches AS (
+			SELECT receipt.id, receipt.demand_topics,
+			       GREATEST(
+			           clock.stage1_started_at,
+			           clock.now_at - $1::int * INTERVAL '1 day'
+			       ) AS returned_started_at,
+			       clock.now_at AS returned_as_of
+			FROM search_receipts receipt
+			CROSS JOIN report_clock clock
+			WHERE NOT receipt.is_synthetic
+			  AND receipt.stage1_integrity_generation=1
+			  AND receipt.created_at >= GREATEST(
+			      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')
+			  AND receipt.created_at <= clock.now_at
+		)
+		SELECT topic, COUNT(DISTINCT receipt.id)::int
+		FROM eligible_searches receipt
+		CROSS JOIN LATERAL unnest(receipt.demand_topics) AS topic
+		JOIN organic_results_returned returned
+		  ON returned.search_receipt_id=receipt.id
+		 AND returned.stage1_integrity_generation=1
+		 AND returned.returned_at >= receipt.returned_started_at
+		 AND returned.returned_at <= receipt.returned_as_of
+		JOIN sites site
+		  ON site.id=returned.site_id
+		 AND site.domain=returned.site_domain_snapshot
+		 AND site.category<>'spam'
+		WHERE topic = ANY($4::text[]) AND topic<>'other'
+		GROUP BY topic
+		HAVING COUNT(DISTINCT receipt.id) >= $2
+		   AND COUNT(DISTINCT returned.site_domain_snapshot) >= $5
+		ORDER BY COUNT(DISTINCT receipt.id) DESC, topic`,
+		days, Stage1CandidateTopicReceipts, cohortAsOf,
+		pq.Array(stage1ControlledDemandTopics()), Stage1CandidateTopicDomains)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	for rows.Next() {
+		var bucket Stage1DemandBucket
+		if err := rows.Scan(&bucket.Value, &bucket.ReceiptCount); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		// Keep "other" out defensively even though the SQL predicate already
+		// excludes it. Only controlled, attributable topics can open Stage 2.
+		if bucket.Value != "other" {
+			proof.PilotCandidateTopics = append(proof.PilotCandidateTopics, bucket)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	rows, err = tx.Query(`
+		WITH report_clock AS (
+			SELECT $3::timestamptz AS now_at,
+			       (SELECT applied_at FROM nhs_schema_migrations
+			         WHERE name=CASE
+			             WHEN EXISTS (
+			                 SELECT 1 FROM nhs_schema_migrations
+			                  WHERE name='025_stage1_fact_integrity.sql'
+			             ) THEN '025_stage1_fact_integrity.sql'
+			             ELSE '020_action_interest_receipts.sql'
+			         END) AS stage1_started_at
+		), eligible_searches AS (
+			SELECT receipt.id
+			FROM search_receipts receipt
+			CROSS JOIN report_clock clock
+			WHERE NOT receipt.is_synthetic
+			  AND receipt.stage1_integrity_generation=1
+			  AND receipt.created_at >= GREATEST(
+			      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')
+			  AND receipt.created_at <= clock.now_at
+			  AND EXISTS (
+				SELECT 1 FROM organic_results_returned returned
+				WHERE returned.search_receipt_id=receipt.id
+				  AND returned.stage1_integrity_generation=1
+				  AND returned.returned_at >= GREATEST(
+				      clock.stage1_started_at,
+				      clock.now_at - $1::int * INTERVAL '1 day')
+				  AND returned.returned_at <= clock.now_at
+			  )
+		)
+		SELECT interest.action_type,
+		       COUNT(DISTINCT interest.search_receipt_id)::int
+		FROM action_interest_receipts interest
+		JOIN eligible_searches receipt ON receipt.id=interest.search_receipt_id
+		CROSS JOIN report_clock clock
+		WHERE interest.created_at >= GREATEST(
+		      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')
+		  AND interest.created_at <= clock.now_at
+		  AND interest.expires_at > clock.now_at
+		  AND interest.stage1_integrity_generation=1
+		GROUP BY interest.action_type
+		HAVING COUNT(DISTINCT interest.search_receipt_id) >= $2
+		ORDER BY COUNT(DISTINCT interest.search_receipt_id) DESC,
+		         interest.action_type`, days, ProviderDemandPrivacyThreshold, cohortAsOf)
+	if err != nil {
+		return nil, err
+	}
 	for rows.Next() {
 		var bucket Stage1DemandBucket
 		if err := rows.Scan(&bucket.Value, &bucket.ReceiptCount); err != nil {
@@ -397,19 +583,37 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 		proof.ActionTypes = append(proof.ActionTypes, bucket)
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
 		return nil, err
 	}
 
-	proof.ObservationWindowMet = proof.ObservationSpanDays >= proof.ObservationWindowDays
+	proof.ObservationSpanDays = int(proof.ObservationSpanSeconds / (24 * 60 * 60))
+	proof.ObservationWindowMet = proof.ObservationSpanSeconds >= int64(proof.ObservationWindowDays*24*60*60)
+	proof.PilotCandidateTopicAvailable = len(proof.PilotCandidateTopics) > 0
 	proof.TargetsMet = map[string]bool{
 		"meaningful_search_receipts":           proof.MeaningfulSearchReceipts >= proof.Targets["meaningful_search_receipts"],
 		"search_receipts_with_selection":       proof.SearchReceiptsWithSelection >= proof.Targets["search_receipts_with_selection"],
 		"search_receipts_with_action_interest": proof.SearchReceiptsWithActionInterest >= proof.Targets["search_receipts_with_action_interest"],
+		"pilot_candidate_topic_receipts":       proof.PilotCandidateTopicAvailable,
 		"observation_window_days":              proof.ObservationWindowMet,
 	}
 	proof.Stage1Ready = true
 	for _, met := range proof.TargetsMet {
 		proof.Stage1Ready = proof.Stage1Ready && met
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return proof, nil
+}
+
+func stage1ControlledDemandTopics() []string {
+	topics := make([]string, 0, len(demandTopicRules)+1)
+	for _, rule := range demandTopicRules {
+		topics = append(topics, rule.name)
+	}
+	return append(topics, "other")
 }

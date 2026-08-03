@@ -387,10 +387,11 @@ func GetTopSites(db *sql.DB, category string, limit int) ([]Site, error) {
 }
 
 // GetRecentSites returns the most recently added agent-first sites,
-// newest first by created_at. days is how far back to look (1..90, clamped).
-// limit is how many to return (1..50, clamped). Useful for agents asking
-// "what new agent-ready services have been indexed lately?"
-func GetRecentSites(db *sql.DB, days, limit int) ([]Site, error) {
+// newest first by created_at. days is how far back to look (1..90, clamped),
+// category optionally narrows the organic set, and limit is how many to return
+// (1..50, clamped). Useful for agents asking what new agent-ready services have
+// been indexed lately, including an explicitly selected public category.
+func GetRecentSites(db *sql.DB, days, limit int, category string) ([]Site, error) {
 	if days <= 0 {
 		days = 7
 	}
@@ -405,10 +406,15 @@ func GetRecentSites(db *sql.DB, days, limit int) ([]Site, error) {
 	             has_structured_api, has_mcp_server, has_schema_org,
 	             agentic_score, category, tags, created_at
 	      FROM sites WHERE ` + AgentFirstFilter + `
-	        AND created_at >= NOW() - make_interval(days => $1)
-	      ORDER BY created_at DESC, agentic_score DESC
+	        AND created_at >= NOW() - make_interval(days => $1)`
+	args := []any{days}
+	if category != "" {
+		q += ` AND category = $2`
+		args = append(args, category)
+	}
+	q += ` ORDER BY created_at DESC, agentic_score DESC, domain ASC
 	      LIMIT ` + fmt.Sprintf("%d", limit)
-	rows, err := db.Query(q, days)
+	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -469,6 +475,7 @@ func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, result
 	if db == nil {
 		return
 	}
+	toolName = normalizeMCPAnalyticsToolName(toolName)
 	var args *string
 	if len(arguments) > 0 {
 		s := string(arguments)
@@ -481,6 +488,17 @@ func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, result
 	db.Exec(`INSERT INTO mcp_requests (method, tool_name, arguments, result_count, user_agent, ip_hash, duration_ms)
 		VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)`,
 		method, toolName, args, rc, userAgent, ipHash, durationMs)
+}
+
+func normalizeMCPAnalyticsToolName(name string) string {
+	switch name {
+	case "", "search_agents", "search", "get_site_details", "get_stats", "submit_site",
+		"register_monitor", "check_url", "verify_mcp", "list_categories", "get_top_sites",
+		"find_mcp_servers", "recent_additions", "unknown_tool":
+		return name
+	default:
+		return "unknown_tool"
+	}
 }
 
 // GetMCPAnalytics returns aggregated MCP request data: tool breakdown, method
@@ -553,7 +571,10 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 		CROSS JOIN LATERAL jsonb_array_elements_text(
 			COALESCE(request.arguments->'demand_topics', '[]'::jsonb)
 		) AS expanded(topic)
-		WHERE request.tool_name IN ('search_agents', 'search', 'find_mcp_servers')
+		WHERE request.tool_name IN (
+			'search_agents', 'search', 'find_mcp_servers',
+			'get_top_sites', 'recent_additions'
+		)
 		  AND request.created_at > NOW() - make_interval(days => $1)
 		GROUP BY expanded.topic ORDER BY receipt_count DESC, expanded.topic ASC LIMIT 30`, days)
 	if err != nil {

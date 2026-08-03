@@ -1,5 +1,7 @@
 {
   "pass": true,
+  "reviewed_at": "2026-08-02T11:09:45-07:00",
+  "review_scope_sha256": "f3fd4c703e1174c69ca902547fdef705c5b1c040f2f57976d45e3cb8f2c8281d",
   "contract": "/Users/shane/machine/nothumansearch/design/reviews/2026-08-01-provider-exchange.json",
   "root": "/Users/shane/machine/nothumansearch",
   "surface_count": 2,

@@ -29,7 +29,7 @@
       <header class="hero">
         <div class="eyebrow">Privacy and authorization boundary</div>
         <h1>The boundary is part of the product.</h1>
-        <p class="lede">Agents can search Not Human Search without an account or payment. A caller can attest that its principal currently wants a controlled next step and record that interest without contacting a provider. A provider-funded handoff requires a separate, versioned authorization attestation.</p>
+        <p class="lede">Agents can search Not Human Search without an account or payment. A caller can attest that its principal currently wants a controlled next step and record that interest without contacting a provider. Creating a provider-funded ticket and asking NHS to continue to the provider are separate actions with separate versioned attestations.</p>
         <div class="promise">NO RAW QUERY SALES · NO AGENT IDENTITY SALES · NO PAID ORGANIC RANK</div>
       </header>
 
@@ -45,10 +45,11 @@
               <li>Controlled topics and explicit category.</li>
               <li>Boolean capability filters, result count, page, and page size.</li>
               <li>Returned site IDs, domain snapshots, scores, and organic positions.</li>
-              <li>Any paid offer shown: its ID, version, name, action type, disclosed bounty/currency, charge event, and organic-result binding.</li>
+              <li>Any paid offer shown: its ID, offer version, name, action type, disclosed bounty/currency, charge event, and organic-result binding.</li>
+              <li>The offer’s exact commercial-terms contract version and SHA-256, invalid/duplicate credit rule, provider response expectation, first-activation period-anchor rule, and Merchant-of-Record acknowledgement.</li>
               <li>Whether the request was a marked deployment smoke test.</li>
             </ul>
-            <span class="retention">30-day retention</span>
+            <span class="retention">30-day eligibility · hourly physical deletion</span>
           </article>
           <article class="card">
             <h3>Not in the discovery receipt</h3>
@@ -76,7 +77,7 @@
               <li>One exact domain already present in that organic result set.</li>
               <li>One action: quote, trial, demo, booking, application, signup, or purchase.</li>
               <li>REST or MCP surface, confirmation boolean, version label, and timestamps.</li>
-              <li>The receipt becomes ineligible for replay and reporting when its source search receipt reaches 30 days; hourly cleanup then deletes the row.</li>
+              <li>The receipt becomes ineligible for replay and reporting when its source search receipt reaches 30 days; the next successful boot or hourly cleanup then deletes the row.</li>
             </ul>
           </div>
           <div>
@@ -94,23 +95,23 @@
         <article class="consent" style="margin-top:20px">
           <span class="version">nhs-action-interest-v1</span>
           <h3>The caller attests all of the following:</h3>
-          <p>The human or company principal currently wants to pursue the selected action with the named domain returned in the referenced organic search; permits Not Human Search to store the query-free search reference, domain, controlled action type, surface, and this confirmation, mark the receipt expired when the source search receipt reaches 30 days, and delete the row in the next hourly cleanup cycle; understands that NHS will not contact the provider or share this row with it, create a provider action ticket or charge, change organic rank or readiness score, or treat the receipt as a provider-accepted handoff, activation, outcome, revenue, or commercial proof; and understands that NHS does not place a raw query, contact detail, free-form text, agent identity, or principal identity in this receipt.</p>
-          <p class="limits">This is a caller attestation of current principal interest, not NHS verification of identity, agency, legal authority, uniqueness, or completion. Aggregate counts are receipts, not unique people, principals, or agents. Separate abuse telemetry from the earlier search can still exist under the operational policy below, but NHS does not join it into or share it with this receipt. Contacting a provider later requires a separate action and, for an NHS provider-funded handoff, the separate <code>nhs-principal-consent-v1</code> authorization.</p>
+          <p>The human or company principal currently wants to pursue the selected action with the named domain returned in the referenced organic search; permits Not Human Search to store the query-free search reference, domain, controlled action type, surface, and this confirmation, mark the receipt expired when the source search receipt reaches 30 days, and delete the row during the next successful boot or hourly cleanup; understands that downtime or cleanup failure can delay physical deletion but not replay or reporting eligibility; understands that NHS will not contact the provider or share this row with it, create a provider action ticket or charge, change organic rank or readiness score, or treat the receipt as a provider-accepted handoff, activation, outcome, revenue, or commercial proof; and understands that NHS does not place a raw query, contact detail, free-form text, agent identity, or principal identity in this receipt.</p>
+          <p class="limits">This is a caller attestation of current principal interest, not NHS verification of identity, agency, legal authority, uniqueness, or completion. Aggregate counts are receipts, not unique people, principals, or agents. Separate abuse telemetry from the earlier search can still exist under the operational policy below, but NHS does not join it into or share it with this receipt. Contacting a provider later requires a separate action; an NHS provider-funded path requires the separate <code>nhs-principal-consent-v1</code> ticket authorization and then <code>nhs-provider-handoff-consent-v1</code> at handoff.</p>
         </article>
       </section>
 
       <section aria-labelledby="ticket-title">
         <h2 id="ticket-title">What a provider action ticket records</h2>
-        <p class="section-copy">A ticket exists only for an active provider-funded offer attached to a site already present in the referenced organic result set. Creating it charges neither party.</p>
+        <p class="section-copy">A ticket exists only for an active provider-funded offer attached to a site already present in the referenced organic result set. Creation returns a raw bearer token and the NHS handoff endpoint—not the provider action URL—and charges neither party.</p>
         <div class="boundary">
           <div>
             <h3>Controlled ticket fields</h3>
             <ul>
-              <li>Provider offer and search-receipt IDs.</li>
+              <li>Opaque provider-claim, provider-offer, and search-receipt IDs.</li>
               <li>One topic already present on that receipt.</li>
               <li>Optional region, USD budget band, urgency, and allowlisted requirement flags.</li>
               <li>The authorization boolean and immutable consent-version label.</li>
-              <li>Immutable offer, price, bounty, action URL, and billing snapshots.</li>
+              <li>Immutable offer, price, bounty, action URL, billing, offer-version, exact commercial-terms contract/hash, credit-rule, response-expectation, terms-anchor, and provider Merchant-of-Record acknowledgement snapshots.</li>
             </ul>
           </div>
           <div>
@@ -120,11 +121,12 @@
               <li>No raw prompt, notes, free-form requirements, or uploaded content.</li>
               <li>No claimed agent identity or principal identity.</li>
               <li>No card, bank, or provider-account credentials.</li>
-              <li>The provider may collect information on its own site under its own terms after the action URL is followed.</li>
+              <li>No provider action URL is returned until the caller separately makes the handoff-time attestation below.</li>
+              <li>The provider may collect information on its own site under its own terms after the attributed action URL is followed.</li>
             </ul>
           </div>
         </div>
-        <p class="section-copy" style="margin-top:20px">After 30 days, NHS removes the ticket’s controlled intent fields and search-receipt link. It retains the consent attestation, immutable commercial snapshot, opaque IDs, and signed outcome/accounting records needed for disputes and audit history.</p>
+        <p class="section-copy" style="margin-top:20px">At 30 days, NHS read paths stop returning the ticket’s controlled intent fields and search-receipt link. NHS schedules their physical redaction on the next successful boot or hourly cleanup; downtime or cleanup failure can delay that redaction without extending resolver availability. It retains the ticket consent attestation, immutable commercial snapshot, opaque IDs, handoff receipt, and signed outcome/accounting records as commercial and audit history; the schema does not promise automatic deletion of those retained records.</p>
       </section>
 
       <section id="consent-v1" aria-labelledby="consent-title">
@@ -133,16 +135,83 @@
         <article class="consent">
           <span class="version">nhs-principal-consent-v1</span>
           <h3>The caller attests all of the following:</h3>
-          <p>The human or company principal authorized Not Human Search to create one action ticket for the named provider offer returned beside the referenced organic result; understands that NHS will store the controlled topic, optional region, USD budget band, urgency, and requirement flags for up to 30 days; understands that NHS places no name, email, contact detail, raw prompt, agent identity, or principal identity in the ticket; understands that the provider may collect information under its own terms after the provider action URL is followed; and understands that NHS may receive the disclosed provider-funded amount if the provider reports the configured outcome. Creating the ticket charges neither the principal nor the provider.</p>
+          <p>The human or company principal authorized Not Human Search to create one action ticket for the named provider offer returned beside the referenced organic result; understands that NHS permits use or disclosure of the controlled topic, optional region, USD budget band, urgency, requirement flags, and search-receipt link for no more than 30 days; understands that NHS schedules physical redaction on the next successful boot or hourly cleanup after that deadline and that downtime or cleanup failure can delay physical redaction without extending availability; understands that NHS places no name, email, contact detail, raw prompt, agent identity, or principal identity in the ticket; understands that the provider may collect information under its own terms after the provider action URL is followed; and understands that NHS may receive the disclosed provider-funded amount if the provider reports the configured outcome. Creating the ticket charges neither the principal nor the provider.</p>
           <p class="limits">This is a caller attestation, not NHS verification of identity, agency, or legal authority. It does not revoke an action already completed on a provider’s site. Provider callbacks are authenticated assertions; NHS signatures prove what NHS recorded, not that NHS independently audited the underlying business event.</p>
+        </article>
+      </section>
+
+      <section id="handoff-consent-v1" aria-labelledby="handoff-consent-title">
+        <h2 id="handoff-consent-title">Exact handoff-time attestation</h2>
+        <p class="section-copy">This is a separate action from ticket creation. The wording below is the complete contract represented by <code>nhs-provider-handoff-consent-v1</code>. A new meaning requires a new version label.</p>
+        <div class="boundary">
+          <div>
+            <h3>What the durable handoff receipt stores</h3>
+            <ul>
+              <li>Opaque receipt, ticket, provider-offer, and internal provider-claim IDs.</li>
+              <li>The exact offer version, commercial-terms contract version, and commercial-terms SHA-256 already attached to the ticket.</li>
+              <li><code>principal_handoff_consent=true</code>, the handoff-consent version, <code>nhs-action-handoff-v1</code>, and observation timestamps.</li>
+              <li>A one-way SHA-256 hash of the presented ticket bearer. The raw string is not stored in the ticket or handoff row; NHS retains ticket nonce/key metadata and signing material that can reconstruct it for an exact replay.</li>
+              <li>NHS may use this receipt to establish that NHS observed the handoff. It can support commercial proof only together with current verified commercial evidence and a later authenticated provider-reported outcome.</li>
+            </ul>
+            <span class="retention">Append-only commercial/audit record · no automatic deletion interval specified</span>
+          </div>
+          <div>
+            <h3>What the handoff receipt does not store</h3>
+            <ul>
+              <li>No raw query, query hash, prompt, topic, region, budget band, urgency, requirement flags, notes, or free-form content.</li>
+              <li>No name, email, phone number, contact data, agent identity, principal identity, or agent-to-principal mapping.</li>
+              <li>No IP address, IP hash, network identifier, referrer, referral trail, user agent, cookie, or provider-collected form data.</li>
+              <li>No raw attribution-bearer field. Its one-way hash is retained internally and is not returned in the public receipt; separate retained nonce/key metadata and signing material can reconstruct the exact bearer for a replay.</li>
+              <li>No charge. Ticket creation and handoff charge neither the principal nor the provider.</li>
+            </ul>
+          </div>
+        </div>
+        <article class="consent" style="margin-top:20px">
+          <span class="version">nhs-provider-handoff-consent-v1</span>
+          <h3>The caller attests all of the following:</h3>
+          <p>The human or company principal authorized Not Human Search to continue this exact action ticket to the named provider; understands that NHS will store an append-only, query-free and identity-free handoff receipt containing opaque ticket and provider-offer identifiers, the exact offer and commercial-terms versions and hash, this confirmation and version label, a one-way hash of the presented ticket bearer, and observation timestamps; understands that the raw bearer string is not stored in the ticket or handoff row but retained ticket nonce/key metadata and signing material can reconstruct it for an exact replay; understands that NHS may use that receipt to establish an NHS-observed handoff and, only with current verified commercial evidence and a later authenticated provider-reported outcome, commercial proof; understands that NHS will then disclose an attributed provider action URL containing the opaque bearer and that following the URL sends that bearer to the provider, which may collect information under its own terms; and understands that creating this handoff charges neither the principal nor the provider, while NHS may receive the already-disclosed provider-funded amount only if the provider later reports the configured downstream outcome.</p>
+          <p class="limits">This is a caller attestation, not NHS verification of identity, agency, legal authority, uniqueness, provider acceptance, activation, conversion, or payment. The handoff receipt contains no raw query, agent or principal identity, contact data, network address or hash, referrer, or user agent. It is retained as an append-only commercial and audit record; no automatic deletion interval is specified for it.</p>
+        </article>
+      </section>
+
+      <section id="controlled-intent-disclosure-consent-v1" aria-labelledby="controlled-intent-disclosure-title">
+        <h2 id="controlled-intent-disclosure-title">Optional controlled-intent disclosure</h2>
+        <p class="section-copy">This is separate from both ticket authorization and handoff consent. The wording below is the complete contract represented by <code>nhs-provider-controlled-intent-disclosure-consent-v1</code>. It is optional: declining it does not block the observed handoff or free direct provider access. A new meaning requires a new version label.</p>
+        <div class="boundary">
+          <div>
+            <h3>What the verified provider can resolve</h3>
+            <ul>
+              <li>The opaque ticket and provider-offer IDs, exact offer version, and controlled action type needed to bind the response.</li>
+              <li>The ticket’s controlled demand topic, optional region code, USD budget band, urgency, and allowlisted requirement flags.</li>
+              <li>The handoff observation time, the shorter ticket/30-day availability boundary, and this exact consent-version label.</li>
+              <li>Only an active key for the same DNS-verified, currently fresh provider claim can resolve the exact signed bearer after NHS records the handoff.</li>
+            </ul>
+            <span class="retention">Shorter of ticket authorization and 30-day resolver availability</span>
+          </div>
+          <div>
+            <h3>What the resolver excludes and cannot do</h3>
+            <ul>
+              <li>No search query or query hash, prompt, free-form text, search-receipt ID, name, contact data, agent or principal identity, IP or network identifier, user agent, referrer, cookie, credentials, or payment data.</li>
+              <li>No action URL, price, bounty, provider-account, provider-funding balance, accounting, charge, outcome, or commercial-proof fields.</li>
+              <li>It does not authorize provider outreach, verify identity or agency, prove uniqueness or an outcome, change organic rank or readiness, or charge either party.</li>
+              <li>The resolver is read-only and free. Its call writes no page-view, request-line identity, MCP, intent-event, durable quota, receipt, outcome, provider-budget entry, charge, or commercial-proof record. For abuse control only, NHS uses process-local rate-limit buckets with one-hour counting windows: before authentication, a bucket keyed by the 64-bit truncated SHA-256 hash of the network address; after authentication, a bucket keyed by the provider-key record ID plus that same hash. Expired entries are evicted opportunistically on later resolver-limiter use or at process restart; the buckets are never logged or persisted.</li>
+            </ul>
+          </div>
+        </div>
+        <article class="consent" style="margin-top:20px">
+          <span class="version">nhs-provider-controlled-intent-disclosure-consent-v1</span>
+          <h3>The caller attests all of the following:</h3>
+          <p>The caller attests that the human or company principal authorizes Not Human Search, after NHS observes this exact provider handoff, to disclose to the DNS-verified provider controlling the ticket’s provider claim only the controlled demand topic, optional region code, USD budget band, urgency, and allowlisted requirement flags already stored in this ticket, together with the opaque ticket and offer identifiers and action type needed to bind those values. The principal understands that the provider may read that same bounded bundle during the shorter of the ticket authorization window and NHS’s 30-day controlled-intent retention period; that NHS will not disclose the search query or query hash, prompt, free-form text, name, contact data, agent or principal identity, IP or network identifier, user agent, referrer, cookie, search-receipt identifier, credentials, or payment data; and that this consent does not authorize provider outreach, verify identity or agency, prove uniqueness or an outcome, change organic rank, or charge either party. Declining this disclosure does not block the handoff or free direct provider access.</p>
+          <p class="limits">Consent is recorded only in the append-only handoff receipt and cannot be added later by replay. The provider presents the exact signed attribution bearer to the REST resolver with its active claim-scoped key. NHS returns <code>nhs-provider-controlled-intent-resolver-v1</code> only while the claim, ticket, bearer, authorization, consent, and retention checks all remain valid. NHS exposes no provider resolver MCP tool.</p>
         </article>
       </section>
 
       <section aria-labelledby="operations-title">
         <h2 id="operations-title">Operational and commercial records</h2>
         <div class="grid">
-          <article class="card"><h3>Abuse and reliability telemetry</h3><p>Separate operational logs can contain a truncated IP hash, user agent, route, status, duration, and allowlisted MCP arguments. Page, MCP, and intent-event logs are pruned after 30 days; priority-throughput usage events after 35 days. New discovery analytics do not write raw query text.</p></article>
+          <article class="card"><h3>Abuse and reliability telemetry</h3><p>Separate operational logs for ordinary discovery can contain a truncated IP hash, user agent, route, status, duration, and allowlisted MCP arguments. Ticket preparation, observed handoff, optional controlled-intent resolution, and action-interest recording bypass page-view and request-line identity telemetry; the privacy-bypassed MCP actions also skip MCP request and paid-usage telemetry. Page, MCP, and intent-event logs become eligible for boot or hourly deletion after 30 days; priority-throughput usage events after 35 days. Downtime or cleanup failure can delay physical deletion. New discovery analytics do not write raw query text.</p></article>
           <article class="card"><h3>Provider and accounting records</h3><p>Provider accounts retain an email, DNS claim state, key hashes, offer terms, exact non-secret evidence references, append-only admin actions, budget entries, and signed outcome receipts. Callback secrets are returned to the provider and stored only as hashes.</p><h4>DNS ownership freshness</h4><p>The provider must keep its TXT value published. During initial verification and automatic rechecks, NHS compares DNS answers in memory and does not retain the raw answers or challenge token; it stores only the SHA-256 token hash, check timestamps, and failure count. Paid-action eligibility stops after {{.DNSFailureLimit}} consecutive failed checks or when the last successful check reaches {{.DNSVerificationFreshnessDays}} days old. Claim revocation pauses offers and revokes callback keys and outstanding action authorization.</p></article>
+          <article class="card"><h3>Verified commercial evidence</h3><p>A provider-key-authenticated pilot-company or exact-terms acceptance is stored as one append-only event, but does not become proof by itself. Separately, the owner records an externally deduplicated keyed company digest—rather than the raw legal or billing identity in the pilot-company table—and a non-secret identity evidence reference. Funding, exact-terms, renewal, and reversal evidence are separate owner-verified append-only events with exact source references, effective times, offer version, and commercial-terms version/hash. Reversals append a new event; they do not rewrite history.</p><h4>Retention</h4><p>Provider acceptance events, keyed company mappings, owner-verified commercial events, reversals, handoff receipts, budget/accounting links, and signed outcomes are retained as commercial and audit records. The exchange schema and pilot runbook do not specify an automatic deletion interval for them.</p></article>
           <article class="card"><h3>Demand reports</h3><p>Owner-only Stage 1 reports count meaningful searches, result selections, and action-interest receipts without exposing row-level searches or interests. Any segmented topic or action bucket is suppressed until at least 20 persisted, non-synthetic receipts qualify. Because NHS deliberately does not retain agent identity in these receipts, every threshold counts receipts—not distinct people, principals, or agents.</p></article>
           <article class="card"><h3>Who charges whom</h3><p>Pilot terms require the provider to remain Merchant of Record for its product or service; NHS does not independently verify that status. NHS does not charge the principal for a ticket. NHS records a provider-funded debit or capped CPA receivable only on the disclosed provider-reported event. An authenticated invalid or duplicate report can credit an existing charge after ticket expiry or authorization revocation, but cannot create a new charge or positive outcome.</p></article>
         </div>
@@ -151,7 +220,7 @@
       <section aria-labelledby="controls-title">
         <h2 id="controls-title">Controls that stay with each party</h2>
         <div class="controls">
-          <article class="control"><strong>Agents and principals</strong><p>Search or use the canonical organic link without recording interest, decline provider-funded actions, or withhold either versioned attestation.</p></article>
+          <article class="control"><strong>Agents and principals</strong><p>Search or use the canonical organic link without recording interest, decline provider-funded actions, withhold either required versioned attestation, or decline the separate optional controlled-intent disclosure without blocking handoff.</p></article>
           <article class="control"><strong>Providers</strong><p>Pause an offer, rotate a callback key, or revoke a domain claim. Emergency operator action can invalidate outstanding authorization.</p></article>
           <article class="control"><strong>NHS operator</strong><p>Can pause inventory and preserve append-only evidence, but cannot sell organic rank, readiness score, raw queries, or agent identities.</p></article>
         </div>
@@ -165,7 +234,7 @@
       </section>
     </main>
 
-    <footer><span>Effective August 1, 2026</span><span>Not Human Search · free discovery · provider-funded outcomes</span></footer>
+    <footer><span>Effective August 2, 2026</span><span>Not Human Search · free discovery · provider-funded outcomes</span></footer>
   </div>
 </body>
 </html>

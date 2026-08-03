@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -20,19 +21,32 @@ import (
 )
 
 const (
-	ProviderDisclosureLabel            = "Provider-funded action"
-	ProviderPrincipalConsentV1         = "nhs-principal-consent-v1"
-	ProviderClaimChallengeTTL          = 24 * time.Hour
-	ProviderClaimVerificationFreshness = 7 * 24 * time.Hour
-	ProviderClaimDNSRecheckInterval    = 24 * time.Hour
-	ProviderClaimDNSFailureRetry       = time.Hour
-	ProviderClaimDNSLeaseDuration      = 2 * time.Minute
-	ProviderClaimDNSFailureLimit       = 3
-	ProviderClaimDNSMaximumBatch       = 100
-	ActionTicketDefaultTTL             = 30 * 24 * time.Hour
-	ActionTicketMaximumTTL             = 90 * 24 * time.Hour
-	ActionTicketIntentRetention        = 30 * 24 * time.Hour
-	OutcomeReceiptValidity             = 10 * 365 * 24 * time.Hour
+	ProviderDisclosureLabel                     = "Provider-funded action"
+	ProviderPrincipalConsentV1                  = "nhs-principal-consent-v1"
+	ProviderClaimChallengeTTL                   = 24 * time.Hour
+	ProviderClaimVerificationFreshness          = 7 * 24 * time.Hour
+	ProviderClaimDNSRecheckInterval             = 24 * time.Hour
+	ProviderClaimDNSFailureRetry                = time.Hour
+	ProviderClaimDNSLeaseDuration               = 2 * time.Minute
+	ProviderClaimDNSFailureLimit                = 3
+	ProviderClaimDNSMaximumBatch                = 100
+	ActionTicketDefaultTTL                      = 30 * 24 * time.Hour
+	ActionTicketMaximumTTL                      = 90 * 24 * time.Hour
+	ActionTicketIntentRetention                 = 30 * 24 * time.Hour
+	OutcomeReceiptValidity                      = 10 * 365 * 24 * time.Hour
+	ProviderCommercialTermsContractV1           = "nhs-provider-commercial-terms-v1"
+	ProviderCommercialCreditRuleV1              = "full_credit_on_provider_reported_invalid_or_duplicate"
+	ProviderCommercialResponseRuleV1            = "provider_callback_before_attribution_expiry"
+	ProviderCommercialTermsAnchorRuleV1         = "billing_period_begins_at_first_activation"
+	ProviderActionTicketPreparationV2           = "nhs-action-ticket-preparation-v2"
+	ProviderActionHandoffContractV1             = "nhs-action-handoff-v1"
+	ProviderActionHandoffConsentV1              = "nhs-provider-handoff-consent-v1"
+	ProviderControlledIntentDisclosureConsentV1 = "nhs-provider-controlled-intent-disclosure-consent-v1"
+	ProviderControlledIntentResolverV1          = "nhs-provider-controlled-intent-resolver-v1"
+	// The bounded launch pilot uses exact capped CPA terms only. Prepaid
+	// accounting remains covered as dormant code for a later payment-collection
+	// release; it is not an operable provider or owner surface in this pilot.
+	ProviderPilotBillingMode = "terms"
 	// Exported USD-only pilot caps keep each commercial field bounded according
 	// to its actual risk instead of sharing one ambiguous generic ceiling.
 	ProviderBountyMaximumCents          = int64(1_000_000)
@@ -43,29 +57,35 @@ const (
 	ProviderActiveOfferMaximumPerAction = 3
 	providerOfferLockNamespace          = "nhs-provider-offer"
 	providerIdempotencyNamespace        = "nhs-provider-outcome"
+	providerAcceptanceNamespace         = "nhs-provider-commercial-acceptance"
+	providerCommercialSourceNamespace   = "nhs-provider-commercial-source"
+	providerCompanyKeyNamespace         = "nhs-provider-company-key"
 )
 
 var (
-	ErrProviderClaimExists            = errors.New("a live provider claim already exists for this account and site")
-	ErrProviderSiteClaimed            = errors.New("site already has a live provider claim")
-	ErrProviderClaimNotVerified       = errors.New("provider claim is not verified")
-	ErrProviderClaimVerificationStale = errors.New("provider claim DNS verification is stale")
-	ErrProviderChallengeExpired       = errors.New("provider claim challenge expired")
-	ErrProviderChallengeMismatch      = errors.New("provider claim challenge did not match")
-	ErrProviderDNSLeaseLost           = errors.New("provider DNS verification lease is no longer active")
-	ErrProviderAPIKeyExists           = errors.New("provider claim already has an active callback key")
-	ErrProviderOfferNotPublic         = errors.New("provider offer is not eligible for public action discovery")
-	ErrProviderOfferLimit             = errors.New("provider offer limit reached")
-	ErrProviderOfferRevoked           = errors.New("provider offer authorization was revoked by an emergency pause")
-	ErrInsufficientProviderFunds      = errors.New("insufficient prepaid provider budget")
-	ErrProviderBudgetLimit            = errors.New("provider budget limit reached")
-	ErrProviderTermsCreditLimit       = errors.New("provider terms credit limit reached")
-	ErrProviderIdempotency            = errors.New("idempotency key was already used with a different payload")
-	ErrProviderOutcomeExists          = errors.New("outcome already recorded for action ticket")
-	ErrProviderOutcomeTransition      = errors.New("invalid action ticket outcome transition")
-	ErrActionTicketExists             = errors.New("action ticket already exists for this search receipt and offer")
-	ErrActionTicketExpired            = errors.New("action ticket expired")
-	ErrInvalidProviderExchange        = errors.New("invalid provider exchange input")
+	ErrProviderClaimExists                  = errors.New("a live provider claim already exists for this account and site")
+	ErrProviderSiteClaimed                  = errors.New("site already has a live provider claim")
+	ErrProviderClaimNotVerified             = errors.New("provider claim is not verified")
+	ErrProviderClaimVerificationStale       = errors.New("provider claim DNS verification is stale")
+	ErrProviderChallengeExpired             = errors.New("provider claim challenge expired")
+	ErrProviderChallengeMismatch            = errors.New("provider claim challenge did not match")
+	ErrProviderDNSLeaseLost                 = errors.New("provider DNS verification lease is no longer active")
+	ErrProviderAPIKeyExists                 = errors.New("provider claim already has an active callback key")
+	ErrProviderOfferNotPublic               = errors.New("provider offer is not eligible for public action discovery")
+	ErrProviderCommercialEvidenceRequired   = errors.New("verified provider commercial evidence is required")
+	ErrProviderOfferLimit                   = errors.New("provider offer limit reached")
+	ErrProviderOfferRevoked                 = errors.New("provider offer authorization was revoked by an emergency pause")
+	ErrProviderLegacyBudgetMutation         = errors.New("legacy budget mutation is disabled for a verified pilot company")
+	ErrProviderCommercialLedgerContaminated = errors.New("offer has unverified legacy budget rows; use a clean replacement offer")
+	ErrInsufficientProviderFunds            = errors.New("insufficient prepaid provider budget")
+	ErrProviderBudgetLimit                  = errors.New("provider budget limit reached")
+	ErrProviderTermsCreditLimit             = errors.New("provider terms credit limit reached")
+	ErrProviderIdempotency                  = errors.New("idempotency key was already used with a different payload")
+	ErrProviderOutcomeExists                = errors.New("outcome already recorded for action ticket")
+	ErrProviderOutcomeTransition            = errors.New("invalid action ticket outcome transition")
+	ErrActionTicketExists                   = errors.New("action ticket already exists for this search receipt and offer")
+	ErrActionTicketExpired                  = errors.New("action ticket expired")
+	ErrInvalidProviderExchange              = errors.New("invalid provider exchange input")
 )
 
 var (
@@ -172,54 +192,69 @@ type ProviderAPIKey struct {
 }
 
 type ProviderOffer struct {
-	ID                     string     `json:"id"`
-	ProviderClaimID        string     `json:"provider_claim_id"`
-	SiteID                 string     `json:"site_id"`
-	Domain                 string     `json:"domain"`
-	Status                 string     `json:"status"`
-	Version                int        `json:"version"`
-	OfferName              string     `json:"name"`
-	OfferSummary           string     `json:"summary"`
-	ActionType             string     `json:"action_type"`
-	ActionURL              string     `json:"action_url"`
-	DisclosureLabel        string     `json:"disclosure"`
-	ChargeEvent            string     `json:"charge_event"`
-	BountyCents            int64      `json:"bounty_cents"`
-	Currency               string     `json:"currency"`
-	PrincipalPriceMode     string     `json:"principal_price_mode"`
-	PrincipalPriceCents    *int64     `json:"principal_price_cents,omitempty"`
-	PrincipalCurrency      string     `json:"principal_currency"`
-	BillingMode            string     `json:"billing_mode"`
-	TermsCreditLimitCents  *int64     `json:"terms_credit_limit_cents,omitempty"`
-	TermsPeriodDays        *int       `json:"terms_period_days,omitempty"`
-	TermsPeriodAnchorAt    *time.Time `json:"terms_period_anchor_at,omitempty"`
-	TermsEvidenceReference string     `json:"terms_evidence_reference,omitempty"`
-	OrganicPosition        int        `json:"organic_position,omitempty"`
-	BudgetBalanceCents     int64      `json:"budget_balance_cents"`
-	ActivatedAt            *time.Time `json:"activated_at,omitempty"`
-	PausedAt               *time.Time `json:"paused_at,omitempty"`
-	CreatedAt              time.Time  `json:"created_at"`
-	UpdatedAt              time.Time  `json:"updated_at"`
+	ID                                   string     `json:"id"`
+	ProviderClaimID                      string     `json:"provider_claim_id"`
+	ProviderPilotEpochID                 string     `json:"provider_pilot_epoch_id,omitempty"`
+	SiteID                               string     `json:"site_id"`
+	Domain                               string     `json:"domain"`
+	Status                               string     `json:"status"`
+	Version                              int        `json:"version"`
+	OfferName                            string     `json:"name"`
+	OfferSummary                         string     `json:"summary"`
+	ActionType                           string     `json:"action_type"`
+	ActionURL                            string     `json:"action_url"`
+	DisclosureLabel                      string     `json:"disclosure"`
+	ChargeEvent                          string     `json:"charge_event"`
+	BountyCents                          int64      `json:"bounty_cents"`
+	Currency                             string     `json:"currency"`
+	PrincipalPriceMode                   string     `json:"principal_price_mode"`
+	PrincipalPriceCents                  *int64     `json:"principal_price_cents,omitempty"`
+	PrincipalCurrency                    string     `json:"principal_currency"`
+	BillingMode                          string     `json:"billing_mode"`
+	TermsCreditLimitCents                *int64     `json:"terms_credit_limit_cents,omitempty"`
+	TermsPeriodDays                      *int       `json:"terms_period_days,omitempty"`
+	TermsPeriodAnchorAt                  *time.Time `json:"terms_period_anchor_at,omitempty"`
+	TermsEvidenceReference               string     `json:"terms_evidence_reference,omitempty"`
+	CommercialTermsContractVersion       string     `json:"commercial_terms_contract_version"`
+	CommercialTermsSHA256                string     `json:"commercial_terms_sha256"`
+	CreditRule                           string     `json:"credit_rule"`
+	ResponseExpectation                  string     `json:"response_expectation"`
+	TermsPeriodAnchorRule                string     `json:"terms_period_anchor_rule"`
+	ProviderMORAcknowledgementRequired   bool       `json:"provider_mor_acknowledgement_required"`
+	ProviderAcknowledgesMerchantOfRecord bool       `json:"provider_acknowledges_merchant_of_record"`
+	OrganicPosition                      int        `json:"organic_position,omitempty"`
+	BudgetBalanceCents                   int64      `json:"budget_balance_cents"`
+	ActivatedAt                          *time.Time `json:"activated_at,omitempty"`
+	PausedAt                             *time.Time `json:"paused_at,omitempty"`
+	CreatedAt                            time.Time  `json:"created_at"`
+	UpdatedAt                            time.Time  `json:"updated_at"`
 }
 
 // PublicProviderOffer is the deliberately narrow sponsored-action shape. It
 // excludes claim ownership, evidence references, and provider budget balances.
 type PublicProviderOffer struct {
-	OfferID                   string `json:"offer_id"`
-	OfferVersion              int    `json:"offer_version"`
-	SiteID                    string `json:"site_id"`
-	Domain                    string `json:"domain"`
-	OfferName                 string `json:"name"`
-	OfferSummary              string `json:"summary"`
-	ActionType                string `json:"action_type"`
-	ChargeEvent               string `json:"charge_event"`
-	DisclosureLabel           string `json:"disclosure"`
-	ProviderFundedBountyCents int64  `json:"provider_funded_bounty_cents"`
-	ProviderFundedCurrency    string `json:"provider_funded_currency"`
-	PrincipalPriceMode        string `json:"principal_price_mode"`
-	PrincipalPriceCents       *int64 `json:"principal_price_cents,omitempty"`
-	PrincipalCurrency         string `json:"principal_currency"`
-	OrganicPosition           int    `json:"organic_position"`
+	OfferID                              string `json:"offer_id"`
+	ProviderPilotEpochID                 string `json:"-"`
+	OfferVersion                         int    `json:"offer_version"`
+	SiteID                               string `json:"site_id"`
+	Domain                               string `json:"domain"`
+	OfferName                            string `json:"name"`
+	OfferSummary                         string `json:"summary"`
+	ActionType                           string `json:"action_type"`
+	ChargeEvent                          string `json:"charge_event"`
+	DisclosureLabel                      string `json:"disclosure"`
+	ProviderFundedBountyCents            int64  `json:"provider_funded_bounty_cents"`
+	ProviderFundedCurrency               string `json:"provider_funded_currency"`
+	PrincipalPriceMode                   string `json:"principal_price_mode"`
+	PrincipalPriceCents                  *int64 `json:"principal_price_cents,omitempty"`
+	PrincipalCurrency                    string `json:"principal_currency"`
+	CommercialTermsContractVersion       string `json:"commercial_terms_contract_version"`
+	CommercialTermsSHA256                string `json:"commercial_terms_sha256"`
+	CreditRule                           string `json:"credit_rule"`
+	ResponseExpectation                  string `json:"response_expectation"`
+	TermsPeriodAnchorRule                string `json:"terms_period_anchor_rule"`
+	ProviderAcknowledgesMerchantOfRecord bool   `json:"provider_acknowledges_merchant_of_record"`
+	OrganicPosition                      int    `json:"organic_position"`
 }
 
 type ProviderOfferInput struct {
@@ -253,47 +288,212 @@ type ProviderBudgetEntry struct {
 	CreatedAt         time.Time `json:"created_at"`
 }
 
+type ProviderCommercialAcceptanceInput struct {
+	EventType                string
+	ProviderOfferID          string
+	RelatedAcceptanceEventID string
+	ExpectedOfferVersion     int
+	ExpectedExactTermsSHA256 string
+	IdempotencyKey           string
+	PayloadHash              string
+	ProviderReference        string
+}
+
+type ProviderCommercialAcceptanceEvent struct {
+	ID                          string     `json:"id"`
+	ProviderClaimID             string     `json:"provider_claim_id"`
+	ProviderOfferID             string     `json:"provider_offer_id,omitempty"`
+	ProviderAPIKeyID            int64      `json:"provider_api_key_id"`
+	EventType                   string     `json:"event_type"`
+	RelatedAcceptanceEventID    string     `json:"related_acceptance_event_id,omitempty"`
+	OfferVersionSnapshot        *int       `json:"offer_version,omitempty"`
+	TermsContractVersion        string     `json:"terms_contract_version,omitempty"`
+	ExactTermsSHA256            string     `json:"exact_terms_sha256,omitempty"`
+	ProviderAcceptanceReference string     `json:"provider_acceptance_reference"`
+	ProviderAcceptedAt          time.Time  `json:"provider_accepted_at"`
+	ValidUntil                  *time.Time `json:"valid_until,omitempty"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	Replayed                    bool       `json:"-"`
+	idempotencyKeyHash          string
+	payloadHash                 string
+}
+
+type ProviderPilotCompany struct {
+	ID                          string    `json:"id"`
+	CompanyKeyHash              string    `json:"-"`
+	ProviderClaimID             string    `json:"provider_claim_id"`
+	ProviderAPIKeyID            int64     `json:"provider_api_key_id"`
+	ProviderAcceptanceEventID   string    `json:"provider_acceptance_event_id"`
+	ProviderAcceptanceReference string    `json:"provider_acceptance_reference"`
+	IdentityEvidenceReference   string    `json:"identity_evidence_reference"`
+	OperatorReference           string    `json:"operator_reference"`
+	ProviderAcceptedAt          time.Time `json:"provider_accepted_at"`
+	OwnerVerifiedAt             time.Time `json:"owner_verified_at"`
+	CreatedAt                   time.Time `json:"created_at"`
+	Replayed                    bool      `json:"-"`
+}
+
+type VerifiedProviderFundingInput struct {
+	ProviderOfferID          string
+	AmountCents              int64
+	Currency                 string
+	SourceSystem             string
+	SourceEventID            string
+	SourceEffectiveAt        time.Time
+	QualifyingActionTicketID string
+	OperatorReference        string
+	OwnerEvidenceReference   string
+}
+
+type VerifiedProviderTermsInput struct {
+	ProviderOfferID           string
+	ProviderAcceptanceEventID string
+	RelatedCommitmentEventID  string
+	SourceSystem              string
+	SourceEventID             string
+	SourceEffectiveAt         time.Time
+	OperatorReference         string
+	OwnerEvidenceReference    string
+}
+
+type ProviderFundingReversalInput struct {
+	RelatedCommitmentEventID string
+	AmountCents              int64
+	SourceSystem             string
+	SourceEventID            string
+	SourceEffectiveAt        time.Time
+	OperatorReference        string
+	OwnerEvidenceReference   string
+}
+
+type ProviderCommercialCommitmentEvent struct {
+	ID                          string     `json:"id"`
+	ProviderPilotCompanyID      string     `json:"provider_pilot_company_id"`
+	ProviderClaimID             string     `json:"provider_claim_id"`
+	ProviderOfferID             string     `json:"provider_offer_id"`
+	ProviderAPIKeyID            int64      `json:"provider_api_key_id"`
+	EventType                   string     `json:"event_type"`
+	RelatedEventID              string     `json:"related_event_id,omitempty"`
+	ProviderAcceptanceEventID   string     `json:"provider_acceptance_event_id,omitempty"`
+	BudgetLedgerEntryID         *int64     `json:"budget_ledger_entry_id,omitempty"`
+	QualifyingActionTicketID    string     `json:"qualifying_action_ticket_id,omitempty"`
+	OfferVersionSnapshot        int        `json:"offer_version"`
+	TermsContractVersion        string     `json:"terms_contract_version"`
+	ExactTermsSHA256            string     `json:"exact_terms_sha256"`
+	AmountCents                 int64      `json:"amount_cents"`
+	Currency                    string     `json:"currency"`
+	SourceSystem                string     `json:"source_system"`
+	SourceEventID               string     `json:"source_event_id"`
+	SourceEffectiveAt           time.Time  `json:"source_effective_at"`
+	ProviderAcceptanceReference string     `json:"provider_acceptance_reference"`
+	OperatorReference           string     `json:"operator_reference"`
+	OwnerEvidenceReference      string     `json:"owner_evidence_reference"`
+	ProviderAcceptedAt          time.Time  `json:"provider_accepted_at"`
+	ValidUntil                  *time.Time `json:"valid_until,omitempty"`
+	OwnerVerifiedAt             time.Time  `json:"owner_verified_at"`
+	CreatedAt                   time.Time  `json:"created_at"`
+	Replayed                    bool       `json:"-"`
+}
+
 type ActionTicket struct {
-	ID                             string     `json:"id"`
-	ProviderClaimID                string     `json:"provider_claim_id"`
-	ProviderOfferID                string     `json:"provider_offer_id"`
-	SearchReceiptID                string     `json:"search_receipt_id,omitempty"`
-	SourceIsSynthetic              bool       `json:"-"`
-	TokenHash                      string     `json:"-"`
-	TokenNonce                     string     `json:"-"`
-	CreationRequestHash            string     `json:"-"`
-	OfferVersionSnapshot           int        `json:"offer_version"`
-	OfferNameSnapshot              string     `json:"offer_name"`
-	OfferSummarySnapshot           string     `json:"offer_summary"`
-	ActionTypeSnapshot             string     `json:"action_type"`
-	ActionURLSnapshot              string     `json:"action_url"`
-	DisclosureSnapshot             string     `json:"disclosure"`
-	ChargeEventSnapshot            string     `json:"charge_event"`
-	BountyCentsSnapshot            int64      `json:"bounty_cents"`
-	CurrencySnapshot               string     `json:"currency"`
-	BillingModeSnapshot            string     `json:"billing_mode"`
-	TermsEvidenceReferenceSnapshot string     `json:"-"`
-	TermsCreditLimitCentsSnapshot  *int64     `json:"-"`
-	TermsPeriodDaysSnapshot        *int       `json:"-"`
-	TermsPeriodAnchorAtSnapshot    *time.Time `json:"-"`
-	AttributionKeyIDSnapshot       string     `json:"-"`
-	PrincipalPriceModeSnapshot     string     `json:"principal_price_mode"`
-	PrincipalPriceCentsSnapshot    *int64     `json:"principal_price_cents,omitempty"`
-	PrincipalCurrencySnapshot      string     `json:"principal_currency"`
-	DemandTopic                    string     `json:"demand_topic"`
-	RegionCode                     string     `json:"region_code,omitempty"`
-	BudgetBand                     string     `json:"budget_band"`
-	Urgency                        string     `json:"urgency"`
-	RequirementFlags               []string   `json:"requirement_flags"`
-	PrincipalConsent               bool       `json:"principal_consent"`
-	ConsentVersion                 string     `json:"consent_version"`
-	Status                         string     `json:"status"`
-	ExpiresAt                      time.Time  `json:"expires_at"`
-	IntentRedactedAt               *time.Time `json:"intent_redacted_at,omitempty"`
-	AuthorizationRevokedAt         *time.Time `json:"authorization_revoked_at,omitempty"`
-	Replayed                       bool       `json:"-"`
-	CreatedAt                      time.Time  `json:"created_at"`
-	UpdatedAt                      time.Time  `json:"updated_at"`
+	ID                                     string     `json:"id"`
+	ProviderClaimID                        string     `json:"provider_claim_id"`
+	ProviderOfferID                        string     `json:"provider_offer_id"`
+	ProviderPilotEpochID                   string     `json:"provider_pilot_epoch_id"`
+	SearchReceiptID                        string     `json:"search_receipt_id,omitempty"`
+	SourceIsSynthetic                      bool       `json:"-"`
+	TokenHash                              string     `json:"-"`
+	TokenNonce                             string     `json:"-"`
+	CreationRequestHash                    string     `json:"-"`
+	OfferVersionSnapshot                   int        `json:"offer_version"`
+	OfferNameSnapshot                      string     `json:"offer_name"`
+	OfferSummarySnapshot                   string     `json:"offer_summary"`
+	ActionTypeSnapshot                     string     `json:"action_type"`
+	ActionURLSnapshot                      string     `json:"-"`
+	DisclosureSnapshot                     string     `json:"disclosure"`
+	ChargeEventSnapshot                    string     `json:"charge_event"`
+	BountyCentsSnapshot                    int64      `json:"bounty_cents"`
+	CurrencySnapshot                       string     `json:"currency"`
+	BillingModeSnapshot                    string     `json:"billing_mode"`
+	TermsEvidenceReferenceSnapshot         string     `json:"-"`
+	CommercialTermsContractVersionSnapshot string     `json:"commercial_terms_contract_version"`
+	CommercialTermsSHA256Snapshot          string     `json:"commercial_terms_sha256"`
+	TermsCreditLimitCentsSnapshot          *int64     `json:"-"`
+	TermsPeriodDaysSnapshot                *int       `json:"-"`
+	TermsPeriodAnchorAtSnapshot            *time.Time `json:"-"`
+	AttributionKeyIDSnapshot               string     `json:"-"`
+	PrincipalPriceModeSnapshot             string     `json:"principal_price_mode"`
+	PrincipalPriceCentsSnapshot            *int64     `json:"principal_price_cents,omitempty"`
+	PrincipalCurrencySnapshot              string     `json:"principal_currency"`
+	DemandTopic                            string     `json:"demand_topic"`
+	RegionCode                             string     `json:"region_code,omitempty"`
+	BudgetBand                             string     `json:"budget_band"`
+	Urgency                                string     `json:"urgency"`
+	RequirementFlags                       []string   `json:"requirement_flags"`
+	PrincipalConsent                       bool       `json:"principal_consent"`
+	ConsentVersion                         string     `json:"consent_version"`
+	Status                                 string     `json:"status"`
+	ExpiresAt                              time.Time  `json:"expires_at"`
+	IntentRedactedAt                       *time.Time `json:"intent_redacted_at,omitempty"`
+	AuthorizationRevokedAt                 *time.Time `json:"authorization_revoked_at,omitempty"`
+	Replayed                               bool       `json:"-"`
+	CreatedAt                              time.Time  `json:"created_at"`
+	UpdatedAt                              time.Time  `json:"updated_at"`
+}
+
+// ProviderActionHandoffReceipt is NHS's privacy-safe proof that the exact
+// bearer for a consent-attested ticket asked NHS to continue to the provider.
+// It intentionally contains no query, principal, agent, contact, network,
+// referrer, or user-agent data. PresentedTokenHash is never returned publicly.
+type ProviderActionHandoffReceipt struct {
+	ID                                         string    `json:"id"`
+	ActionTicketID                             string    `json:"action_ticket_id"`
+	ProviderClaimID                            string    `json:"-"`
+	ProviderOfferID                            string    `json:"provider_offer_id"`
+	OfferVersionSnapshot                       int       `json:"offer_version"`
+	CommercialTermsContractVersionSnapshot     string    `json:"commercial_terms_contract_version"`
+	CommercialTermsSHA256Snapshot              string    `json:"commercial_terms_sha256"`
+	PresentedTokenHash                         string    `json:"-"`
+	PrincipalHandoffConsent                    bool      `json:"principal_handoff_consent"`
+	HandoffConsentVersion                      string    `json:"handoff_consent_version"`
+	PrincipalControlledIntentDisclosureConsent bool      `json:"principal_controlled_intent_disclosure_consent"`
+	ControlledIntentDisclosureConsentVersion   string    `json:"controlled_intent_disclosure_consent_version,omitempty"`
+	EventContractVersion                       string    `json:"event_contract_version"`
+	ObservedAt                                 time.Time `json:"observed_at"`
+	CreatedAt                                  time.Time `json:"created_at"`
+	Replayed                                   bool      `json:"-"`
+}
+
+type ProviderActionHandoffInput struct {
+	ActionTicketID                             string
+	AttributionToken                           string
+	PrincipalHandoffConsent                    bool
+	HandoffConsentVersion                      string
+	PrincipalControlledIntentDisclosureConsent bool
+	ControlledIntentDisclosureConsentVersion   string
+}
+
+type ProviderControlledIntent struct {
+	DemandTopic      string   `json:"demand_topic"`
+	RegionCode       string   `json:"region_code,omitempty"`
+	BudgetBand       string   `json:"budget_band"`
+	Urgency          string   `json:"urgency"`
+	RequirementFlags []string `json:"requirement_flags"`
+}
+
+// ProviderControlledIntentResolution is the deliberately narrow provider view
+// of a separately consented, already-handed-off ticket. It omits search,
+// identity, contact, network, action-URL, price, and accounting fields.
+type ProviderControlledIntentResolution struct {
+	ResolverContractVersion string                   `json:"resolver_contract_version"`
+	TicketID                string                   `json:"ticket_id"`
+	OfferID                 string                   `json:"offer_id"`
+	OfferVersion            int                      `json:"offer_version"`
+	ActionType              string                   `json:"action_type"`
+	ControlledIntent        ProviderControlledIntent `json:"controlled_intent"`
+	ObservedAt              time.Time                `json:"observed_at"`
+	IntentAvailableUntil    time.Time                `json:"intent_available_until"`
+	ConsentVersion          string                   `json:"consent_version"`
 }
 
 type ActionTicketInput struct {
@@ -339,27 +539,46 @@ type OutcomeReceipt struct {
 // public receipt verification. Signature validity is intentionally evaluated
 // separately by providerexchange; this shape reports mutable billing state.
 type PublicOutcomeReceiptState struct {
-	ReceiptID                   string `json:"receipt_id"`
-	ActionTicketID              string `json:"action_ticket_id"`
-	ReceiptOutcome              string `json:"receipt_outcome"`
-	CurrentTicketStatus         string `json:"current_ticket_status"`
-	OriginalChargeCredited      bool   `json:"original_charge_credited"`
-	SupersededByLaterState      bool   `json:"superseded_by_later_state"`
-	AuthorizationRevoked        bool   `json:"authorization_revoked"`
-	NetCommercialEffectCents    int64  `json:"net_commercial_effect_cents"`
-	NetCommercialEffectCurrency string `json:"net_commercial_effect_currency"`
+	ReceiptID                      string `json:"receipt_id"`
+	ActionTicketID                 string `json:"action_ticket_id"`
+	OfferVersion                   int    `json:"offer_version"`
+	CommercialTermsContractVersion string `json:"commercial_terms_contract_version"`
+	CommercialTermsSHA256          string `json:"commercial_terms_sha256"`
+	ReceiptOutcome                 string `json:"receipt_outcome"`
+	CurrentTicketStatus            string `json:"current_ticket_status"`
+	OriginalChargeCredited         bool   `json:"original_charge_credited"`
+	SupersededByLaterState         bool   `json:"superseded_by_later_state"`
+	AuthorizationRevoked           bool   `json:"authorization_revoked"`
+	NetCommercialEffectCents       int64  `json:"net_commercial_effect_cents"`
+	NetCommercialEffectCurrency    string `json:"net_commercial_effect_currency"`
 }
 
 type ProviderExchangeProof struct {
-	OperatorRecordedProviderBudgets     int              `json:"operator_recorded_provider_budgets"`
-	ProviderReportedAcceptedHandoffs    int              `json:"provider_reported_accepted_handoffs"`
-	ProviderReportedActivations         int              `json:"provider_reported_activations"`
-	RenewedProviderBudgets              int              `json:"renewed_provider_budgets"`
-	ProviderReportedConversions         int              `json:"provider_reported_conversions"`
-	PrepaidNetDebitedByCurrency         map[string]int64 `json:"prepaid_net_debited_by_currency"`
-	TermsNetReceivableByCurrency        map[string]int64 `json:"terms_net_receivable_by_currency"`
-	OperatorRecordedCollectedByCurrency map[string]int64 `json:"operator_recorded_collected_by_currency"`
-	PilotThresholdsMet                  bool             `json:"pilot_thresholds_met"`
+	ProviderPilotEpochID                 string           `json:"provider_pilot_epoch_id,omitempty"`
+	ProviderPilotDemandTopic             string           `json:"provider_pilot_demand_topic,omitempty"`
+	ProviderPilotStatus                  string           `json:"provider_pilot_status,omitempty"`
+	OutcomeReceiptIntegrityValid         bool             `json:"outcome_receipt_integrity_valid"`
+	VerifiedOutcomeReceipts              int              `json:"verified_outcome_receipts"`
+	RejectedOutcomeReceipts              int              `json:"rejected_outcome_receipts"`
+	VerifiedOutcomeLedgerEntries         int              `json:"verified_outcome_ledger_entries"`
+	RejectedOutcomeLedgerEntries         int              `json:"rejected_outcome_ledger_entries"`
+	VerifiedProviderCompanies            int              `json:"verified_provider_companies"`
+	VerifiedProviderAcceptedHandoffs     int              `json:"verified_provider_accepted_handoffs"`
+	VerifiedProviderConfirmedActivations int              `json:"verified_provider_confirmed_activations"`
+	VerifiedProviderRenewals             int              `json:"verified_provider_renewals"`
+	VerifiedProviderConfirmedConversions int              `json:"verified_provider_confirmed_conversions"`
+	VerifiedPrepaidSettledByCurrency     map[string]int64 `json:"verified_prepaid_settled_by_currency"`
+	VerifiedPrepaidNetDebitedByCurrency  map[string]int64 `json:"verified_prepaid_net_debited_by_currency"`
+	VerifiedTermsNetReceivableByCurrency map[string]int64 `json:"verified_terms_net_receivable_by_currency"`
+	OperatorRecordedProviderBudgets      int              `json:"operator_recorded_provider_budgets"`
+	ProviderReportedAcceptedHandoffs     int              `json:"provider_reported_accepted_handoffs"`
+	ProviderReportedActivations          int              `json:"provider_reported_activations"`
+	RenewedProviderBudgets               int              `json:"renewed_provider_budgets"`
+	ProviderReportedConversions          int              `json:"provider_reported_conversions"`
+	PrepaidNetDebitedByCurrency          map[string]int64 `json:"prepaid_net_debited_by_currency"`
+	TermsNetReceivableByCurrency         map[string]int64 `json:"terms_net_receivable_by_currency"`
+	OperatorRecordedCollectedByCurrency  map[string]int64 `json:"operator_recorded_collected_by_currency"`
+	PilotThresholdsMet                   bool             `json:"pilot_thresholds_met"`
 }
 
 type ProviderAdminAuditEvent struct {
@@ -435,6 +654,62 @@ func validProviderUUID(value string) bool {
 
 func validProviderReference(value string) bool {
 	return providerReferencePattern.MatchString(strings.TrimSpace(value))
+}
+
+func providerCommercialTermsHash(offerID string, version int, input ProviderOfferInput) string {
+	principalPrice := "null"
+	if input.PrincipalPriceCents != nil {
+		principalPrice = strconv.FormatInt(*input.PrincipalPriceCents, 10)
+	}
+	termsLimit := "null"
+	if input.TermsCreditLimitCents != nil {
+		termsLimit = strconv.FormatInt(*input.TermsCreditLimitCents, 10)
+	}
+	termsDays := "null"
+	if input.TermsPeriodDays != nil {
+		termsDays = strconv.Itoa(*input.TermsPeriodDays)
+	}
+	controlled := []string{
+		ProviderCommercialTermsContractV1,
+		strings.ToLower(strings.TrimSpace(offerID)),
+		strconv.Itoa(version),
+		strings.TrimSpace(input.OfferName),
+		strings.TrimSpace(input.OfferSummary),
+		strings.ToLower(strings.TrimSpace(input.ActionType)),
+		strings.TrimSpace(input.ActionURL),
+		ProviderDisclosureLabel,
+		strings.ToLower(strings.TrimSpace(input.ChargeEvent)),
+		strconv.FormatInt(input.BountyCents, 10),
+		strings.ToLower(strings.TrimSpace(input.Currency)),
+		strings.ToLower(strings.TrimSpace(input.PrincipalPriceMode)),
+		principalPrice,
+		strings.ToLower(strings.TrimSpace(input.PrincipalCurrency)),
+		strings.ToLower(strings.TrimSpace(input.BillingMode)),
+		termsLimit,
+		termsDays,
+		ProviderCommercialCreditRuleV1,
+		ProviderCommercialResponseRuleV1,
+		ProviderCommercialTermsAnchorRuleV1,
+		"provider_acknowledges_merchant_of_record=true",
+	}
+	sum := sha256.Sum256([]byte(strings.Join(controlled, "\x00")))
+	return hex.EncodeToString(sum[:])
+}
+
+func providerCommercialTermsHashFromOffer(offer *ProviderOffer) string {
+	if offer == nil {
+		return ""
+	}
+	return providerCommercialTermsHash(offer.ID, offer.Version, ProviderOfferInput{
+		OfferName: offer.OfferName, OfferSummary: offer.OfferSummary,
+		ActionType: offer.ActionType, ActionURL: offer.ActionURL,
+		ChargeEvent: offer.ChargeEvent, BountyCents: offer.BountyCents,
+		Currency: offer.Currency, PrincipalPriceMode: offer.PrincipalPriceMode,
+		PrincipalPriceCents: offer.PrincipalPriceCents,
+		PrincipalCurrency:   offer.PrincipalCurrency, BillingMode: offer.BillingMode,
+		TermsCreditLimitCents: offer.TermsCreditLimitCents,
+		TermsPeriodDays:       offer.TermsPeriodDays,
+	})
 }
 
 func validProviderOpaqueValue(value string) bool {
@@ -1296,13 +1571,15 @@ func scanProviderOffer(row rowScanner) (*ProviderOffer, error) {
 	var principalPrice, termsCreditLimit, termsPeriodDays sql.NullInt64
 	var termsPeriodAnchor, activatedAt, pausedAt sql.NullTime
 	err := row.Scan(
-		&offer.ID, &offer.ProviderClaimID, &offer.SiteID, &offer.Domain,
+		&offer.ID, &offer.ProviderClaimID, &offer.ProviderPilotEpochID,
+		&offer.SiteID, &offer.Domain,
 		&offer.Status, &offer.Version, &offer.OfferName, &offer.OfferSummary,
 		&offer.ActionType, &offer.ActionURL, &offer.DisclosureLabel,
 		&offer.ChargeEvent, &offer.BountyCents, &offer.Currency,
 		&offer.PrincipalPriceMode, &principalPrice, &offer.PrincipalCurrency,
 		&offer.BillingMode, &termsCreditLimit, &termsPeriodDays,
 		&termsPeriodAnchor, &offer.TermsEvidenceReference,
+		&offer.CommercialTermsContractVersion, &offer.CommercialTermsSHA256,
 		&offer.BudgetBalanceCents, &activatedAt, &pausedAt,
 		&offer.CreatedAt, &offer.UpdatedAt,
 	)
@@ -1330,11 +1607,21 @@ func scanProviderOffer(row rowScanner) (*ProviderOffer, error) {
 	if pausedAt.Valid {
 		offer.PausedAt = &pausedAt.Time
 	}
+	offer.CreditRule = ProviderCommercialCreditRuleV1
+	offer.ResponseExpectation = ProviderCommercialResponseRuleV1
+	offer.TermsPeriodAnchorRule = ProviderCommercialTermsAnchorRuleV1
+	offer.ProviderMORAcknowledgementRequired = true
+	// A draft describes the acknowledgement required by its exact terms; it
+	// does not itself prove the provider accepted those terms. Activation is the
+	// only normal offer state that is gated on matching provider-authenticated
+	// and owner-verified commercial evidence.
+	offer.ProviderAcknowledgesMerchantOfRecord = offer.Status == "active"
 	return &offer, nil
 }
 
 const providerOfferSelectColumns = `
-	offer.id::text, offer.provider_claim_id::text, claim.site_id::text,
+	offer.id::text, offer.provider_claim_id::text,
+	COALESCE(offer.provider_pilot_epoch_id::text,''), claim.site_id::text,
 	claim.domain_snapshot, offer.status, offer.version, offer.offer_name, offer.offer_summary,
 	offer.action_type, offer.action_url, offer.disclosure_label,
 	offer.charge_event, offer.bounty_cents, offer.currency,
@@ -1343,6 +1630,7 @@ const providerOfferSelectColumns = `
 	offer.terms_credit_limit_cents, offer.terms_period_days,
 	offer.terms_period_anchor_at,
 	offer.terms_evidence_reference,
+	offer.commercial_terms_contract_version, offer.commercial_terms_sha256,
 	COALESCE((SELECT SUM(ledger.amount_cents)
 	          FROM provider_budget_ledger ledger
 	          WHERE ledger.provider_offer_id=offer.id),0)::bigint,
@@ -1368,6 +1656,7 @@ func CreateProviderOffer(db *sql.DB, accountID int64, claimID string, input Prov
 	if err != nil {
 		return nil, err
 	}
+	commercialTermsSHA256 := providerCommercialTermsHash(offerID, 1, input)
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
@@ -1403,15 +1692,17 @@ func CreateProviderOffer(db *sql.DB, accountID int64, claimID string, input Prov
 			action_url, charge_event, bounty_cents, currency,
 			principal_price_mode, principal_price_cents, principal_currency,
 			billing_mode, terms_credit_limit_cents, terms_period_days,
-			terms_evidence_reference
+			terms_evidence_reference, commercial_terms_contract_version,
+			commercial_terms_sha256
 		) VALUES (
-			$1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16
+			$1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
 		)`,
 		offerID, claimID, input.OfferName, input.OfferSummary, input.ActionType,
 		input.ActionURL, input.ChargeEvent, input.BountyCents, input.Currency,
 		input.PrincipalPriceMode, input.PrincipalPriceCents, input.PrincipalCurrency,
 		input.BillingMode, input.TermsCreditLimitCents, input.TermsPeriodDays,
-		input.TermsEvidenceReference); err != nil {
+		input.TermsEvidenceReference, ProviderCommercialTermsContractV1,
+		commercialTermsSHA256); err != nil {
 		return nil, err
 	}
 	offer, err := getProviderOfferTx(tx, offerID)
@@ -1444,21 +1735,29 @@ func UpdateProviderOffer(db *sql.DB, accountID int64, offerID string, input Prov
 		return nil, err
 	}
 	var currentStatus string
-	var hasLedgerEntries bool
+	var currentVersion int
+	var hasLedgerEntries, hasCommercialAcceptances bool
 	if err := tx.QueryRow(`
-		SELECT offer.status, EXISTS(
+		SELECT offer.status, offer.version, EXISTS(
 			SELECT 1 FROM provider_budget_ledger ledger
 			WHERE ledger.provider_offer_id=offer.id
+		), EXISTS(
+			SELECT 1 FROM provider_commercial_acceptance_events accepted
+			WHERE accepted.provider_offer_id=offer.id
 		)
 		FROM provider_offers offer
 		JOIN provider_claims claim ON claim.id=offer.provider_claim_id
 		WHERE offer.id=$1::uuid AND claim.account_id=$2
-		FOR UPDATE OF offer`, offerID, accountID).Scan(&currentStatus, &hasLedgerEntries); err != nil {
+		FOR UPDATE OF offer`, offerID, accountID).Scan(
+		&currentStatus, &currentVersion, &hasLedgerEntries, &hasCommercialAcceptances,
+	); err != nil {
 		return nil, err
 	}
-	if currentStatus != "draft" || hasLedgerEntries {
+	if currentStatus != "draft" || hasLedgerEntries || hasCommercialAcceptances {
 		return nil, errors.New("activated provider offer terms are immutable; create a new draft")
 	}
+	nextVersion := currentVersion + 1
+	commercialTermsSHA256 := providerCommercialTermsHash(offerID, nextVersion, input)
 	if _, err := tx.Exec(`
 		UPDATE provider_offers SET
 			offer_name=$1, offer_summary=$2, action_type=$3, action_url=$4,
@@ -1466,13 +1765,17 @@ func UpdateProviderOffer(db *sql.DB, accountID int64, offerID string, input Prov
 			principal_price_mode=$8, principal_price_cents=$9,
 			principal_currency=$10, billing_mode=$11,
 			terms_credit_limit_cents=$12, terms_period_days=$13,
-			terms_evidence_reference=$14, version=version+1, updated_at=NOW()
-		WHERE id=$15::uuid`,
+			terms_evidence_reference=$14,
+			commercial_terms_contract_version=$15,
+			commercial_terms_sha256=$16,
+			version=$17, updated_at=NOW()
+		WHERE id=$18::uuid`,
 		input.OfferName, input.OfferSummary, input.ActionType, input.ActionURL,
 		input.ChargeEvent, input.BountyCents, input.Currency,
 		input.PrincipalPriceMode, input.PrincipalPriceCents, input.PrincipalCurrency,
 		input.BillingMode, input.TermsCreditLimitCents, input.TermsPeriodDays,
-		input.TermsEvidenceReference, offerID); err != nil {
+		input.TermsEvidenceReference, ProviderCommercialTermsContractV1,
+		commercialTermsSHA256, nextVersion, offerID); err != nil {
 		return nil, err
 	}
 	offer, err := getProviderOfferTx(tx, offerID)
@@ -1944,13 +2247,16 @@ func ActivateProviderOffer(db *sql.DB, offerID, operatorReference, evidenceRefer
 	if err := lockProviderOffer(tx, offerID); err != nil {
 		return nil, err
 	}
-	var offerStatus, billingMode, actionType string
+	var offerStatus, billingMode, actionType, existingPilotID string
 	var bounty int64
 	err = tx.QueryRow(`
-		SELECT offer.status, offer.billing_mode, offer.bounty_cents, offer.action_type
+		SELECT offer.status, offer.billing_mode, offer.bounty_cents, offer.action_type,
+		       COALESCE(offer.provider_pilot_epoch_id::text,'')
 		FROM provider_offers offer
 		WHERE offer.id=$1::uuid
-		FOR UPDATE OF offer`, offerID).Scan(&offerStatus, &billingMode, &bounty, &actionType)
+		FOR UPDATE OF offer`, offerID).Scan(
+		&offerStatus, &billingMode, &bounty, &actionType, &existingPilotID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1971,6 +2277,27 @@ func ActivateProviderOffer(db *sql.DB, offerID, operatorReference, evidenceRefer
 		activeActionOfferCount >= ProviderActiveOfferMaximumPerAction {
 		return nil, ErrProviderOfferLimit
 	}
+	authorizedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, err
+	}
+	commerciallyVerified, err := providerOfferHasVerifiedCommercialCommitment(tx, offerID, authorizedAt)
+	if err != nil {
+		return nil, err
+	}
+	if !commerciallyVerified {
+		return nil, ErrProviderCommercialEvidenceRequired
+	}
+	pilotID, _, err := requireActiveProviderPilotEnrollment(tx, claimID)
+	if err != nil {
+		return nil, err
+	}
+	if existingPilotID != "" && existingPilotID != pilotID {
+		return nil, ErrProviderPilotNotActive
+	}
+	if err := requireCurrentProviderPilotReview(tx, pilotID, "offer", offerID); err != nil {
+		return nil, err
+	}
 	if billingMode == "prepaid" {
 		balance, err := providerOfferBalance(tx, offerID)
 		if err != nil {
@@ -1983,12 +2310,13 @@ func ActivateProviderOffer(db *sql.DB, offerID, operatorReference, evidenceRefer
 	if _, err := tx.Exec(`
 		UPDATE provider_offers
 		SET status='active', terms_evidence_reference=$1,
+		    provider_pilot_epoch_id=$2::uuid,
 		    terms_period_anchor_at=CASE
 		        WHEN billing_mode='terms' THEN COALESCE(terms_period_anchor_at,NOW())
 		        ELSE NULL
 		    END,
 		    activated_at=COALESCE(activated_at,NOW()), paused_at=NULL, updated_at=NOW()
-		WHERE id=$2::uuid`, evidenceReference, offerID); err != nil {
+		WHERE id=$3::uuid`, evidenceReference, pilotID, offerID); err != nil {
 		return nil, err
 	}
 	if _, err := tx.Exec(`
@@ -2089,6 +2417,17 @@ func recordProviderBudgetEntry(db *sql.DB, offerID, entryType string, amountCent
 	if err != sql.ErrNoRows {
 		return nil, err
 	}
+	var pilotControlled bool
+	if err := tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM provider_pilot_companies company
+			WHERE company.provider_claim_id=$1::uuid
+		)`, claimID).Scan(&pilotControlled); err != nil {
+		return nil, err
+	}
+	if pilotControlled {
+		return nil, ErrProviderLegacyBudgetMutation
+	}
 	balance, err := providerOfferBalance(tx, offerID)
 	if err != nil {
 		return nil, err
@@ -2155,11 +2494,1018 @@ func AdjustProviderOfferBudget(db *sql.DB, offerID string, amountCents int64, cu
 	return recordProviderBudgetEntry(db, offerID, "adjustment", amountCents, currency, externalReference)
 }
 
+const providerCommercialAcceptanceColumns = `
+	id::text, provider_claim_id::text, provider_offer_id::text,
+	provider_api_key_id, event_type, related_acceptance_event_id::text,
+	offer_version_snapshot, terms_contract_version, exact_terms_sha256,
+	idempotency_key_hash, payload_hash, provider_acceptance_reference,
+	provider_accepted_at, valid_until, created_at`
+
+func scanProviderCommercialAcceptance(row rowScanner) (*ProviderCommercialAcceptanceEvent, error) {
+	var event ProviderCommercialAcceptanceEvent
+	var offerID, relatedID sql.NullString
+	var version sql.NullInt64
+	var validUntil sql.NullTime
+	if err := row.Scan(
+		&event.ID, &event.ProviderClaimID, &offerID, &event.ProviderAPIKeyID,
+		&event.EventType, &relatedID, &version, &event.TermsContractVersion,
+		&event.ExactTermsSHA256, &event.idempotencyKeyHash, &event.payloadHash,
+		&event.ProviderAcceptanceReference, &event.ProviderAcceptedAt,
+		&validUntil, &event.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if offerID.Valid {
+		event.ProviderOfferID = offerID.String
+	}
+	if relatedID.Valid {
+		event.RelatedAcceptanceEventID = relatedID.String
+	}
+	if version.Valid {
+		value := int(version.Int64)
+		event.OfferVersionSnapshot = &value
+	}
+	if validUntil.Valid {
+		event.ValidUntil = &validUntil.Time
+	}
+	return &event, nil
+}
+
+func providerCommercialAcceptancePayloadHash(input ProviderCommercialAcceptanceInput) string {
+	controlled := []string{
+		strings.ToLower(strings.TrimSpace(input.EventType)),
+		strings.ToLower(strings.TrimSpace(input.ProviderOfferID)),
+		strings.ToLower(strings.TrimSpace(input.RelatedAcceptanceEventID)),
+		strconv.Itoa(input.ExpectedOfferVersion),
+		strings.ToLower(strings.TrimSpace(input.ExpectedExactTermsSHA256)),
+		strings.TrimSpace(input.ProviderReference),
+	}
+	sum := sha256.Sum256([]byte(strings.Join(controlled, "\x00")))
+	return hex.EncodeToString(sum[:])
+}
+
+// RecordProviderCommercialAcceptance is the provider-authenticated half of
+// commercial proof. It records either pilot-company participation or exact CPA
+// terms; owner verification is a distinct, later event and cannot be inferred
+// from this row alone.
+func RecordProviderCommercialAcceptance(
+	db *sql.DB,
+	key *ProviderAPIKey,
+	input ProviderCommercialAcceptanceInput,
+) (*ProviderCommercialAcceptanceEvent, bool, error) {
+	input.EventType = strings.ToLower(strings.TrimSpace(input.EventType))
+	input.ProviderOfferID = strings.ToLower(strings.TrimSpace(input.ProviderOfferID))
+	input.RelatedAcceptanceEventID = strings.ToLower(strings.TrimSpace(input.RelatedAcceptanceEventID))
+	input.ExpectedExactTermsSHA256 = strings.ToLower(strings.TrimSpace(input.ExpectedExactTermsSHA256))
+	input.IdempotencyKey = strings.TrimSpace(input.IdempotencyKey)
+	input.ProviderReference = strings.TrimSpace(input.ProviderReference)
+	input.PayloadHash = providerCommercialAcceptancePayloadHash(input)
+	if db == nil || key == nil || key.ID < 1 || !validProviderUUID(key.ProviderClaimID) ||
+		!validProviderOpaqueValue(input.IdempotencyKey) ||
+		!validProviderReference(input.ProviderReference) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	switch input.EventType {
+	case "pilot_company":
+		if input.ProviderOfferID != "" || input.RelatedAcceptanceEventID != "" ||
+			input.ExpectedOfferVersion != 0 || input.ExpectedExactTermsSHA256 != "" {
+			return nil, false, ErrInvalidProviderExchange
+		}
+	case "terms_acceptance":
+		if !validProviderUUID(input.ProviderOfferID) || input.RelatedAcceptanceEventID != "" ||
+			input.ExpectedOfferVersion < 1 || !providerHashPattern.MatchString(input.ExpectedExactTermsSHA256) {
+			return nil, false, ErrInvalidProviderExchange
+		}
+	case "terms_renewal":
+		if !validProviderUUID(input.ProviderOfferID) || !validProviderUUID(input.RelatedAcceptanceEventID) ||
+			input.ExpectedOfferVersion < 1 || !providerHashPattern.MatchString(input.ExpectedExactTermsSHA256) {
+			return nil, false, ErrInvalidProviderExchange
+		}
+	default:
+		return nil, false, ErrInvalidProviderExchange
+	}
+
+	idempotencyHash := HashProviderSecret(input.IdempotencyKey)
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	var claimStatus, keyStatus string
+	var lastSucceededAt time.Time
+	if err := tx.QueryRow(`
+		SELECT claim.status, claim.verification_last_succeeded_at, api_key.status
+		FROM provider_claims claim
+		JOIN provider_api_keys api_key
+		  ON api_key.id=$2 AND api_key.provider_claim_id=claim.id
+		WHERE claim.id=$1::uuid
+		FOR UPDATE OF claim, api_key`, key.ProviderClaimID, key.ID).
+		Scan(&claimStatus, &lastSucceededAt, &keyStatus); err != nil {
+		return nil, false, err
+	}
+	authorizedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, false, err
+	}
+	if claimStatus != "verified" {
+		return nil, false, ErrProviderClaimNotVerified
+	}
+	if !providerClaimVerificationFresh(lastSucceededAt, authorizedAt) {
+		return nil, false, ErrProviderClaimVerificationStale
+	}
+	if keyStatus != "active" {
+		return nil, false, sql.ErrNoRows
+	}
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
+		providerAcceptanceNamespace+":"+key.ProviderClaimID, idempotencyHash); err != nil {
+		return nil, false, err
+	}
+	existing, err := scanProviderCommercialAcceptance(tx.QueryRow(`
+		SELECT `+providerCommercialAcceptanceColumns+`
+		FROM provider_commercial_acceptance_events
+		WHERE provider_claim_id=$1::uuid AND idempotency_key_hash=$2`,
+		key.ProviderClaimID, idempotencyHash))
+	if err == nil {
+		if existing.payloadHash != input.PayloadHash || existing.EventType != input.EventType ||
+			existing.ProviderOfferID != input.ProviderOfferID ||
+			existing.RelatedAcceptanceEventID != input.RelatedAcceptanceEventID ||
+			existing.ProviderAcceptanceReference != input.ProviderReference ||
+			existing.ProviderAPIKeyID != key.ID {
+			return nil, false, ErrProviderIdempotency
+		}
+		existing.Replayed = true
+		if err := tx.Commit(); err != nil {
+			return nil, false, err
+		}
+		return existing, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+
+	var offerVersion any
+	termsContractVersion := ""
+	exactTermsSHA256 := ""
+	var validUntil any
+	if input.EventType != "pilot_company" {
+		if err := lockProviderOffer(tx, input.ProviderOfferID); err != nil {
+			return nil, false, err
+		}
+		offer, err := getProviderOfferTx(tx, input.ProviderOfferID)
+		if err != nil {
+			return nil, false, err
+		}
+		if offer.ProviderClaimID != key.ProviderClaimID || offer.BillingMode != "terms" ||
+			offer.TermsPeriodDays == nil || offer.CommercialTermsContractVersion != ProviderCommercialTermsContractV1 ||
+			!providerHashPattern.MatchString(offer.CommercialTermsSHA256) ||
+			offer.CommercialTermsSHA256 != providerCommercialTermsHashFromOffer(offer) ||
+			offer.Version != input.ExpectedOfferVersion ||
+			offer.CommercialTermsSHA256 != input.ExpectedExactTermsSHA256 {
+			return nil, false, ErrInvalidProviderExchange
+		}
+		offerVersion = offer.Version
+		termsContractVersion = offer.CommercialTermsContractVersion
+		exactTermsSHA256 = offer.CommercialTermsSHA256
+		validFrom := authorizedAt
+		if input.EventType == "terms_renewal" {
+			prior, err := scanProviderCommercialAcceptance(tx.QueryRow(`
+				SELECT `+providerCommercialAcceptanceColumns+`
+				FROM provider_commercial_acceptance_events
+				WHERE id=$1::uuid AND provider_claim_id=$2::uuid
+				FOR UPDATE`, input.RelatedAcceptanceEventID, key.ProviderClaimID))
+			if err != nil {
+				return nil, false, err
+			}
+			if prior.ProviderOfferID != offer.ID || prior.ValidUntil == nil ||
+				(prior.EventType != "terms_acceptance" && prior.EventType != "terms_renewal") ||
+				prior.ExactTermsSHA256 != exactTermsSHA256 {
+				return nil, false, ErrInvalidProviderExchange
+			}
+			if prior.ValidUntil.After(validFrom) {
+				validFrom = *prior.ValidUntil
+			}
+		}
+		validUntil = validFrom.Add(time.Duration(*offer.TermsPeriodDays) * 24 * time.Hour)
+	} else {
+		offerVersion = nil
+		validUntil = nil
+	}
+
+	event, err := scanProviderCommercialAcceptance(tx.QueryRow(`
+		INSERT INTO provider_commercial_acceptance_events (
+			provider_claim_id, provider_offer_id, provider_api_key_id,
+			event_type, related_acceptance_event_id, offer_version_snapshot,
+			terms_contract_version, exact_terms_sha256,
+			idempotency_key_hash, payload_hash, provider_acceptance_reference,
+			provider_accepted_at, valid_until, created_at
+		) VALUES (
+			$1::uuid,NULLIF($2,'')::uuid,$3,$4,NULLIF($5,'')::uuid,$6,
+			$7,$8,$9,$10,$11,$12,$13,$12
+		)
+		RETURNING `+providerCommercialAcceptanceColumns,
+		key.ProviderClaimID, input.ProviderOfferID, key.ID, input.EventType,
+		input.RelatedAcceptanceEventID, offerVersion, termsContractVersion,
+		exactTermsSHA256, idempotencyHash, input.PayloadHash,
+		input.ProviderReference, authorizedAt, validUntil))
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := tx.Exec(`UPDATE provider_api_keys SET last_used_at=$1 WHERE id=$2`, authorizedAt, key.ID); err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return event, true, nil
+}
+
+func scanProviderPilotCompany(row rowScanner) (*ProviderPilotCompany, error) {
+	var company ProviderPilotCompany
+	if err := row.Scan(
+		&company.ID, &company.CompanyKeyHash, &company.ProviderClaimID,
+		&company.ProviderAPIKeyID, &company.ProviderAcceptanceEventID,
+		&company.ProviderAcceptanceReference, &company.IdentityEvidenceReference,
+		&company.OperatorReference, &company.ProviderAcceptedAt,
+		&company.OwnerVerifiedAt, &company.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &company, nil
+}
+
+const providerPilotCompanyColumns = `
+	id::text, company_key_hash, provider_claim_id::text, provider_api_key_id,
+	provider_acceptance_event_id::text, provider_acceptance_reference,
+	identity_evidence_reference, operator_reference, provider_accepted_at,
+	owner_verified_at, created_at`
+
+// VerifyProviderPilotCompany binds one provider-authenticated canonical claim
+// to one owner-deduplicated external company key. The key is already a keyed
+// digest; raw legal identity never enters NHS storage.
+func VerifyProviderPilotCompany(
+	db *sql.DB,
+	acceptanceEventID, companyKeyHash, operatorReference, identityEvidenceReference string,
+) (*ProviderPilotCompany, bool, error) {
+	acceptanceEventID = strings.ToLower(strings.TrimSpace(acceptanceEventID))
+	companyKeyHash = strings.ToLower(strings.TrimSpace(companyKeyHash))
+	operatorReference = strings.TrimSpace(operatorReference)
+	identityEvidenceReference = strings.TrimSpace(identityEvidenceReference)
+	if db == nil || !validProviderUUID(acceptanceEventID) ||
+		!providerHashPattern.MatchString(companyKeyHash) ||
+		!validProviderReference(operatorReference) ||
+		!validProviderReference(identityEvidenceReference) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	var acceptanceClaimID string
+	if err := tx.QueryRow(`
+		SELECT provider_claim_id::text
+		FROM provider_commercial_acceptance_events
+		WHERE id=$1::uuid`, acceptanceEventID).Scan(&acceptanceClaimID); err != nil {
+		return nil, false, err
+	}
+	var claimStatus string
+	var lastSucceededAt time.Time
+	if err := tx.QueryRow(`
+		SELECT status, verification_last_succeeded_at FROM provider_claims
+		WHERE id=$1::uuid FOR UPDATE`, acceptanceClaimID).
+		Scan(&claimStatus, &lastSucceededAt); err != nil {
+		return nil, false, err
+	}
+	accepted, err := scanProviderCommercialAcceptance(tx.QueryRow(`
+		SELECT `+providerCommercialAcceptanceColumns+`
+		FROM provider_commercial_acceptance_events
+		WHERE id=$1::uuid AND provider_claim_id=$2::uuid
+		FOR UPDATE`, acceptanceEventID, acceptanceClaimID))
+	if err != nil {
+		return nil, false, err
+	}
+	if accepted.EventType != "pilot_company" {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	verifiedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, false, err
+	}
+	if claimStatus != "verified" {
+		return nil, false, ErrProviderClaimNotVerified
+	}
+	if !providerClaimVerificationFresh(lastSucceededAt, verifiedAt) {
+		return nil, false, ErrProviderClaimVerificationStale
+	}
+	// The claim row serializes one claim/acceptance. A keyed company digest is
+	// the only uniqueness boundary shared across claims, so lock that digest
+	// explicitly before lookup/insert. PostgreSQL forbids ON CONFLICT on this
+	// append-only table because it has UPDATE/DELETE rules.
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
+		providerCompanyKeyNamespace, companyKeyHash); err != nil {
+		return nil, false, err
+	}
+	existing, err := scanProviderPilotCompany(tx.QueryRow(`
+		SELECT `+providerPilotCompanyColumns+`
+		FROM provider_pilot_companies
+		WHERE provider_claim_id=$1::uuid OR company_key_hash=$2 OR provider_acceptance_event_id=$3::uuid
+		ORDER BY CASE WHEN provider_acceptance_event_id=$3::uuid THEN 0 ELSE 1 END
+		LIMIT 1`, accepted.ProviderClaimID, companyKeyHash, acceptanceEventID))
+	if err == nil {
+		if existing.ProviderClaimID != accepted.ProviderClaimID ||
+			existing.CompanyKeyHash != companyKeyHash ||
+			existing.ProviderAPIKeyID != accepted.ProviderAPIKeyID ||
+			existing.ProviderAcceptanceEventID != accepted.ID ||
+			existing.ProviderAcceptanceReference != accepted.ProviderAcceptanceReference ||
+			existing.OperatorReference != operatorReference ||
+			existing.IdentityEvidenceReference != identityEvidenceReference {
+			return nil, false, ErrProviderIdempotency
+		}
+		existing.Replayed = true
+		if err := tx.Commit(); err != nil {
+			return nil, false, err
+		}
+		return existing, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+	company, err := scanProviderPilotCompany(tx.QueryRow(`
+		INSERT INTO provider_pilot_companies (
+			company_key_hash, provider_claim_id, provider_api_key_id,
+			provider_acceptance_event_id, provider_acceptance_reference,
+			identity_evidence_reference, operator_reference,
+			provider_accepted_at, owner_verified_at, created_at
+		) VALUES ($1,$2::uuid,$3,$4::uuid,$5,$6,$7,$8,$9,$9)
+		RETURNING `+providerPilotCompanyColumns,
+		companyKeyHash, accepted.ProviderClaimID, accepted.ProviderAPIKeyID,
+		accepted.ID, accepted.ProviderAcceptanceReference,
+		identityEvidenceReference, operatorReference, accepted.ProviderAcceptedAt,
+		verifiedAt))
+	if err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return company, true, nil
+}
+
+const providerCommercialCommitmentColumns = `
+	id::text, provider_pilot_company_id::text, provider_claim_id::text,
+	provider_offer_id::text, provider_api_key_id, event_type,
+	related_event_id::text, provider_acceptance_event_id::text,
+	budget_ledger_entry_id, qualifying_action_ticket_id::text,
+	offer_version_snapshot, terms_contract_version, exact_terms_sha256,
+	amount_cents, currency, source_system, source_event_id,
+	source_effective_at, provider_acceptance_reference, operator_reference,
+	owner_evidence_reference, provider_accepted_at, valid_until,
+	owner_verified_at, created_at`
+
+func scanProviderCommercialCommitment(row rowScanner) (*ProviderCommercialCommitmentEvent, error) {
+	var event ProviderCommercialCommitmentEvent
+	var relatedID, acceptanceID, ticketID sql.NullString
+	var budgetID sql.NullInt64
+	var validUntil sql.NullTime
+	if err := row.Scan(
+		&event.ID, &event.ProviderPilotCompanyID, &event.ProviderClaimID,
+		&event.ProviderOfferID, &event.ProviderAPIKeyID, &event.EventType,
+		&relatedID, &acceptanceID, &budgetID, &ticketID,
+		&event.OfferVersionSnapshot, &event.TermsContractVersion,
+		&event.ExactTermsSHA256, &event.AmountCents, &event.Currency,
+		&event.SourceSystem, &event.SourceEventID, &event.SourceEffectiveAt,
+		&event.ProviderAcceptanceReference, &event.OperatorReference,
+		&event.OwnerEvidenceReference, &event.ProviderAcceptedAt,
+		&validUntil, &event.OwnerVerifiedAt, &event.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	if relatedID.Valid {
+		event.RelatedEventID = relatedID.String
+	}
+	if acceptanceID.Valid {
+		event.ProviderAcceptanceEventID = acceptanceID.String
+	}
+	if budgetID.Valid {
+		value := budgetID.Int64
+		event.BudgetLedgerEntryID = &value
+	}
+	if ticketID.Valid {
+		event.QualifyingActionTicketID = ticketID.String
+	}
+	if validUntil.Valid {
+		event.ValidUntil = &validUntil.Time
+	}
+	return &event, nil
+}
+
+func normalizeProviderCommercialSource(system, event string) (string, string, string, error) {
+	system = strings.ToLower(strings.TrimSpace(system))
+	event = strings.TrimSpace(event)
+	externalReference := system + ":" + event
+	if !validProviderReference(system) || len(system) > 80 ||
+		!validProviderReference(event) || len(event) > 120 ||
+		!validProviderReference(externalReference) || len(externalReference) > 200 {
+		return "", "", "", ErrInvalidProviderExchange
+	}
+	return system, event, externalReference, nil
+}
+
+func lockProviderPilotCompanyForOffer(tx *sql.Tx, offerID string) (*ProviderPilotCompany, *ProviderOffer, error) {
+	claimID, err := lockVerifiedProviderOfferClaim(tx, offerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := lockProviderOffer(tx, offerID); err != nil {
+		return nil, nil, err
+	}
+	offer, err := getProviderOfferTx(tx, offerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if offer.ProviderClaimID != claimID ||
+		offer.CommercialTermsContractVersion != ProviderCommercialTermsContractV1 ||
+		!providerHashPattern.MatchString(offer.CommercialTermsSHA256) ||
+		offer.CommercialTermsSHA256 != providerCommercialTermsHashFromOffer(offer) {
+		return nil, nil, ErrInvalidProviderExchange
+	}
+	company, err := scanProviderPilotCompany(tx.QueryRow(`
+		SELECT `+providerPilotCompanyColumns+`
+		FROM provider_pilot_companies
+		WHERE provider_claim_id=$1::uuid FOR SHARE`, claimID))
+	if err != nil {
+		return nil, nil, err
+	}
+	return company, offer, nil
+}
+
+// lockProviderPilotCompanyForReversal deliberately does not require current
+// claim ownership. An external refund or chargeback must remain recordable even
+// after the provider's DNS claim becomes stale or revoked; otherwise NHS would
+// overstate both budget and commercial proof.
+func lockProviderPilotCompanyForReversal(tx *sql.Tx, offerID string) (*ProviderPilotCompany, *ProviderOffer, error) {
+	var claimID, lockedClaimID string
+	if err := tx.QueryRow(`
+		SELECT provider_claim_id::text FROM provider_offers
+		WHERE id=$1::uuid`, offerID).Scan(&claimID); err != nil {
+		return nil, nil, err
+	}
+	// Preserve the global claim-row -> offer-advisory lock order used by every
+	// normal funding, ticket, outcome, activation, and revocation path. Status
+	// and freshness are intentionally not authorization gates for a reversal.
+	if err := tx.QueryRow(`
+		SELECT id::text FROM provider_claims
+		WHERE id=$1::uuid FOR UPDATE`, claimID).Scan(&lockedClaimID); err != nil {
+		return nil, nil, err
+	}
+	if lockedClaimID != claimID {
+		return nil, nil, errors.New("provider claim changed during funding reversal")
+	}
+	if err := lockProviderOffer(tx, offerID); err != nil {
+		return nil, nil, err
+	}
+	offer, err := getProviderOfferTx(tx, offerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if offer.ProviderClaimID != claimID ||
+		offer.CommercialTermsContractVersion != ProviderCommercialTermsContractV1 ||
+		!providerHashPattern.MatchString(offer.CommercialTermsSHA256) ||
+		offer.CommercialTermsSHA256 != providerCommercialTermsHashFromOffer(offer) {
+		return nil, nil, ErrInvalidProviderExchange
+	}
+	company, err := scanProviderPilotCompany(tx.QueryRow(`
+		SELECT `+providerPilotCompanyColumns+`
+		FROM provider_pilot_companies
+		WHERE provider_claim_id=$1::uuid FOR SHARE`, offer.ProviderClaimID))
+	if err != nil {
+		return nil, nil, err
+	}
+	return company, offer, nil
+}
+
+func existingProviderCommercialSource(
+	tx *sql.Tx, sourceSystem, sourceEventID string,
+) (*ProviderCommercialCommitmentEvent, error) {
+	return scanProviderCommercialCommitment(tx.QueryRow(`
+		SELECT `+providerCommercialCommitmentColumns+`
+		FROM provider_commercial_commitment_events
+		WHERE source_system=$1 AND source_event_id=$2`, sourceSystem, sourceEventID))
+}
+
+// providerOfferCommercialLedgerClean prevents a real external receipt from
+// being irreversibly attached to an offer that the public/proof eligibility
+// contract must reject. Exact replays are checked before this preflight so a
+// later direct-SQL contamination cannot erase an already-recorded receipt.
+func providerOfferCommercialLedgerClean(tx *sql.Tx, offerID string) (bool, error) {
+	var clean bool
+	err := tx.QueryRow(`
+		SELECT NOT EXISTS (
+			SELECT 1 FROM provider_budget_ledger unverified
+			WHERE unverified.provider_offer_id=$1::uuid
+			  AND unverified.entry_type IN ('fund','adjustment')
+			  AND NOT EXISTS (
+				SELECT 1 FROM provider_commercial_commitment_events linked
+				WHERE linked.budget_ledger_entry_id=unverified.id
+				  AND (
+					(linked.event_type='prepaid_fund' AND unverified.entry_type='fund') OR
+					(linked.event_type='fund_reversal' AND unverified.entry_type='adjustment')
+				  )
+			  )
+		)`, offerID).Scan(&clean)
+	return clean, err
+}
+
+// RecordVerifiedProviderFunding atomically records operational prepaid balance
+// and owner-verified external settlement evidence. A qualifying charged ticket
+// is optional for initial funding and mandatory for replenishment proof.
+func RecordVerifiedProviderFunding(
+	db *sql.DB,
+	input VerifiedProviderFundingInput,
+) (*ProviderCommercialCommitmentEvent, bool, error) {
+	input.ProviderOfferID = strings.ToLower(strings.TrimSpace(input.ProviderOfferID))
+	input.Currency = strings.ToLower(strings.TrimSpace(input.Currency))
+	input.QualifyingActionTicketID = strings.ToLower(strings.TrimSpace(input.QualifyingActionTicketID))
+	input.OperatorReference = strings.TrimSpace(input.OperatorReference)
+	input.OwnerEvidenceReference = strings.TrimSpace(input.OwnerEvidenceReference)
+	sourceSystem, sourceEventID, externalReference, err := normalizeProviderCommercialSource(input.SourceSystem, input.SourceEventID)
+	if err != nil || db == nil || !validProviderUUID(input.ProviderOfferID) ||
+		input.AmountCents < 1 || input.AmountCents > ProviderMoneyMaximumCents ||
+		input.Currency != "usd" || input.SourceEffectiveAt.IsZero() ||
+		(input.QualifyingActionTicketID != "" && !validProviderUUID(input.QualifyingActionTicketID)) ||
+		!validProviderReference(input.OperatorReference) ||
+		!validProviderReference(input.OwnerEvidenceReference) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	company, offer, err := lockProviderPilotCompanyForOffer(tx, input.ProviderOfferID)
+	if err != nil {
+		return nil, false, err
+	}
+	if offer.BillingMode != "prepaid" || offer.Currency != input.Currency {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
+		providerCommercialSourceNamespace+":"+sourceSystem, sourceEventID); err != nil {
+		return nil, false, err
+	}
+	existing, err := existingProviderCommercialSource(tx, sourceSystem, sourceEventID)
+	if err == nil {
+		if existing.EventType != "prepaid_fund" || existing.ProviderOfferID != offer.ID ||
+			existing.AmountCents != input.AmountCents || existing.Currency != input.Currency ||
+			!existing.SourceEffectiveAt.Equal(input.SourceEffectiveAt.UTC()) ||
+			existing.QualifyingActionTicketID != input.QualifyingActionTicketID ||
+			existing.OperatorReference != input.OperatorReference ||
+			existing.OwnerEvidenceReference != input.OwnerEvidenceReference {
+			return nil, false, ErrProviderIdempotency
+		}
+		existing.Replayed = true
+		if err := tx.Commit(); err != nil {
+			return nil, false, err
+		}
+		return existing, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+	cleanLedger, err := providerOfferCommercialLedgerClean(tx, offer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !cleanLedger {
+		return nil, false, ErrProviderCommercialLedgerContaminated
+	}
+	verifiedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, false, err
+	}
+	input.SourceEffectiveAt = input.SourceEffectiveAt.UTC()
+	if input.SourceEffectiveAt.After(verifiedAt) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	balance, err := providerOfferBalance(tx, offer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if balance > ProviderMoneyMaximumCents-input.AmountCents {
+		return nil, false, ErrProviderBudgetLimit
+	}
+	creditExposure, err := providerOutstandingCreditExposure(tx, offer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if creditExposure > ProviderMoneyMaximumCents-balance-input.AmountCents {
+		return nil, false, ErrProviderBudgetLimit
+	}
+	var budgetLedgerID int64
+	if err := tx.QueryRow(`
+		INSERT INTO provider_budget_ledger (
+			provider_claim_id, provider_offer_id, entry_type,
+			amount_cents, currency, external_reference, created_at
+		) VALUES ($1::uuid,$2::uuid,'fund',$3,$4,$5,$6)
+		RETURNING id`, offer.ProviderClaimID, offer.ID, input.AmountCents,
+		input.Currency, externalReference, verifiedAt).Scan(&budgetLedgerID); err != nil {
+		return nil, false, err
+	}
+	event, err := scanProviderCommercialCommitment(tx.QueryRow(`
+		INSERT INTO provider_commercial_commitment_events (
+			provider_pilot_company_id, provider_claim_id, provider_offer_id,
+			provider_api_key_id, event_type, budget_ledger_entry_id,
+			qualifying_action_ticket_id, offer_version_snapshot,
+			terms_contract_version, exact_terms_sha256, amount_cents, currency,
+			source_system, source_event_id, source_effective_at,
+			provider_acceptance_reference, operator_reference,
+			owner_evidence_reference, provider_accepted_at,
+			owner_verified_at, created_at
+		) VALUES (
+			$1::uuid,$2::uuid,$3::uuid,$4,'prepaid_fund',$5,
+			NULLIF($6,'')::uuid,$7,$8,$9,$10,$11,$12,$13,$14,
+			$15,$16,$17,$18,$19,$19
+		)
+		RETURNING `+providerCommercialCommitmentColumns,
+		company.ID, offer.ProviderClaimID, offer.ID, company.ProviderAPIKeyID,
+		budgetLedgerID, input.QualifyingActionTicketID, offer.Version,
+		offer.CommercialTermsContractVersion, offer.CommercialTermsSHA256,
+		input.AmountCents, input.Currency, sourceSystem, sourceEventID,
+		input.SourceEffectiveAt, company.ProviderAcceptanceReference,
+		input.OperatorReference, input.OwnerEvidenceReference,
+		company.ProviderAcceptedAt, verifiedAt))
+	if err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return event, true, nil
+}
+
+// RecordVerifiedProviderTerms verifies owner-held evidence for one exact,
+// provider-key-authenticated acceptance. A renewal must point to the preceding
+// owner-verified terms event and extend the same canonical hash.
+func RecordVerifiedProviderTerms(
+	db *sql.DB,
+	input VerifiedProviderTermsInput,
+) (*ProviderCommercialCommitmentEvent, bool, error) {
+	input.ProviderOfferID = strings.ToLower(strings.TrimSpace(input.ProviderOfferID))
+	input.ProviderAcceptanceEventID = strings.ToLower(strings.TrimSpace(input.ProviderAcceptanceEventID))
+	input.RelatedCommitmentEventID = strings.ToLower(strings.TrimSpace(input.RelatedCommitmentEventID))
+	input.OperatorReference = strings.TrimSpace(input.OperatorReference)
+	input.OwnerEvidenceReference = strings.TrimSpace(input.OwnerEvidenceReference)
+	sourceSystem, sourceEventID, _, err := normalizeProviderCommercialSource(input.SourceSystem, input.SourceEventID)
+	if err != nil || db == nil || !validProviderUUID(input.ProviderOfferID) ||
+		!validProviderUUID(input.ProviderAcceptanceEventID) ||
+		(input.RelatedCommitmentEventID != "" && !validProviderUUID(input.RelatedCommitmentEventID)) ||
+		input.SourceEffectiveAt.IsZero() ||
+		!validProviderReference(input.OperatorReference) ||
+		!validProviderReference(input.OwnerEvidenceReference) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	company, offer, err := lockProviderPilotCompanyForOffer(tx, input.ProviderOfferID)
+	if err != nil {
+		return nil, false, err
+	}
+	if offer.BillingMode != "terms" {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
+		providerCommercialSourceNamespace+":"+sourceSystem, sourceEventID); err != nil {
+		return nil, false, err
+	}
+	existing, err := existingProviderCommercialSource(tx, sourceSystem, sourceEventID)
+	if err == nil {
+		if existing.ProviderOfferID != offer.ID ||
+			existing.ProviderAcceptanceEventID != input.ProviderAcceptanceEventID ||
+			existing.RelatedEventID != input.RelatedCommitmentEventID ||
+			!existing.SourceEffectiveAt.Equal(input.SourceEffectiveAt.UTC()) ||
+			existing.OperatorReference != input.OperatorReference ||
+			existing.OwnerEvidenceReference != input.OwnerEvidenceReference {
+			return nil, false, ErrProviderIdempotency
+		}
+		existing.Replayed = true
+		if err := tx.Commit(); err != nil {
+			return nil, false, err
+		}
+		return existing, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+	cleanLedger, err := providerOfferCommercialLedgerClean(tx, offer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if !cleanLedger {
+		return nil, false, ErrProviderCommercialLedgerContaminated
+	}
+	accepted, err := scanProviderCommercialAcceptance(tx.QueryRow(`
+		SELECT `+providerCommercialAcceptanceColumns+`
+		FROM provider_commercial_acceptance_events
+		WHERE id=$1::uuid AND provider_claim_id=$2::uuid
+		FOR UPDATE`, input.ProviderAcceptanceEventID, offer.ProviderClaimID))
+	if err != nil {
+		return nil, false, err
+	}
+	if accepted.ProviderOfferID != offer.ID || accepted.ValidUntil == nil ||
+		accepted.ExactTermsSHA256 != offer.CommercialTermsSHA256 ||
+		accepted.TermsContractVersion != offer.CommercialTermsContractVersion ||
+		accepted.OfferVersionSnapshot == nil || *accepted.OfferVersionSnapshot != offer.Version ||
+		(accepted.EventType != "terms_acceptance" && accepted.EventType != "terms_renewal") {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	if accepted.EventType == "terms_acceptance" && input.RelatedCommitmentEventID != "" {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	if accepted.EventType == "terms_renewal" && input.RelatedCommitmentEventID == "" {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	verifiedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, false, err
+	}
+	if !accepted.ValidUntil.After(verifiedAt) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	input.SourceEffectiveAt = input.SourceEffectiveAt.UTC()
+	if input.SourceEffectiveAt.After(verifiedAt) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	event, err := scanProviderCommercialCommitment(tx.QueryRow(`
+		INSERT INTO provider_commercial_commitment_events (
+			provider_pilot_company_id, provider_claim_id, provider_offer_id,
+			provider_api_key_id, event_type, related_event_id,
+			provider_acceptance_event_id, offer_version_snapshot,
+			terms_contract_version, exact_terms_sha256, amount_cents, currency,
+			source_system, source_event_id, source_effective_at,
+			provider_acceptance_reference, operator_reference,
+			owner_evidence_reference, provider_accepted_at, valid_until,
+			owner_verified_at, created_at
+		) VALUES (
+			$1::uuid,$2::uuid,$3::uuid,$4,$5,NULLIF($6,'')::uuid,
+			$7::uuid,$8,$9,$10,0,'usd',$11,$12,$13,$14,$15,$16,$17,$18,$19,$19
+		)
+		RETURNING `+providerCommercialCommitmentColumns,
+		company.ID, offer.ProviderClaimID, offer.ID, accepted.ProviderAPIKeyID,
+		accepted.EventType, input.RelatedCommitmentEventID, accepted.ID,
+		offer.Version, offer.CommercialTermsContractVersion,
+		offer.CommercialTermsSHA256, sourceSystem, sourceEventID,
+		input.SourceEffectiveAt, accepted.ProviderAcceptanceReference,
+		input.OperatorReference, input.OwnerEvidenceReference,
+		accepted.ProviderAcceptedAt, accepted.ValidUntil, verifiedAt))
+	if err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return event, true, nil
+}
+
+// ReverseVerifiedProviderFunding records an external partial/full reversal and
+// the matching negative accounting entry in one transaction. If remaining
+// balance can no longer cover promised tickets, the offer is paused and live
+// authorizations are revoked in the same commit.
+func ReverseVerifiedProviderFunding(
+	db *sql.DB,
+	input ProviderFundingReversalInput,
+) (*ProviderCommercialCommitmentEvent, bool, error) {
+	input.RelatedCommitmentEventID = strings.ToLower(strings.TrimSpace(input.RelatedCommitmentEventID))
+	input.OperatorReference = strings.TrimSpace(input.OperatorReference)
+	input.OwnerEvidenceReference = strings.TrimSpace(input.OwnerEvidenceReference)
+	sourceSystem, sourceEventID, externalReference, err := normalizeProviderCommercialSource(input.SourceSystem, input.SourceEventID)
+	if err != nil || db == nil || !validProviderUUID(input.RelatedCommitmentEventID) ||
+		input.AmountCents < 1 || input.AmountCents > ProviderMoneyMaximumCents ||
+		input.SourceEffectiveAt.IsZero() ||
+		!validProviderReference(input.OperatorReference) ||
+		!validProviderReference(input.OwnerEvidenceReference) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	var offerID string
+	if err := tx.QueryRow(`
+		SELECT provider_offer_id::text FROM provider_commercial_commitment_events
+		WHERE id=$1::uuid`, input.RelatedCommitmentEventID).Scan(&offerID); err != nil {
+		return nil, false, err
+	}
+	company, offer, err := lockProviderPilotCompanyForReversal(tx, offerID)
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))`,
+		providerCommercialSourceNamespace+":"+sourceSystem, sourceEventID); err != nil {
+		return nil, false, err
+	}
+	existing, err := existingProviderCommercialSource(tx, sourceSystem, sourceEventID)
+	if err == nil {
+		if existing.EventType != "fund_reversal" ||
+			existing.RelatedEventID != input.RelatedCommitmentEventID ||
+			existing.AmountCents != -input.AmountCents ||
+			!existing.SourceEffectiveAt.Equal(input.SourceEffectiveAt.UTC()) ||
+			existing.OperatorReference != input.OperatorReference ||
+			existing.OwnerEvidenceReference != input.OwnerEvidenceReference {
+			return nil, false, ErrProviderIdempotency
+		}
+		existing.Replayed = true
+		if err := tx.Commit(); err != nil {
+			return nil, false, err
+		}
+		return existing, false, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, false, err
+	}
+	related, err := scanProviderCommercialCommitment(tx.QueryRow(`
+		SELECT `+providerCommercialCommitmentColumns+`
+		FROM provider_commercial_commitment_events
+		WHERE id=$1::uuid FOR UPDATE`, input.RelatedCommitmentEventID))
+	if err != nil {
+		return nil, false, err
+	}
+	if related.EventType != "prepaid_fund" || related.ProviderOfferID != offer.ID ||
+		related.ProviderPilotCompanyID != company.ID {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	verifiedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, false, err
+	}
+	input.SourceEffectiveAt = input.SourceEffectiveAt.UTC()
+	if input.SourceEffectiveAt.Before(related.SourceEffectiveAt) || input.SourceEffectiveAt.After(verifiedAt) {
+		return nil, false, ErrInvalidProviderExchange
+	}
+	balance, err := providerOfferBalance(tx, offer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if balance < -ProviderMoneyMaximumCents+input.AmountCents {
+		return nil, false, ErrProviderBudgetLimit
+	}
+	var budgetLedgerID int64
+	if err := tx.QueryRow(`
+		INSERT INTO provider_budget_ledger (
+			provider_claim_id, provider_offer_id, entry_type,
+			amount_cents, currency, external_reference, created_at
+		) VALUES ($1::uuid,$2::uuid,'adjustment',$3,'usd',$4,$5)
+		RETURNING id`, offer.ProviderClaimID, offer.ID, -input.AmountCents,
+		externalReference, verifiedAt).Scan(&budgetLedgerID); err != nil {
+		return nil, false, err
+	}
+	event, err := scanProviderCommercialCommitment(tx.QueryRow(`
+		INSERT INTO provider_commercial_commitment_events (
+			provider_pilot_company_id, provider_claim_id, provider_offer_id,
+			provider_api_key_id, event_type, related_event_id,
+			budget_ledger_entry_id, offer_version_snapshot,
+			terms_contract_version, exact_terms_sha256, amount_cents, currency,
+			source_system, source_event_id, source_effective_at,
+			provider_acceptance_reference, operator_reference,
+			owner_evidence_reference, provider_accepted_at,
+			owner_verified_at, created_at
+		) VALUES (
+			$1::uuid,$2::uuid,$3::uuid,$4,'fund_reversal',$5::uuid,
+			$6,$7,$8,$9,$10,'usd',$11,$12,$13,$14,$15,$16,$17,$18,$18
+		)
+		RETURNING `+providerCommercialCommitmentColumns,
+		company.ID, offer.ProviderClaimID, offer.ID, company.ProviderAPIKeyID,
+		related.ID, budgetLedgerID, offer.Version,
+		offer.CommercialTermsContractVersion, offer.CommercialTermsSHA256,
+		-input.AmountCents, sourceSystem, sourceEventID,
+		input.SourceEffectiveAt, company.ProviderAcceptanceReference,
+		input.OperatorReference, input.OwnerEvidenceReference,
+		company.ProviderAcceptedAt, verifiedAt))
+	if err != nil {
+		return nil, false, err
+	}
+	newBalance := balance - input.AmountCents
+	reserved, err := providerActiveReservedCapacity(tx, offer.ID)
+	if err != nil {
+		return nil, false, err
+	}
+	if offer.Status == "active" && (newBalance < offer.BountyCents || reserved > newBalance) {
+		if _, err := tx.Exec(`
+			UPDATE provider_offers
+			SET status='paused', paused_at=COALESCE(paused_at,$1), updated_at=$1
+			WHERE id=$2::uuid`, verifiedAt, offer.ID); err != nil {
+			return nil, false, err
+		}
+		if _, err := tx.Exec(`
+			UPDATE action_tickets
+			SET authorization_revoked_at=COALESCE(authorization_revoked_at,$1), updated_at=$1
+			WHERE provider_offer_id=$2::uuid AND authorization_revoked_at IS NULL
+			  AND expires_at > $1
+			  AND status IN ('created','redirected','accepted','activated','converted')`,
+			verifiedAt, offer.ID); err != nil {
+			return nil, false, err
+		}
+		if _, err := tx.Exec(`
+			INSERT INTO provider_admin_audit_events (
+				provider_claim_id, provider_offer_id, event_type,
+				operator_reference, evidence_reference, previous_status,
+				new_status, created_at
+			) VALUES ($1::uuid,$2::uuid,'emergency_pause',$3,$4,'active','paused',$5)`,
+			offer.ProviderClaimID, offer.ID, input.OperatorReference,
+			input.OwnerEvidenceReference, verifiedAt); err != nil {
+			return nil, false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return event, true, nil
+}
+
+func providerOfferHasVerifiedCommercialCommitment(
+	tx *sql.Tx,
+	offerID string,
+	authorizedAt time.Time,
+) (bool, error) {
+	var eligible bool
+	err := tx.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1
+			FROM provider_offers offer
+			JOIN provider_claims claim ON claim.id=offer.provider_claim_id
+			JOIN provider_pilot_companies company ON company.provider_claim_id=claim.id
+			WHERE offer.id=$1::uuid
+				  AND claim.status='verified'
+				  AND claim.verification_last_succeeded_at >
+				      $2::timestamptz - $3::bigint * INTERVAL '1 second'
+			  AND offer.commercial_terms_contract_version=$4
+			  AND offer.commercial_terms_sha256 ~ '^[0-9a-f]{64}$'
+			  AND NOT EXISTS (
+				SELECT 1 FROM provider_budget_ledger unverified
+				WHERE unverified.provider_offer_id=offer.id
+				  AND unverified.entry_type IN ('fund','adjustment')
+				  AND NOT EXISTS (
+					SELECT 1 FROM provider_commercial_commitment_events linked
+					WHERE linked.budget_ledger_entry_id=unverified.id
+					  AND (
+						(linked.event_type='prepaid_fund' AND unverified.entry_type='fund') OR
+						(linked.event_type='fund_reversal' AND unverified.entry_type='adjustment')
+					  )
+				  )
+			  )
+			  AND (
+				(offer.billing_mode='prepaid'
+				 AND EXISTS (
+					SELECT 1
+					FROM provider_commercial_commitment_events fund
+					WHERE fund.provider_pilot_company_id=company.id
+					  AND fund.provider_claim_id=claim.id
+					  AND fund.provider_offer_id=offer.id
+					  AND fund.event_type='prepaid_fund'
+					  AND fund.offer_version_snapshot=offer.version
+					  AND fund.terms_contract_version=offer.commercial_terms_contract_version
+					  AND fund.exact_terms_sha256=offer.commercial_terms_sha256
+					  AND fund.amount_cents + COALESCE((
+						SELECT SUM(reversal.amount_cents)
+						FROM provider_commercial_commitment_events reversal
+						WHERE reversal.related_event_id=fund.id
+						  AND reversal.event_type='fund_reversal'
+					  ),0) > 0
+				 )) OR
+				(offer.billing_mode='terms'
+				 AND EXISTS (
+					SELECT 1 FROM provider_commercial_commitment_events terms
+					WHERE terms.provider_pilot_company_id=company.id
+					  AND terms.provider_claim_id=claim.id
+					  AND terms.provider_offer_id=offer.id
+					  AND terms.event_type IN ('terms_acceptance','terms_renewal')
+					  AND terms.offer_version_snapshot=offer.version
+					  AND terms.terms_contract_version=offer.commercial_terms_contract_version
+					  AND terms.exact_terms_sha256=offer.commercial_terms_sha256
+						  AND terms.valid_until > $2::timestamptz
+				 ))
+			  )
+		)`, offerID, authorizedAt, int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1).Scan(&eligible)
+	return eligible, err
+}
+
 // ListPublicProviderOffersForOrganicResults is a separate paid-offer lookup. It
-// accepts only the already-computed organic result list and preserves that list's
-// position; it never modifies search scores, membership, or organic ordering.
-func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) ([]PublicProviderOffer, error) {
-	if db == nil || len(organicSites) == 0 {
+// accepts only the already-computed organic result list and exact persisted
+// search receipt, preserving organic position. The receipt must belong to the
+// one active pilot topic; this never modifies search scores, membership, or
+// organic ordering.
+func ListPublicProviderOffersForOrganicResults(db *sql.DB, searchPublicID string, organicSites []Site) ([]PublicProviderOffer, error) {
+	searchPublicID = strings.TrimSpace(searchPublicID)
+	if db == nil || !strings.HasPrefix(searchPublicID, "nhs_sr_") ||
+		len(searchPublicID) > 100 ||
+		!regexp.MustCompile(`^[A-Za-z0-9_-]+$`).MatchString(searchPublicID) {
+		return nil, ErrInvalidProviderExchange
+	}
+	if len(organicSites) == 0 {
 		return []PublicProviderOffer{}, nil
 	}
 	ids := make([]string, 0, len(organicSites))
@@ -2178,20 +3524,90 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 		return []PublicProviderOffer{}, nil
 	}
 	rows, err := db.Query(`
-		WITH organic(site_id, domain, organic_position) AS (
+		WITH selected_receipt AS (
+			SELECT id, demand_topics, created_at
+			FROM search_receipts
+			WHERE public_id=$1 AND NOT is_synthetic
+		), organic(site_id, domain, organic_position) AS (
 			SELECT item.site_id::uuid, item.domain, item.ordinality::integer
-			FROM unnest($1::text[], $2::text[]) WITH ORDINALITY AS item(site_id, domain, ordinality)
+			FROM unnest($2::text[], $3::text[]) WITH ORDINALITY AS item(site_id, domain, ordinality)
 		)
 		SELECT `+providerOfferSelectColumns+`, organic.organic_position
-		FROM organic
+		FROM selected_receipt receipt
+			JOIN provider_pilot_epochs pilot
+			  ON pilot.status='active'
+			 AND pilot.activated_at IS NOT NULL
+			 AND receipt.created_at >= pilot.activated_at
+			 AND pilot.demand_topic=ANY(receipt.demand_topics)
+			JOIN organic ON TRUE
+			JOIN organic_results_returned persisted_organic
+			  ON persisted_organic.search_receipt_id=receipt.id
+			 AND persisted_organic.site_id=organic.site_id
+			 AND persisted_organic.site_domain_snapshot=organic.domain
+			 AND persisted_organic.organic_position=organic.organic_position
 			JOIN provider_claims claim
 			  ON claim.site_id=organic.site_id
 			 AND claim.domain_snapshot=organic.domain
 			 AND claim.status='verified'
 			 AND claim.verification_last_succeeded_at >
-			     NOW() - $3::bigint * INTERVAL '1 second'
-		JOIN provider_offers offer ON offer.provider_claim_id=claim.id AND offer.status='active'
-		LEFT JOIN LATERAL (
+			     NOW() - $4::bigint * INTERVAL '1 second'
+			JOIN provider_pilot_enrollments enrollment
+			  ON enrollment.provider_pilot_epoch_id=pilot.id
+			 AND enrollment.provider_claim_id=claim.id
+			 AND provider_pilot_enrollment_eligibility_is_current(
+			     pilot.id, enrollment.provider_claim_id
+			 )
+			JOIN provider_offers offer ON offer.provider_claim_id=claim.id AND offer.status='active'
+			  AND offer.provider_pilot_epoch_id=pilot.id
+			  AND offer.activated_at >= pilot.activated_at
+			  AND offer.commercial_terms_contract_version=$5
+			  AND offer.commercial_terms_sha256 ~ '^[0-9a-f]{64}$'
+			  AND NOT EXISTS (
+				SELECT 1 FROM provider_budget_ledger unverified
+				WHERE unverified.provider_offer_id=offer.id
+				  AND unverified.entry_type IN ('fund','adjustment')
+				  AND NOT EXISTS (
+					SELECT 1 FROM provider_commercial_commitment_events linked
+					WHERE linked.budget_ledger_entry_id=unverified.id
+					  AND (
+						(linked.event_type='prepaid_fund' AND unverified.entry_type='fund') OR
+						(linked.event_type='fund_reversal' AND unverified.entry_type='adjustment')
+					  )
+				  )
+			  )
+			  AND EXISTS (
+				SELECT 1
+				FROM provider_pilot_companies company
+				WHERE company.provider_claim_id=claim.id
+				  AND (
+					(offer.billing_mode='prepaid'
+					 AND EXISTS (
+						SELECT 1 FROM provider_commercial_commitment_events fund
+						WHERE fund.provider_pilot_company_id=company.id
+						  AND fund.provider_offer_id=offer.id
+						  AND fund.event_type='prepaid_fund'
+						  AND fund.offer_version_snapshot=offer.version
+						  AND fund.exact_terms_sha256=offer.commercial_terms_sha256
+						  AND fund.amount_cents + COALESCE((
+							SELECT SUM(reversal.amount_cents)
+							FROM provider_commercial_commitment_events reversal
+							WHERE reversal.related_event_id=fund.id
+							  AND reversal.event_type='fund_reversal'
+						  ),0) > 0
+					 )) OR
+					(offer.billing_mode='terms'
+					 AND EXISTS (
+						SELECT 1 FROM provider_commercial_commitment_events terms
+						WHERE terms.provider_pilot_company_id=company.id
+						  AND terms.provider_offer_id=offer.id
+						  AND terms.event_type IN ('terms_acceptance','terms_renewal')
+						  AND terms.offer_version_snapshot=offer.version
+						  AND terms.exact_terms_sha256=offer.commercial_terms_sha256
+						  AND terms.valid_until > NOW()
+					 ))
+				  )
+			  )
+			LEFT JOIN LATERAL (
 			SELECT COALESCE(SUM(reserve.amount_cents::numeric),0) AS reserved_cents
 			FROM provider_capacity_events reserve
 			JOIN action_tickets reserved_ticket
@@ -2213,7 +3629,7 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 				SELECT SUM(ledger.amount_cents::numeric)
 				FROM provider_budget_ledger ledger
 				WHERE ledger.provider_offer_id=offer.id
-			),0) >= offer.bounty_cents + capacity.reserved_cents
+				),0) >= offer.bounty_cents + capacity.reserved_cents
 		) OR (
 			offer.billing_mode='terms'
 			AND offer.terms_credit_limit_cents >= offer.bounty_cents
@@ -2236,7 +3652,9 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 			),0),0) <= offer.terms_credit_limit_cents-offer.bounty_cents-capacity.reserved_cents
 		)
 			ORDER BY organic.organic_position, offer.action_type, offer.id`,
-		pq.Array(ids), pq.Array(domains), int64(ProviderClaimVerificationFreshness/time.Second))
+		searchPublicID, pq.Array(ids), pq.Array(domains),
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1)
 	if err != nil {
 		return nil, err
 	}
@@ -2247,18 +3665,29 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, organicSites []Site) 
 		if err != nil {
 			return nil, err
 		}
+		if offer.CommercialTermsContractVersion != ProviderCommercialTermsContractV1 ||
+			offer.CommercialTermsSHA256 != providerCommercialTermsHashFromOffer(offer) {
+			continue
+		}
 		offers = append(offers, PublicProviderOffer{
-			OfferID: offer.ID, OfferVersion: offer.Version,
-			SiteID: offer.SiteID, Domain: offer.Domain,
+			OfferID: offer.ID, ProviderPilotEpochID: offer.ProviderPilotEpochID,
+			OfferVersion: offer.Version,
+			SiteID:       offer.SiteID, Domain: offer.Domain,
 			OfferName: offer.OfferName, OfferSummary: offer.OfferSummary,
 			ActionType: offer.ActionType, ChargeEvent: offer.ChargeEvent,
-			DisclosureLabel:           offer.DisclosureLabel,
-			ProviderFundedBountyCents: offer.BountyCents,
-			ProviderFundedCurrency:    offer.Currency,
-			PrincipalPriceMode:        offer.PrincipalPriceMode,
-			PrincipalPriceCents:       offer.PrincipalPriceCents,
-			PrincipalCurrency:         offer.PrincipalCurrency,
-			OrganicPosition:           offer.OrganicPosition,
+			DisclosureLabel:                      offer.DisclosureLabel,
+			ProviderFundedBountyCents:            offer.BountyCents,
+			ProviderFundedCurrency:               offer.Currency,
+			PrincipalPriceMode:                   offer.PrincipalPriceMode,
+			PrincipalPriceCents:                  offer.PrincipalPriceCents,
+			PrincipalCurrency:                    offer.PrincipalCurrency,
+			CommercialTermsContractVersion:       offer.CommercialTermsContractVersion,
+			CommercialTermsSHA256:                offer.CommercialTermsSHA256,
+			CreditRule:                           ProviderCommercialCreditRuleV1,
+			ResponseExpectation:                  ProviderCommercialResponseRuleV1,
+			TermsPeriodAnchorRule:                ProviderCommercialTermsAnchorRuleV1,
+			ProviderAcknowledgesMerchantOfRecord: true,
+			OrganicPosition:                      offer.OrganicPosition,
 		})
 	}
 	return offers, rows.Err()
@@ -2282,7 +3711,15 @@ func RecordProviderOffersReturned(db *sql.DB, searchPublicID string, offers []Pu
 	defer tx.Rollback()
 	for _, offer := range offers {
 		offerID := strings.ToLower(strings.TrimSpace(offer.OfferID))
-		if !validProviderUUID(offerID) || offer.OfferVersion < 1 {
+		pilotID := strings.ToLower(strings.TrimSpace(offer.ProviderPilotEpochID))
+		if !validProviderUUID(offerID) || !validProviderUUID(pilotID) ||
+			offer.OfferVersion < 1 ||
+			offer.CommercialTermsContractVersion != ProviderCommercialTermsContractV1 ||
+			!providerHashPattern.MatchString(offer.CommercialTermsSHA256) ||
+			offer.CreditRule != ProviderCommercialCreditRuleV1 ||
+			offer.ResponseExpectation != ProviderCommercialResponseRuleV1 ||
+			offer.TermsPeriodAnchorRule != ProviderCommercialTermsAnchorRuleV1 ||
+			!offer.ProviderAcknowledgesMerchantOfRecord {
 			return ErrInvalidProviderExchange
 		}
 		if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
@@ -2292,14 +3729,17 @@ func RecordProviderOffersReturned(db *sql.DB, searchPublicID string, offers []Pu
 		result, err := tx.Exec(`
 			INSERT INTO provider_offers_returned (
 				search_receipt_id, provider_offer_id, provider_claim_id,
+				provider_pilot_epoch_id_snapshot,
 				offer_version_snapshot, offer_name_snapshot, action_type_snapshot,
 				disclosure_snapshot, bounty_cents_snapshot, currency_snapshot,
-				charge_event_snapshot
+				charge_event_snapshot, commercial_terms_contract_version_snapshot,
+				commercial_terms_sha256_snapshot
 			)
-			SELECT receipt.id, offer.id, offer.provider_claim_id,
+			SELECT receipt.id, offer.id, offer.provider_claim_id, pilot.id,
 			       offer.version, offer.offer_name, offer.action_type,
 			       offer.disclosure_label, offer.bounty_cents, offer.currency,
-			       offer.charge_event
+			       offer.charge_event, offer.commercial_terms_contract_version,
+			       offer.commercial_terms_sha256
 			FROM search_receipts receipt
 			JOIN provider_offers offer ON offer.id=$2::uuid
 			JOIN provider_claims claim
@@ -2307,19 +3747,37 @@ func RecordProviderOffersReturned(db *sql.DB, searchPublicID string, offers []Pu
 			 AND claim.status='verified'
 			 AND claim.verification_last_succeeded_at >
 			     NOW() - $4::bigint * INTERVAL '1 second'
+			JOIN provider_pilot_epochs pilot
+			  ON pilot.id=offer.provider_pilot_epoch_id
+			 AND pilot.id=$7::uuid
+			 AND pilot.status='active'
+			 AND pilot.activated_at IS NOT NULL
+			 AND receipt.created_at >= pilot.activated_at
+			 AND pilot.demand_topic=ANY(receipt.demand_topics)
+				JOIN provider_pilot_enrollments enrollment
+				  ON enrollment.provider_pilot_epoch_id=pilot.id
+				 AND enrollment.provider_claim_id=claim.id
+				 AND provider_pilot_enrollment_eligibility_is_current(
+				     pilot.id, enrollment.provider_claim_id
+				 )
 			JOIN organic_results_returned organic
 			  ON organic.search_receipt_id=receipt.id
 			 AND organic.site_id=claim.site_id
 			 AND organic.site_domain_snapshot=claim.domain_snapshot
 			WHERE receipt.public_id=$1 AND NOT receipt.is_synthetic
 			  AND offer.version=$3 AND offer.status='active'
+			  AND offer.activated_at >= pilot.activated_at
+			  AND offer.commercial_terms_contract_version=$5
+			  AND offer.commercial_terms_sha256=$6
 			  AND NOT EXISTS (
 				SELECT 1 FROM provider_offers_returned existing
 				WHERE existing.search_receipt_id=receipt.id
 				  AND existing.provider_offer_id=offer.id
 			  )`,
 			searchPublicID, offerID, offer.OfferVersion,
-			int64(ProviderClaimVerificationFreshness/time.Second))
+			int64(ProviderClaimVerificationFreshness/time.Second),
+			offer.CommercialTermsContractVersion, offer.CommercialTermsSHA256,
+			pilotID)
 		if err != nil {
 			return err
 		}
@@ -2336,7 +3794,12 @@ func RecordProviderOffersReturned(db *sql.DB, searchPublicID string, offers []Pu
 					WHERE receipt.public_id=$1
 					  AND returned.provider_offer_id=$2::uuid
 					  AND returned.offer_version_snapshot=$3
-				)`, searchPublicID, offerID, offer.OfferVersion).Scan(&exact); err != nil {
+					  AND returned.commercial_terms_contract_version_snapshot=$4
+					  AND returned.commercial_terms_sha256_snapshot=$5
+					  AND returned.provider_pilot_epoch_id_snapshot=$6::uuid
+				)`, searchPublicID, offerID, offer.OfferVersion,
+				offer.CommercialTermsContractVersion, offer.CommercialTermsSHA256,
+				pilotID).Scan(&exact); err != nil {
 				return err
 			}
 			if !exact {
@@ -2352,13 +3815,15 @@ func scanProviderOfferWithPosition(row rowScanner) (*ProviderOffer, error) {
 	var principalPrice, termsCreditLimit, termsPeriodDays sql.NullInt64
 	var termsPeriodAnchor, activatedAt, pausedAt sql.NullTime
 	err := row.Scan(
-		&offer.ID, &offer.ProviderClaimID, &offer.SiteID, &offer.Domain,
+		&offer.ID, &offer.ProviderClaimID, &offer.ProviderPilotEpochID,
+		&offer.SiteID, &offer.Domain,
 		&offer.Status, &offer.Version, &offer.OfferName, &offer.OfferSummary,
 		&offer.ActionType, &offer.ActionURL, &offer.DisclosureLabel,
 		&offer.ChargeEvent, &offer.BountyCents, &offer.Currency,
 		&offer.PrincipalPriceMode, &principalPrice, &offer.PrincipalCurrency,
 		&offer.BillingMode, &termsCreditLimit, &termsPeriodDays,
 		&termsPeriodAnchor, &offer.TermsEvidenceReference,
+		&offer.CommercialTermsContractVersion, &offer.CommercialTermsSHA256,
 		&offer.BudgetBalanceCents, &activatedAt, &pausedAt,
 		&offer.CreatedAt, &offer.UpdatedAt, &offer.OrganicPosition,
 	)
@@ -2386,6 +3851,11 @@ func scanProviderOfferWithPosition(row rowScanner) (*ProviderOffer, error) {
 	if pausedAt.Valid {
 		offer.PausedAt = &pausedAt.Time
 	}
+	offer.CreditRule = ProviderCommercialCreditRuleV1
+	offer.ResponseExpectation = ProviderCommercialResponseRuleV1
+	offer.TermsPeriodAnchorRule = ProviderCommercialTermsAnchorRuleV1
+	offer.ProviderMORAcknowledgementRequired = true
+	offer.ProviderAcknowledgesMerchantOfRecord = true
 	return &offer, nil
 }
 
@@ -2446,6 +3916,7 @@ func scanActionTicket(row rowScanner) (*ActionTicket, error) {
 	var termsPeriodAnchor, redactedAt, authorizationRevokedAt sql.NullTime
 	err := row.Scan(
 		&ticket.ID, &ticket.ProviderClaimID, &ticket.ProviderOfferID,
+		&ticket.ProviderPilotEpochID,
 		&searchReceiptID, &ticket.SourceIsSynthetic, &ticket.TokenHash,
 		&ticket.TokenNonce, &ticket.CreationRequestHash,
 		&ticket.OfferVersionSnapshot, &ticket.OfferNameSnapshot,
@@ -2454,6 +3925,8 @@ func scanActionTicket(row rowScanner) (*ActionTicket, error) {
 		&ticket.ChargeEventSnapshot, &ticket.BountyCentsSnapshot,
 		&ticket.CurrencySnapshot, &ticket.BillingModeSnapshot,
 		&ticket.TermsEvidenceReferenceSnapshot,
+		&ticket.CommercialTermsContractVersionSnapshot,
+		&ticket.CommercialTermsSHA256Snapshot,
 		&termsCreditLimit, &termsPeriodDays, &termsPeriodAnchor,
 		&ticket.AttributionKeyIDSnapshot,
 		&ticket.PrincipalPriceModeSnapshot, &principalPrice,
@@ -2496,12 +3969,15 @@ func scanActionTicket(row rowScanner) (*ActionTicket, error) {
 
 const actionTicketColumns = `
 	id::text, provider_claim_id::text, provider_offer_id::text,
+	COALESCE(provider_pilot_epoch_id::text,''),
 	search_receipt_id::text, source_is_synthetic, token_hash,
 	token_nonce, creation_request_hash,
 	offer_version_snapshot, offer_name_snapshot, offer_summary_snapshot,
 	action_type_snapshot, action_url_snapshot, disclosure_snapshot,
 	charge_event_snapshot, bounty_cents_snapshot, currency_snapshot,
 	billing_mode_snapshot, terms_evidence_reference_snapshot,
+	commercial_terms_contract_version_snapshot,
+	commercial_terms_sha256_snapshot,
 	terms_credit_limit_cents_snapshot, terms_period_days_snapshot,
 	terms_period_anchor_at_snapshot,
 	attribution_key_id_snapshot,
@@ -2554,10 +4030,12 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		return nil, nil, "", err
 	}
 
-	var searchReceiptID string
+	var searchReceiptID, pilotEpochID string
 	var sourceIsSynthetic bool
+	var organicPosition int
 	err = tx.QueryRow(`
-		SELECT receipt.id::text, receipt.is_synthetic
+		SELECT receipt.id::text, receipt.is_synthetic, organic.organic_position,
+		       pilot.id::text
 		FROM provider_offers offer
 			JOIN provider_claims claim
 			  ON claim.id=offer.provider_claim_id AND claim.status='verified'
@@ -2566,10 +4044,25 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		JOIN search_receipts receipt
 		  ON receipt.public_id=$2 AND NOT receipt.is_synthetic
 		 AND $3=ANY(receipt.demand_topics)
+		JOIN provider_pilot_epochs pilot
+		  ON pilot.id=offer.provider_pilot_epoch_id
+		 AND pilot.status='active'
+		 AND pilot.activated_at IS NOT NULL
+		 AND pilot.demand_topic=$3
+		 AND receipt.created_at >= pilot.activated_at
+		JOIN provider_pilot_enrollments enrollment
+		  ON enrollment.provider_pilot_epoch_id=pilot.id
+		 AND enrollment.provider_claim_id=claim.id
+		 AND provider_pilot_enrollment_eligibility_is_current(
+		     pilot.id, enrollment.provider_claim_id
+		 )
 		JOIN provider_offers_returned returned
 		  ON returned.search_receipt_id=receipt.id
 		 AND returned.provider_offer_id=offer.id
+		 AND returned.provider_pilot_epoch_id_snapshot=pilot.id
 		 AND returned.offer_version_snapshot=offer.version
+		 AND returned.commercial_terms_contract_version_snapshot=offer.commercial_terms_contract_version
+		 AND returned.commercial_terms_sha256_snapshot=offer.commercial_terms_sha256
 		JOIN organic_results_returned organic
 		  ON organic.search_receipt_id=receipt.id
 		 AND organic.site_id=claim.site_id
@@ -2577,7 +4070,7 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		WHERE offer.id=$1::uuid AND offer.status='active'
 		FOR UPDATE OF offer`, input.ProviderOfferID, input.SearchReceiptPublicID, input.DemandTopic,
 		int64(ProviderClaimVerificationFreshness/time.Second)).
-		Scan(&searchReceiptID, &sourceIsSynthetic)
+		Scan(&searchReceiptID, &sourceIsSynthetic, &organicPosition, &pilotEpochID)
 	if err == sql.ErrNoRows {
 		return nil, nil, "", ErrProviderOfferNotPublic
 	}
@@ -2590,6 +4083,17 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 	}
 	if offer.ProviderClaimID != lockedClaimID {
 		return nil, nil, "", errors.New("provider offer claim changed during ticket creation")
+	}
+	if organicPosition < 1 {
+		return nil, nil, "", ErrProviderOfferNotPublic
+	}
+	// Return the exact persisted organic position that made this offer eligible,
+	// not the zero value from the claim-scoped offer lookup. This keeps ticket
+	// preparation aligned with the public sidecar/OpenAPI neutrality contract.
+	offer.OrganicPosition = organicPosition
+	if offer.CommercialTermsContractVersion != ProviderCommercialTermsContractV1 ||
+		offer.CommercialTermsSHA256 != providerCommercialTermsHashFromOffer(offer) {
+		return nil, nil, "", ErrProviderOfferNotPublic
 	}
 	// Provider self-service pause takes the offer row lock without the advisory
 	// lock. Read the authoritative clock only after the eligibility query has
@@ -2613,6 +4117,15 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 	if !providerClaimVerificationFresh(verificationLastSucceededAt, authorizationAt) {
 		return nil, nil, "", ErrProviderClaimVerificationStale
 	}
+	commerciallyVerified, err := providerOfferHasVerifiedCommercialCommitment(
+		tx, input.ProviderOfferID, authorizationAt,
+	)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !commerciallyVerified {
+		return nil, nil, "", ErrProviderOfferNotPublic
+	}
 	issuedAt := authorizationAt.Truncate(time.Second)
 	expiresAt := issuedAt.Add(input.TTL)
 	existing, err := scanActionTicket(tx.QueryRow(`
@@ -2621,6 +4134,9 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		WHERE search_receipt_id=$1::uuid AND provider_offer_id=$2::uuid`,
 		searchReceiptID, input.ProviderOfferID))
 	if err == nil {
+		if existing.ProviderPilotEpochID != pilotEpochID {
+			return nil, nil, "", ErrProviderPilotNotActive
+		}
 		if existing.CreationRequestHash != requestHash {
 			return nil, nil, "", ErrActionTicketExists
 		}
@@ -2674,6 +4190,15 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 	if err != sql.ErrNoRows {
 		return nil, nil, "", err
 	}
+	boundedPilotID, err := enforceProviderPilotTicketBoundary(
+		tx, offer.ProviderClaimID, input.DemandTopic, authorizationAt,
+	)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if boundedPilotID != pilotEpochID {
+		return nil, nil, "", ErrProviderPilotNotActive
+	}
 	if offer.BillingMode == "prepaid" {
 		balance, err := providerOfferBalance(tx, input.ProviderOfferID)
 		if err != nil {
@@ -2723,6 +4248,8 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 			action_type_snapshot, action_url_snapshot, disclosure_snapshot,
 			charge_event_snapshot, bounty_cents_snapshot, currency_snapshot,
 			billing_mode_snapshot, terms_evidence_reference_snapshot,
+			commercial_terms_contract_version_snapshot,
+			commercial_terms_sha256_snapshot,
 			terms_credit_limit_cents_snapshot, terms_period_days_snapshot,
 			terms_period_anchor_at_snapshot,
 			attribution_key_id_snapshot,
@@ -2730,11 +4257,11 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 			principal_price_cents_snapshot, principal_currency_snapshot,
 			demand_topic, region_code, budget_band, urgency,
 			requirement_flags, principal_consent, consent_version,
-			expires_at, created_at, updated_at
+			provider_pilot_epoch_id, expires_at, created_at, updated_at
 		) VALUES (
 			$1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6,$7,$8,
-			$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
-			$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$35
+			$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
+			$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$38::uuid,$36,$37,$37
 		)
 		RETURNING `+actionTicketColumns,
 		ticketID, offer.ProviderClaimID, input.ProviderOfferID, searchReceiptID,
@@ -2742,13 +4269,14 @@ func CreateActionTicket(db *sql.DB, input ActionTicketInput, signer *providerexc
 		offer.Version, offer.OfferName, offer.OfferSummary, offer.ActionType,
 		offer.ActionURL, offer.DisclosureLabel, offer.ChargeEvent,
 		offer.BountyCents, offer.Currency, offer.BillingMode,
-		offer.TermsEvidenceReference, offer.TermsCreditLimitCents,
+		offer.TermsEvidenceReference, offer.CommercialTermsContractVersion,
+		offer.CommercialTermsSHA256, offer.TermsCreditLimitCents,
 		offer.TermsPeriodDays, offer.TermsPeriodAnchorAt, attributionKeyID,
 		offer.PrincipalPriceMode,
 		offer.PrincipalPriceCents, offer.PrincipalCurrency,
 		input.DemandTopic, input.RegionCode, input.BudgetBand, input.Urgency,
 		pq.Array(input.RequirementFlags), input.PrincipalConsent,
-		input.ConsentVersion, expiresAt, issuedAt))
+		input.ConsentVersion, expiresAt, issuedAt, pilotEpochID))
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -2803,25 +4331,362 @@ func ResolveActionTicketForChargeResolution(db *sql.DB, ticketID, rawToken strin
 		  )`, ticketID, HashProviderSecret(rawToken)))
 }
 
-func MarkActionTicketRedirected(db *sql.DB, ticketID, rawToken string) (*ActionTicket, error) {
-	if db == nil || !validProviderUUID(ticketID) || strings.TrimSpace(rawToken) == "" {
+const providerActionHandoffReceiptColumns = `
+	id::text, action_ticket_id::text, provider_claim_id::text,
+	provider_offer_id::text, offer_version_snapshot,
+	commercial_terms_contract_version_snapshot,
+	commercial_terms_sha256_snapshot, presented_token_hash,
+	principal_handoff_consent, handoff_consent_version,
+	principal_controlled_intent_disclosure_consent,
+	controlled_intent_disclosure_consent_version,
+	event_contract_version, observed_at, created_at`
+
+func scanProviderActionHandoffReceipt(row rowScanner) (*ProviderActionHandoffReceipt, error) {
+	var receipt ProviderActionHandoffReceipt
+	if err := row.Scan(
+		&receipt.ID, &receipt.ActionTicketID, &receipt.ProviderClaimID,
+		&receipt.ProviderOfferID, &receipt.OfferVersionSnapshot,
+		&receipt.CommercialTermsContractVersionSnapshot,
+		&receipt.CommercialTermsSHA256Snapshot, &receipt.PresentedTokenHash,
+		&receipt.PrincipalHandoffConsent, &receipt.HandoffConsentVersion,
+		&receipt.PrincipalControlledIntentDisclosureConsent,
+		&receipt.ControlledIntentDisclosureConsentVersion,
+		&receipt.EventContractVersion, &receipt.ObservedAt, &receipt.CreatedAt,
+	); err != nil {
+		return nil, err
+	}
+	return &receipt, nil
+}
+
+func actionTicketHandoffReplayable(status string) bool {
+	switch status {
+	case "redirected", "accepted", "activated", "converted":
+		return true
+	default:
+		return false
+	}
+}
+
+// RecordActionTicketHandoff records the value-bearing boundary without
+// recording who crossed it: an exact live ticket bearer asked NHS to continue
+// to the provider. The receipt and created -> redirected transition commit
+// together. No charge occurs here; charging remains tied to the configured,
+// provider-reported downstream outcome.
+func RecordActionTicketHandoff(
+	db *sql.DB, input ProviderActionHandoffInput,
+) (*ActionTicket, *ProviderActionHandoffReceipt, error) {
+	input.ActionTicketID = strings.ToLower(strings.TrimSpace(input.ActionTicketID))
+	input.AttributionToken = strings.TrimSpace(input.AttributionToken)
+	input.HandoffConsentVersion = strings.TrimSpace(input.HandoffConsentVersion)
+	input.ControlledIntentDisclosureConsentVersion = strings.TrimSpace(input.ControlledIntentDisclosureConsentVersion)
+	if db == nil || !validProviderUUID(input.ActionTicketID) || input.AttributionToken == "" ||
+		!input.PrincipalHandoffConsent ||
+		input.HandoffConsentVersion != ProviderActionHandoffConsentV1 ||
+		(input.PrincipalControlledIntentDisclosureConsent &&
+			input.ControlledIntentDisclosureConsentVersion != ProviderControlledIntentDisclosureConsentV1) ||
+		(!input.PrincipalControlledIntentDisclosureConsent &&
+			input.ControlledIntentDisclosureConsentVersion != "") {
+		return nil, nil, ErrInvalidProviderExchange
+	}
+	ticketID := input.ActionTicketID
+	presentedTokenHash := HashProviderSecret(input.AttributionToken)
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback()
+
+	var claimID, offerID string
+	if err := tx.QueryRow(`
+		SELECT provider_claim_id::text, provider_offer_id::text
+		FROM action_tickets WHERE id=$1::uuid`, ticketID).
+		Scan(&claimID, &offerID); err != nil {
+		return nil, nil, err
+	}
+	var claimStatus string
+	var verificationLastSucceededAt time.Time
+	if err := tx.QueryRow(`
+		SELECT status, verification_last_succeeded_at
+		FROM provider_claims WHERE id=$1::uuid FOR UPDATE`, claimID).
+		Scan(&claimStatus, &verificationLastSucceededAt); err != nil {
+		return nil, nil, err
+	}
+	if err := lockProviderOffer(tx, offerID); err != nil {
+		return nil, nil, err
+	}
+	var lockedOfferID string
+	if err := tx.QueryRow(`
+		SELECT id::text FROM provider_offers
+		WHERE id=$1::uuid AND provider_claim_id=$2::uuid
+		FOR UPDATE`, offerID, claimID).Scan(&lockedOfferID); err != nil {
+		return nil, nil, err
+	}
+	ticket, err := scanActionTicket(tx.QueryRow(`
+		SELECT `+actionTicketColumns+`
+		FROM action_tickets
+		WHERE id=$1::uuid AND provider_claim_id=$2::uuid
+		  AND provider_offer_id=$3::uuid
+		FOR UPDATE`, ticketID, claimID, lockedOfferID))
+	if err != nil {
+		return nil, nil, err
+	}
+	authorizedAt, err := providerDatabaseClock(tx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if claimStatus != "verified" {
+		return nil, nil, ErrProviderClaimNotVerified
+	}
+	if !providerClaimVerificationFresh(verificationLastSucceededAt, authorizedAt) {
+		return nil, nil, ErrProviderClaimVerificationStale
+	}
+	activePilotID, _, err := requireActiveProviderPilotEnrollment(tx, claimID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ticket.ProviderPilotEpochID == "" || ticket.ProviderPilotEpochID != activePilotID {
+		return nil, nil, ErrProviderPilotNotActive
+	}
+	if ticket.SourceIsSynthetic || !ticket.PrincipalConsent ||
+		ticket.ConsentVersion != ProviderPrincipalConsentV1 {
+		return nil, nil, ErrInvalidProviderExchange
+	}
+	if ticket.AuthorizationRevokedAt != nil {
+		return nil, nil, ErrProviderOfferRevoked
+	}
+	if !ticket.ExpiresAt.After(authorizedAt) {
+		return nil, nil, ErrActionTicketExpired
+	}
+	want, got := []byte(ticket.TokenHash), []byte(presentedTokenHash)
+	if len(want) != len(got) || subtle.ConstantTimeCompare(want, got) != 1 {
+		return nil, nil, sql.ErrNoRows
+	}
+	offer, err := getProviderOfferTx(tx, offerID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if offer.Status != "active" ||
+		offer.ProviderPilotEpochID != ticket.ProviderPilotEpochID ||
+		offer.Version != ticket.OfferVersionSnapshot ||
+		offer.CommercialTermsContractVersion != ticket.CommercialTermsContractVersionSnapshot ||
+		offer.CommercialTermsSHA256 != ticket.CommercialTermsSHA256Snapshot ||
+		offer.CommercialTermsSHA256 != providerCommercialTermsHashFromOffer(offer) {
+		return nil, nil, ErrProviderOfferNotPublic
+	}
+	commerciallyVerified, err := providerOfferHasVerifiedCommercialCommitment(tx, offerID, authorizedAt)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !commerciallyVerified {
+		return nil, nil, ErrProviderCommercialEvidenceRequired
+	}
+
+	existing, err := scanProviderActionHandoffReceipt(tx.QueryRow(`
+		SELECT `+providerActionHandoffReceiptColumns+`
+		FROM provider_action_handoff_receipts
+		WHERE action_ticket_id=$1::uuid`, ticketID))
+	if err == nil {
+		if existing.ProviderClaimID != ticket.ProviderClaimID ||
+			existing.ProviderOfferID != ticket.ProviderOfferID ||
+			existing.OfferVersionSnapshot != ticket.OfferVersionSnapshot ||
+			existing.CommercialTermsContractVersionSnapshot !=
+				ticket.CommercialTermsContractVersionSnapshot ||
+			existing.CommercialTermsSHA256Snapshot != ticket.CommercialTermsSHA256Snapshot ||
+			existing.PresentedTokenHash != presentedTokenHash ||
+			!existing.PrincipalHandoffConsent ||
+			existing.HandoffConsentVersion != input.HandoffConsentVersion ||
+			existing.PrincipalControlledIntentDisclosureConsent !=
+				input.PrincipalControlledIntentDisclosureConsent ||
+			existing.ControlledIntentDisclosureConsentVersion !=
+				input.ControlledIntentDisclosureConsentVersion ||
+			existing.EventContractVersion != ProviderActionHandoffContractV1 ||
+			!actionTicketHandoffReplayable(ticket.Status) {
+			return nil, nil, ErrInvalidProviderExchange
+		}
+		existing.Replayed = true
+		if err := tx.Commit(); err != nil {
+			return nil, nil, err
+		}
+		return ticket, existing, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, nil, err
+	}
+	if ticket.Status != "created" {
+		return nil, nil, ErrProviderOutcomeTransition
+	}
+	if err := requireCurrentProviderPilotReview(
+		tx, ticket.ProviderPilotEpochID, "ticket", ticket.ID,
+	); err != nil {
+		return nil, nil, err
+	}
+	receipt, err := scanProviderActionHandoffReceipt(tx.QueryRow(`
+		INSERT INTO provider_action_handoff_receipts (
+			action_ticket_id, provider_claim_id, provider_offer_id,
+			offer_version_snapshot,
+			commercial_terms_contract_version_snapshot,
+			commercial_terms_sha256_snapshot, presented_token_hash,
+			principal_handoff_consent, handoff_consent_version,
+			principal_controlled_intent_disclosure_consent,
+			controlled_intent_disclosure_consent_version,
+			event_contract_version
+		) VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		RETURNING `+providerActionHandoffReceiptColumns,
+		ticket.ID, ticket.ProviderClaimID, ticket.ProviderOfferID,
+		ticket.OfferVersionSnapshot,
+		ticket.CommercialTermsContractVersionSnapshot,
+		ticket.CommercialTermsSHA256Snapshot, presentedTokenHash,
+		input.PrincipalHandoffConsent, input.HandoffConsentVersion,
+		input.PrincipalControlledIntentDisclosureConsent,
+		input.ControlledIntentDisclosureConsentVersion,
+		ProviderActionHandoffContractV1))
+	if err != nil {
+		return nil, nil, err
+	}
+	ticket, err = scanActionTicket(tx.QueryRow(`
+		UPDATE action_tickets
+		SET status='redirected', updated_at=$2
+		WHERE id=$1::uuid AND status='created'
+		RETURNING `+actionTicketColumns, ticketID, receipt.ObservedAt))
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
+	}
+	return ticket, receipt, nil
+}
+
+// ResolveProviderControlledIntent returns only the bounded ticket fields that
+// the principal separately authorized NHS to disclose after an observed
+// handoff. The claim-scoped provider key, exact bearer, current DNS ownership,
+// consent pair, authorization window, and retention window must all agree.
+func ResolveProviderControlledIntent(
+	db *sql.DB,
+	key *ProviderAPIKey,
+	ticketID, offerID, rawToken string,
+) (*ProviderControlledIntentResolution, error) {
+	ticketID = strings.ToLower(strings.TrimSpace(ticketID))
+	offerID = strings.ToLower(strings.TrimSpace(offerID))
+	rawToken = strings.TrimSpace(rawToken)
+	if db == nil || key == nil || key.ID < 1 || !validProviderUUID(key.ProviderClaimID) ||
+		!validProviderUUID(ticketID) || !validProviderUUID(offerID) || rawToken == "" {
 		return nil, ErrInvalidProviderExchange
 	}
-	return scanActionTicket(db.QueryRow(`
-		UPDATE action_tickets
-		SET status='redirected', updated_at=NOW()
-		WHERE id=$1::uuid AND token_hash=$2 AND expires_at > NOW()
-		  AND authorization_revoked_at IS NULL
-		  AND status IN ('created','redirected')
-		  AND EXISTS (
-			SELECT 1 FROM provider_claims claim
-			WHERE claim.id=action_tickets.provider_claim_id
-			  AND claim.status='verified'
-			  AND claim.verification_last_succeeded_at >
-			      NOW() - $3::bigint * INTERVAL '1 second'
-		  )
-		RETURNING `+actionTicketColumns, ticketID, HashProviderSecret(rawToken),
-		int64(ProviderClaimVerificationFreshness/time.Second)))
+	resolution := &ProviderControlledIntentResolution{
+		ResolverContractVersion: ProviderControlledIntentResolverV1,
+	}
+	var requirementFlags pq.StringArray
+	err := db.QueryRow(`
+		WITH locked AS MATERIALIZED (
+			SELECT
+			  api_key.id AS api_key_id,
+			  api_key.provider_claim_id AS api_key_provider_claim_id,
+			  api_key.status AS api_key_status,
+			  claim.id AS claim_id,
+			  claim.status AS claim_status,
+			  claim.verification_last_succeeded_at AS claim_verified_at,
+			  ticket.id AS ticket_id,
+			  ticket.provider_claim_id AS ticket_provider_claim_id,
+				  ticket.provider_offer_id AS ticket_provider_offer_id,
+				  ticket.provider_pilot_epoch_id AS ticket_pilot_epoch_id,
+			  ticket.offer_version_snapshot AS ticket_offer_version,
+			  ticket.commercial_terms_contract_version_snapshot AS ticket_terms_version,
+			  ticket.commercial_terms_sha256_snapshot AS ticket_terms_sha256,
+			  ticket.action_type_snapshot AS ticket_action_type,
+			  ticket.demand_topic AS ticket_demand_topic,
+			  ticket.region_code AS ticket_region_code,
+			  ticket.budget_band AS ticket_budget_band,
+			  ticket.urgency AS ticket_urgency,
+			  ticket.requirement_flags AS ticket_requirement_flags,
+			  ticket.token_hash AS ticket_token_hash,
+			  ticket.source_is_synthetic AS ticket_source_is_synthetic,
+			  ticket.principal_consent AS ticket_principal_consent,
+			  ticket.consent_version AS ticket_consent_version,
+			  ticket.intent_redacted_at AS ticket_intent_redacted_at,
+			  ticket.authorization_revoked_at AS ticket_authorization_revoked_at,
+			  ticket.expires_at AS ticket_expires_at,
+			  ticket.created_at AS ticket_created_at,
+			  ticket.status AS ticket_status,
+			  handoff.action_ticket_id AS handoff_ticket_id,
+			  handoff.provider_claim_id AS handoff_claim_id,
+			  handoff.provider_offer_id AS handoff_offer_id,
+			  handoff.offer_version_snapshot AS handoff_offer_version,
+			  handoff.commercial_terms_contract_version_snapshot AS handoff_terms_version,
+			  handoff.commercial_terms_sha256_snapshot AS handoff_terms_sha256,
+			  handoff.presented_token_hash AS handoff_token_hash,
+			  handoff.principal_handoff_consent AS handoff_principal_consent,
+			  handoff.handoff_consent_version AS handoff_consent_version,
+			  handoff.event_contract_version AS handoff_event_contract_version,
+			  handoff.principal_controlled_intent_disclosure_consent AS handoff_intent_consent,
+			  handoff.controlled_intent_disclosure_consent_version AS handoff_intent_consent_version,
+			  handoff.observed_at AS handoff_observed_at
+			FROM provider_api_keys api_key
+			JOIN provider_claims claim ON claim.id=api_key.provider_claim_id
+			JOIN action_tickets ticket ON ticket.id=$3::uuid
+			JOIN provider_action_handoff_receipts handoff ON handoff.action_ticket_id=ticket.id
+			WHERE api_key.id=$1
+			  AND claim.id=$2::uuid
+			  AND ticket.provider_offer_id=$4::uuid
+			FOR SHARE OF api_key, claim, ticket, handoff
+		)
+		SELECT ticket_id::text, ticket_provider_offer_id::text,
+		       ticket_offer_version, ticket_action_type,
+		       ticket_demand_topic, ticket_region_code, ticket_budget_band,
+		       ticket_urgency, ticket_requirement_flags,
+		       handoff_observed_at,
+		       LEAST(ticket_expires_at,
+		             ticket_created_at + $6::bigint * INTERVAL '1 second'),
+		       handoff_intent_consent_version
+		FROM locked
+		WHERE api_key_provider_claim_id=$2::uuid
+		  AND api_key_status='active'
+		  AND claim_id=$2::uuid
+		  AND claim_status='verified'
+		  AND claim_verified_at >
+		      clock_timestamp() - $7::bigint * INTERVAL '1 second'
+			  AND ticket_provider_claim_id=claim_id
+			  AND ticket_provider_offer_id=$4::uuid
+			  AND provider_pilot_enrollment_eligibility_is_current(
+			      ticket_pilot_epoch_id, ticket_provider_claim_id
+			  )
+		  AND handoff_ticket_id=ticket_id
+		  AND handoff_claim_id=claim_id
+		  AND handoff_offer_id=ticket_provider_offer_id
+		  AND handoff_offer_version=ticket_offer_version
+		  AND handoff_terms_version=ticket_terms_version
+		  AND handoff_terms_sha256=ticket_terms_sha256
+		  AND ticket_token_hash=$5
+		  AND handoff_token_hash=$5
+		  AND NOT ticket_source_is_synthetic
+		  AND ticket_principal_consent
+		  AND ticket_consent_version='nhs-principal-consent-v1'
+		  AND handoff_principal_consent
+		  AND handoff_consent_version='nhs-provider-handoff-consent-v1'
+		  AND handoff_event_contract_version='nhs-action-handoff-v1'
+		  AND handoff_intent_consent
+		  AND handoff_intent_consent_version=
+		      'nhs-provider-controlled-intent-disclosure-consent-v1'
+		  AND ticket_intent_redacted_at IS NULL
+		  AND ticket_authorization_revoked_at IS NULL
+		  AND ticket_expires_at > clock_timestamp()
+		  AND ticket_created_at + $6::bigint * INTERVAL '1 second' > clock_timestamp()
+		  AND ticket_status IN ('redirected','accepted','activated','converted')`,
+		key.ID, key.ProviderClaimID, ticketID, offerID, HashProviderSecret(rawToken),
+		int64(ActionTicketIntentRetention/time.Second),
+		int64(ProviderClaimVerificationFreshness/time.Second)).Scan(
+		&resolution.TicketID, &resolution.OfferID, &resolution.OfferVersion,
+		&resolution.ActionType, &resolution.ControlledIntent.DemandTopic,
+		&resolution.ControlledIntent.RegionCode, &resolution.ControlledIntent.BudgetBand,
+		&resolution.ControlledIntent.Urgency, &requirementFlags,
+		&resolution.ObservedAt, &resolution.IntentAvailableUntil,
+		&resolution.ConsentVersion,
+	)
+	if err != nil {
+		return nil, err
+	}
+	resolution.ControlledIntent.RequirementFlags = []string(requirementFlags)
+	return resolution, nil
 }
 
 // RedactExpiredActionTicketIntent enforces the 30-day controlled-intent
@@ -2871,9 +4736,18 @@ const outcomeReceiptColumns = `
 	charge_status, currency, signed_receipt, signature,
 	provider_reported_at, created_at`
 
+const qualifiedOutcomeReceiptColumns = `
+	receipt.id::text, receipt.nhs_event_id::text, receipt.provider_claim_id::text,
+	receipt.provider_offer_id::text, receipt.action_ticket_id::text, receipt.provider_api_key_id,
+	receipt.idempotency_key_hash, receipt.payload_hash, receipt.outcome, receipt.billed_cents,
+	receipt.charge_status, receipt.currency, receipt.signed_receipt, receipt.signature,
+	receipt.provider_reported_at, receipt.created_at`
+
 func validProviderOutcomeTransition(current, outcome string) bool {
 	switch current {
-	case "created", "redirected":
+	case "created":
+		return outcome == "rejected" || outcome == "duplicate" || outcome == "invalid"
+	case "redirected":
 		return outcome == "accepted" || outcome == "rejected" ||
 			outcome == "duplicate" || outcome == "invalid"
 	case "accepted":
@@ -2957,26 +4831,29 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 	if err := lockProviderOffer(tx, offerID); err != nil {
 		return nil, false, err
 	}
-	var claimID, ticketStatus, chargeEvent, billingMode, currency string
-	var expiresAt time.Time
+	var claimID, pilotEpochID, ticketStatus, chargeEvent, billingMode, currency string
+	var expiresAt, ticketCreatedAt time.Time
 	var bountyCents int64
 	var termsCreditLimit, termsPeriodDays sql.NullInt64
 	var termsPeriodAnchor, authorizationRevokedAt sql.NullTime
 	err = tx.QueryRow(`
-		SELECT ticket.provider_claim_id::text, ticket.status,
+		SELECT ticket.provider_claim_id::text,
+		       COALESCE(ticket.provider_pilot_epoch_id::text,''), ticket.status,
 		       ticket.expires_at, ticket.charge_event_snapshot,
 		       ticket.billing_mode_snapshot, ticket.bounty_cents_snapshot,
 		       ticket.currency_snapshot, ticket.terms_credit_limit_cents_snapshot,
 		       ticket.terms_period_days_snapshot, ticket.terms_period_anchor_at_snapshot,
-		       ticket.authorization_revoked_at
+		       ticket.authorization_revoked_at, ticket.created_at
 		FROM action_tickets ticket
-		JOIN provider_offers offer ON offer.id=ticket.provider_offer_id
+		JOIN provider_offers offer
+		  ON offer.id=ticket.provider_offer_id
+		 AND offer.provider_pilot_epoch_id=ticket.provider_pilot_epoch_id
 		WHERE ticket.id=$1::uuid AND offer.id=$2::uuid
 		FOR UPDATE OF ticket, offer`, input.ActionTicketID, offerID).
 		Scan(
-			&claimID, &ticketStatus, &expiresAt, &chargeEvent, &billingMode,
+			&claimID, &pilotEpochID, &ticketStatus, &expiresAt, &chargeEvent, &billingMode,
 			&bountyCents, &currency, &termsCreditLimit, &termsPeriodDays,
-			&termsPeriodAnchor, &authorizationRevokedAt,
+			&termsPeriodAnchor, &authorizationRevokedAt, &ticketCreatedAt,
 		)
 	if err != nil {
 		return nil, false, err
@@ -3062,6 +4939,49 @@ func RecordProviderOutcome(db *sql.DB, key *ProviderAPIKey, input ProviderOutcom
 	}
 	if err != sql.ErrNoRows {
 		return nil, false, err
+	}
+	if input.Outcome == "accepted" || input.Outcome == "activated" || input.Outcome == "converted" {
+		if !validProviderUUID(pilotEpochID) {
+			return nil, false, ErrProviderOutcomeTransition
+		}
+		var observedHandoff bool
+		if err := tx.QueryRow(`
+			SELECT EXISTS (
+				SELECT 1
+				FROM provider_action_handoff_receipts handoff
+				JOIN provider_pilot_epochs pilot
+				  ON pilot.id=$4::uuid
+				 AND pilot.status IN ('active','closed')
+				 AND pilot.activated_at IS NOT NULL
+				 AND $5::timestamptz >= date_trunc('second', pilot.activated_at)
+				 AND (pilot.closed_at IS NULL OR $5::timestamptz <= pilot.closed_at)
+				 AND handoff.observed_at >= pilot.activated_at
+				 AND (pilot.closed_at IS NULL OR handoff.observed_at <= pilot.closed_at)
+					JOIN provider_pilot_enrollments enrollment
+					  ON enrollment.provider_pilot_epoch_id=pilot.id
+					 AND enrollment.provider_claim_id=$2::uuid
+					 AND provider_pilot_enrollment_eligibility_is_current(
+					     pilot.id, enrollment.provider_claim_id
+					 )
+				WHERE handoff.action_ticket_id=$1::uuid
+				  AND handoff.provider_claim_id=$2::uuid
+				  AND handoff.provider_offer_id=$3::uuid
+			)`, input.ActionTicketID, claimID, offerID, pilotEpochID,
+			ticketCreatedAt).Scan(&observedHandoff); err != nil {
+			return nil, false, err
+		}
+		if !observedHandoff {
+			return nil, false, ErrProviderOutcomeTransition
+		}
+		commerciallyVerified, err := providerOfferHasVerifiedCommercialCommitment(
+			tx, offerID, authorizationAt,
+		)
+		if err != nil {
+			return nil, false, err
+		}
+		if !commerciallyVerified {
+			return nil, false, ErrProviderCommercialEvidenceRequired
+		}
 	}
 	if bountyCents < 1 || bountyCents > ProviderBountyMaximumCents || currency != "usd" {
 		return nil, false, ErrInvalidProviderExchange
@@ -3236,7 +5156,7 @@ func GetOutcomeReceipt(db *sql.DB, key *ProviderAPIKey, receiptID string) (*Outc
 		return nil, ErrInvalidProviderExchange
 	}
 	return scanOutcomeReceipt(db.QueryRow(`
-		SELECT `+outcomeReceiptColumns+`
+		SELECT `+qualifiedOutcomeReceiptColumns+`
 		FROM outcome_receipts receipt
 		JOIN provider_api_keys key
 		  ON key.id=$1 AND key.provider_claim_id=receipt.provider_claim_id
@@ -3258,6 +5178,9 @@ func GetPublicOutcomeReceiptState(db *sql.DB, receiptID, ticketID string) (*Publ
 	var rawNet string
 	err := db.QueryRow(`
 		SELECT receipt.id::text, ticket.id::text, receipt.outcome,
+		       ticket.offer_version_snapshot,
+		       ticket.commercial_terms_contract_version_snapshot,
+		       ticket.commercial_terms_sha256_snapshot,
 		       CASE
 		           WHEN ticket.authorization_revoked_at IS NOT NULL THEN 'revoked'
 		           WHEN ticket.expires_at <= NOW()
@@ -3285,6 +5208,8 @@ func GetPublicOutcomeReceiptState(db *sql.DB, receiptID, ticketID string) (*Publ
 		JOIN action_tickets ticket ON ticket.id=receipt.action_ticket_id
 		WHERE receipt.id=$1::uuid AND ticket.id=$2::uuid`, receiptID, ticketID).Scan(
 		&state.ReceiptID, &state.ActionTicketID, &state.ReceiptOutcome,
+		&state.OfferVersion, &state.CommercialTermsContractVersion,
+		&state.CommercialTermsSHA256,
 		&state.CurrentTicketStatus, &state.OriginalChargeCredited,
 		&state.SupersededByLaterState, &state.AuthorizationRevoked,
 		&rawNet, &state.NetCommercialEffectCurrency,
@@ -3299,19 +5224,21 @@ func GetPublicOutcomeReceiptState(db *sql.DB, receiptID, ticketID string) (*Publ
 	return state, nil
 }
 
-// GetProviderExchangeProof returns authenticated provider assertions and
-// operator-recorded evidence aggregates. PilotThresholdsMet is a pilot progress
-// signal, never an independently audited business or outcome proof.
-func GetProviderExchangeProof(db *sql.DB) (*ProviderExchangeProof, error) {
-	if db == nil {
-		return nil, ErrInvalidProviderExchange
-	}
+type providerProofQuerier interface {
+	QueryRow(query string, args ...any) *sql.Row
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
+// getProviderExchangeOperationalProgress preserves the explicitly labeled
+// legacy/operator counters as diagnostic progress only. Its threshold value is
+// always overwritten by GetProviderExchangeProof and is never commercial proof.
+func getProviderExchangeOperationalProgress(queryer providerProofQuerier) (*ProviderExchangeProof, error) {
 	proof := &ProviderExchangeProof{
 		PrepaidNetDebitedByCurrency:         map[string]int64{},
 		TermsNetReceivableByCurrency:        map[string]int64{},
 		OperatorRecordedCollectedByCurrency: map[string]int64{},
 	}
-	err := db.QueryRow(`
+	err := queryer.QueryRow(`
 		WITH real_tickets AS (
 			SELECT ticket.id
 			FROM action_tickets ticket
@@ -3392,7 +5319,7 @@ func GetProviderExchangeProof(db *sql.DB) (*ProviderExchangeProof, error) {
 	if err != nil {
 		return nil, err
 	}
-	prepaidRows, err := db.Query(`
+	prepaidRows, err := queryer.Query(`
 		SELECT ledger.currency,
 		       COALESCE(-SUM(ledger.amount_cents::numeric),0)::text AS net_debited_cents
 		FROM provider_budget_ledger ledger
@@ -3424,7 +5351,7 @@ func GetProviderExchangeProof(db *sql.DB) (*ProviderExchangeProof, error) {
 	}
 	prepaidRows.Close()
 
-	termsRows, err := db.Query(`
+	termsRows, err := queryer.Query(`
 		WITH outstanding_by_offer AS (
 			SELECT offer.id, offer.currency,
 			       GREATEST(-COALESCE(SUM(ledger.amount_cents::numeric),0),0) AS receivable_cents
@@ -3459,7 +5386,7 @@ func GetProviderExchangeProof(db *sql.DB) (*ProviderExchangeProof, error) {
 	}
 	termsRows.Close()
 
-	collectedRows, err := db.Query(`
+	collectedRows, err := queryer.Query(`
 		SELECT currency, COALESCE(SUM(amount_cents::numeric),0)::text
 		FROM provider_budget_ledger
 		WHERE entry_type='fund'
@@ -3490,5 +5417,647 @@ func GetProviderExchangeProof(db *sql.DB) (*ProviderExchangeProof, error) {
 		proof.ProviderReportedAcceptedHandoffs >= 5 &&
 		proof.ProviderReportedActivations >= 2 &&
 		proof.RenewedProviderBudgets >= 1
+	return proof, nil
+}
+
+// providerVerifiedCommercialCTEs is the single eligibility contract used by
+// the threshold and monetary aggregates. A row qualifies only while DNS
+// ownership is fresh and a current offer is backed by both provider-authored
+// acceptance and owner-verified commercial evidence. Legacy ledger or free-form
+// evidence rows never enter these CTEs.
+const providerVerifiedCommercialCTEs = `
+	WITH pilot_scope AS (
+		SELECT id, demand_topic, status, created_at, activated_at, closed_at
+		FROM provider_pilot_epochs
+		WHERE id=$4::uuid
+	), proof_pilot AS (
+		SELECT * FROM pilot_scope
+		WHERE status IN ('active','closed') AND activated_at IS NOT NULL
+	), fresh_companies AS (
+		SELECT company.id AS company_id, company.provider_claim_id,
+		       pilot.id AS pilot_id, pilot.demand_topic,
+		       pilot.created_at AS pilot_created_at,
+		       pilot.activated_at AS pilot_activated_at,
+		       pilot.closed_at AS pilot_closed_at
+		FROM proof_pilot pilot
+		JOIN provider_pilot_enrollments enrollment
+		  ON enrollment.provider_pilot_epoch_id=pilot.id
+		 AND enrollment.enrolled_at >= pilot.created_at
+		 AND provider_pilot_enrollment_eligibility_is_current(
+		     pilot.id, enrollment.provider_claim_id
+		 )
+		JOIN provider_pilot_companies company
+		  ON company.id=enrollment.provider_pilot_company_id
+		 AND company.provider_claim_id=enrollment.provider_claim_id
+		JOIN provider_claims claim
+		  ON claim.id=company.provider_claim_id
+		 AND claim.status='verified'
+		 AND claim.verification_last_succeeded_at >
+		     NOW() - $1::bigint * INTERVAL '1 second'
+		JOIN provider_commercial_acceptance_events accepted
+		  ON accepted.id=company.provider_acceptance_event_id
+		 AND accepted.provider_claim_id=company.provider_claim_id
+		 AND accepted.provider_api_key_id=company.provider_api_key_id
+		 AND accepted.event_type='pilot_company'
+		 AND accepted.provider_accepted_at=company.provider_accepted_at
+	), verified_fund_net AS (
+		SELECT fund.id, fund.provider_pilot_company_id, fund.provider_claim_id,
+		       fund.provider_offer_id, fund.qualifying_action_ticket_id,
+		       fund.offer_version_snapshot, fund.terms_contract_version,
+		       fund.exact_terms_sha256, fund.amount_cents, fund.currency,
+		       fund.source_effective_at,
+		       (fund.amount_cents + COALESCE(SUM(reversal.amount_cents),0))::bigint
+		         AS residual_cents
+		FROM provider_commercial_commitment_events fund
+		LEFT JOIN provider_commercial_commitment_events reversal
+		  ON reversal.related_event_id=fund.id
+		 AND reversal.event_type='fund_reversal'
+		WHERE fund.event_type='prepaid_fund'
+		GROUP BY fund.id
+	), qualified_offers AS (
+		SELECT company.company_id, company.provider_claim_id, offer.id AS provider_offer_id,
+		       offer.version, offer.billing_mode, offer.currency, offer.activated_at,
+		       offer.commercial_terms_contract_version, offer.commercial_terms_sha256,
+		       company.pilot_id, company.demand_topic, company.pilot_created_at,
+		       company.pilot_activated_at, company.pilot_closed_at
+		FROM fresh_companies company
+		JOIN provider_offers offer
+		  ON offer.provider_claim_id=company.provider_claim_id
+		 AND offer.provider_pilot_epoch_id=company.pilot_id
+		 AND (
+		      (company.pilot_closed_at IS NULL AND offer.status='active') OR
+		      (company.pilot_closed_at IS NOT NULL AND offer.status IN ('active','paused'))
+		 )
+		 AND offer.activated_at >= company.pilot_activated_at
+		 AND (company.pilot_closed_at IS NULL OR offer.activated_at <= company.pilot_closed_at)
+		 AND offer.commercial_terms_contract_version=$2
+		 AND offer.commercial_terms_sha256 ~ '^[0-9a-f]{64}$'
+		WHERE NOT EXISTS (
+			SELECT 1 FROM provider_budget_ledger unverified
+			WHERE unverified.provider_offer_id=offer.id
+			  AND unverified.entry_type IN ('fund','adjustment')
+			  AND NOT EXISTS (
+				SELECT 1 FROM provider_commercial_commitment_events linked
+				WHERE linked.budget_ledger_entry_id=unverified.id
+				  AND (
+					(linked.event_type='prepaid_fund' AND unverified.entry_type='fund') OR
+					(linked.event_type='fund_reversal' AND unverified.entry_type='adjustment')
+				  )
+			  )
+		)
+		AND (
+			(offer.billing_mode='prepaid'
+			AND EXISTS (
+				SELECT 1 FROM verified_fund_net fund
+				WHERE fund.provider_pilot_company_id=company.company_id
+				  AND fund.provider_claim_id=company.provider_claim_id
+				  AND fund.provider_offer_id=offer.id
+				  AND fund.offer_version_snapshot=offer.version
+				  AND fund.terms_contract_version=offer.commercial_terms_contract_version
+				  AND fund.exact_terms_sha256=offer.commercial_terms_sha256
+				  AND fund.source_effective_at >= company.pilot_created_at
+				  AND (company.pilot_closed_at IS NULL OR
+				       fund.source_effective_at <= company.pilot_closed_at)
+				  AND fund.residual_cents > 0
+			))
+		OR (
+			offer.billing_mode='terms'
+			AND EXISTS (
+				SELECT 1 FROM provider_commercial_commitment_events terms
+				JOIN provider_commercial_acceptance_events accepted
+				  ON accepted.id=terms.provider_acceptance_event_id
+				 AND accepted.provider_claim_id=terms.provider_claim_id
+				 AND accepted.provider_offer_id=terms.provider_offer_id
+				 AND accepted.provider_api_key_id=terms.provider_api_key_id
+				 AND accepted.event_type=terms.event_type
+				 AND accepted.exact_terms_sha256=terms.exact_terms_sha256
+				 AND accepted.valid_until=terms.valid_until
+				WHERE terms.provider_pilot_company_id=company.company_id
+				  AND terms.provider_claim_id=company.provider_claim_id
+				  AND terms.provider_offer_id=offer.id
+				  AND terms.event_type IN ('terms_acceptance','terms_renewal')
+				  AND terms.offer_version_snapshot=offer.version
+				  AND terms.terms_contract_version=offer.commercial_terms_contract_version
+				  AND terms.exact_terms_sha256=offer.commercial_terms_sha256
+				  AND terms.provider_accepted_at >= company.pilot_created_at
+				  AND (company.pilot_closed_at IS NULL OR
+				       terms.provider_accepted_at <= company.pilot_closed_at)
+				  AND terms.valid_until > COALESCE(company.pilot_closed_at,NOW())
+			)
+		)
+		)
+	), pilot_tickets AS (
+		SELECT ticket.id, ticket.provider_offer_id, qualified.company_id,
+		       ticket.provider_claim_id, ticket.billing_mode_snapshot,
+		       ticket.currency_snapshot,
+		       handoff.id AS handoff_receipt_id, handoff.observed_at AS handoff_observed_at,
+		       qualified.pilot_id, qualified.pilot_activated_at,
+		       qualified.pilot_closed_at
+		FROM action_tickets ticket
+		JOIN provider_action_handoff_receipts handoff
+		  ON handoff.action_ticket_id=ticket.id
+		 AND handoff.provider_claim_id=ticket.provider_claim_id
+		 AND handoff.provider_offer_id=ticket.provider_offer_id
+		 AND handoff.offer_version_snapshot=ticket.offer_version_snapshot
+		 AND handoff.commercial_terms_contract_version_snapshot=
+		     ticket.commercial_terms_contract_version_snapshot
+		 AND handoff.commercial_terms_sha256_snapshot=
+		     ticket.commercial_terms_sha256_snapshot
+		 AND handoff.event_contract_version=$3
+		JOIN qualified_offers qualified
+		  ON qualified.provider_offer_id=ticket.provider_offer_id
+		 AND qualified.provider_claim_id=ticket.provider_claim_id
+		 AND qualified.pilot_id=ticket.provider_pilot_epoch_id
+		 AND qualified.version=ticket.offer_version_snapshot
+		 AND qualified.commercial_terms_contract_version=
+		     ticket.commercial_terms_contract_version_snapshot
+		 AND qualified.commercial_terms_sha256=ticket.commercial_terms_sha256_snapshot
+		WHERE NOT ticket.source_is_synthetic
+		  AND ticket.created_at >= date_trunc('second', qualified.pilot_activated_at)
+		  AND (qualified.pilot_closed_at IS NULL OR
+		       ticket.created_at <= qualified.pilot_closed_at)
+		  AND handoff.observed_at >= qualified.pilot_activated_at
+		  AND (qualified.pilot_closed_at IS NULL OR
+		       handoff.observed_at <= qualified.pilot_closed_at)
+		  AND ticket.authorization_revoked_at IS NULL
+	), qualified_renewals AS (
+		SELECT DISTINCT qualified.company_id, ticket.id AS action_ticket_id
+		FROM qualified_offers qualified
+		JOIN verified_fund_net fund
+		  ON fund.provider_pilot_company_id=qualified.company_id
+		 AND fund.provider_claim_id=qualified.provider_claim_id
+		 AND fund.provider_offer_id=qualified.provider_offer_id
+		 AND fund.offer_version_snapshot=qualified.version
+		 AND fund.terms_contract_version=qualified.commercial_terms_contract_version
+		 AND fund.exact_terms_sha256=qualified.commercial_terms_sha256
+		JOIN pilot_tickets ticket
+		  ON ticket.id=fund.qualifying_action_ticket_id
+		 AND ticket.provider_offer_id=qualified.provider_offer_id
+		JOIN provider_budget_ledger charge
+		  ON charge.action_ticket_id=ticket.id
+		 AND charge.provider_offer_id=qualified.provider_offer_id
+		 AND charge.entry_type='charge'
+		WHERE qualified.billing_mode='prepaid'
+		  AND fund.qualifying_action_ticket_id IS NOT NULL
+		  AND fund.source_effective_at > charge.created_at
+		  AND fund.source_effective_at >= qualified.pilot_activated_at
+		  AND (qualified.pilot_closed_at IS NULL OR
+		       fund.source_effective_at <= qualified.pilot_closed_at)
+		  AND fund.residual_cents >= -charge.amount_cents
+		UNION
+		SELECT DISTINCT qualified.company_id, ticket.id AS action_ticket_id
+		FROM qualified_offers qualified
+		JOIN provider_commercial_commitment_events renewal
+		  ON renewal.provider_pilot_company_id=qualified.company_id
+		 AND renewal.provider_claim_id=qualified.provider_claim_id
+		 AND renewal.provider_offer_id=qualified.provider_offer_id
+		 AND renewal.offer_version_snapshot=qualified.version
+		 AND renewal.terms_contract_version=qualified.commercial_terms_contract_version
+		 AND renewal.exact_terms_sha256=qualified.commercial_terms_sha256
+		JOIN provider_commercial_commitment_events prior
+		  ON prior.id=renewal.related_event_id
+		 AND prior.provider_pilot_company_id=renewal.provider_pilot_company_id
+		 AND prior.provider_claim_id=renewal.provider_claim_id
+		 AND prior.provider_offer_id=renewal.provider_offer_id
+		 AND prior.event_type IN ('terms_acceptance','terms_renewal')
+		 AND prior.exact_terms_sha256=renewal.exact_terms_sha256
+		JOIN pilot_tickets ticket
+		  ON ticket.company_id=qualified.company_id
+		 AND ticket.provider_offer_id=qualified.provider_offer_id
+		JOIN provider_budget_ledger charge
+		  ON charge.action_ticket_id=ticket.id
+		 AND charge.provider_offer_id=qualified.provider_offer_id
+		 AND charge.entry_type='charge'
+		WHERE qualified.billing_mode='terms'
+		  AND renewal.event_type='terms_renewal'
+		  AND charge.created_at >= prior.provider_accepted_at
+		  AND charge.created_at < prior.valid_until
+		  AND renewal.provider_accepted_at > charge.created_at
+		  AND renewal.source_effective_at > charge.created_at
+		  AND renewal.provider_accepted_at >= qualified.pilot_activated_at
+		  AND (qualified.pilot_closed_at IS NULL OR
+		       renewal.provider_accepted_at <= qualified.pilot_closed_at)
+		  AND renewal.valid_until > COALESCE(qualified.pilot_closed_at,NOW())
+	)`
+
+type providerProofOutcome struct {
+	receipt          OutcomeReceipt
+	billingMode      string
+	pilotActivatedAt time.Time
+}
+
+type providerProofTicketState struct {
+	accepted  bool
+	activated bool
+	converted bool
+	charged   bool
+	reversed  bool
+}
+
+// verifyProviderProofOutcome authenticates the exact persisted canonical
+// receipt and then binds every signed business field back to its database row.
+// Signature validity alone is insufficient: a valid receipt copied onto a
+// different row must never qualify another ticket, offer, event, amount, or
+// timestamp.
+func verifyProviderProofOutcome(
+	signer *providerexchange.Signer,
+	receipt *OutcomeReceipt,
+) (providerexchange.OutcomeReceipt, bool) {
+	if signer == nil || receipt == nil {
+		return providerexchange.OutcomeReceipt{}, false
+	}
+	signed, err := signer.VerifyOutcomeReceiptSignature(receipt.SignedReceipt, receipt.Signature)
+	if err != nil {
+		return providerexchange.OutcomeReceipt{}, false
+	}
+	recordedAt := time.Unix(signed.RecordedAt, 0).UTC()
+	providerReportedAt := time.Unix(signed.ProviderReportedAt, 0).UTC()
+	if signed.ReceiptID != receipt.ID ||
+		signed.TicketID != receipt.ActionTicketID ||
+		signed.OfferID != receipt.ProviderOfferID ||
+		signed.NHSEventID != receipt.NHSEventID ||
+		string(signed.Outcome) != receipt.Outcome ||
+		signed.ChargedMinor != receipt.BilledCents ||
+		string(signed.ChargeStatus) != receipt.ChargeStatus ||
+		signed.Currency != receipt.Currency ||
+		!recordedAt.Equal(receipt.CreatedAt.UTC()) ||
+		!providerReportedAt.Equal(receipt.ProviderReportedAt.UTC()) ||
+		signed.ExpiresAt != recordedAt.Add(OutcomeReceiptValidity).Unix() {
+		return providerexchange.OutcomeReceipt{}, false
+	}
+	return signed, true
+}
+
+// providerProofLedgerMatches requires the immutable signed charge disposition
+// to have the exact atomic ledger counterpart written by RecordProviderOutcome.
+// It also rejects an unexpected ledger row for an explicitly uncharged receipt.
+func providerProofLedgerMatches(
+	queryer providerProofQuerier,
+	receipt *OutcomeReceipt,
+	signed providerexchange.OutcomeReceipt,
+) (int64, bool, error) {
+	rows, err := queryer.Query(`
+		SELECT id, entry_type, amount_cents, currency, provider_claim_id::text,
+		       provider_offer_id::text, action_ticket_id::text
+		FROM provider_budget_ledger
+		WHERE action_ticket_id=$1::uuid AND external_reference=$2
+		ORDER BY id`, receipt.ActionTicketID, "outcome:"+receipt.NHSEventID)
+	if err != nil {
+		return 0, false, err
+	}
+	defer rows.Close()
+
+	type ledgerEntry struct {
+		id                                              int64
+		entryType, currency, claimID, offerID, ticketID string
+		amount                                          int64
+	}
+	entries := make([]ledgerEntry, 0, 1)
+	for rows.Next() {
+		var entry ledgerEntry
+		if err := rows.Scan(
+			&entry.id,
+			&entry.entryType, &entry.amount, &entry.currency,
+			&entry.claimID, &entry.offerID, &entry.ticketID,
+		); err != nil {
+			return 0, false, err
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, false, err
+	}
+	if signed.ChargeStatus == providerexchange.ChargeStatusNone {
+		return 0, len(entries) == 0, nil
+	}
+	if len(entries) != 1 {
+		return 0, false, nil
+	}
+	wantType := "charge"
+	wantAmount := -signed.ChargedMinor
+	if signed.ChargeStatus == providerexchange.ChargeStatusCredited {
+		wantType = "credit"
+		wantAmount = signed.ChargedMinor
+	} else if signed.ChargeStatus != providerexchange.ChargeStatusCharged {
+		return 0, false, nil
+	}
+	entry := entries[0]
+	matches := entry.entryType == wantType && entry.amount == wantAmount &&
+		entry.currency == signed.Currency && entry.claimID == receipt.ProviderClaimID &&
+		entry.offerID == receipt.ProviderOfferID && entry.ticketID == receipt.ActionTicketID
+	if !matches {
+		return 0, false, nil
+	}
+	return entry.id, true, nil
+}
+
+// GetProviderExchangeProof reports operational observations separately from
+// commercially verified proof for one explicit pilot epoch. It never chooses a
+// "latest" pilot, so counters from distinct cohorts cannot be mixed. Every
+// outcome that can influence exact-pilot proof is reauthenticated against the
+// retained NHS signing keyring inside the same repeatable-read snapshot.
+func GetProviderExchangeProof(
+	db *sql.DB,
+	pilotID string,
+	signer *providerexchange.Signer,
+) (*ProviderExchangeProof, error) {
+	pilotID = strings.ToLower(strings.TrimSpace(pilotID))
+	if db == nil || signer == nil || !validProviderUUID(pilotID) {
+		return nil, ErrInvalidProviderExchange
+	}
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	proof, err := getProviderExchangeProof(tx, pilotID, signer)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return proof, nil
+}
+
+// getProviderExchangeProof evaluates exact-pilot commercial proof through the
+// caller's snapshot. Manifest issuance uses this inside the same serializable
+// transaction as chronological owner-review validation and durable signing.
+func getProviderExchangeProof(
+	tx providerProofQuerier,
+	pilotID string,
+	signer *providerexchange.Signer,
+) (*ProviderExchangeProof, error) {
+	proof, err := getProviderExchangeOperationalProgress(tx)
+	if err != nil {
+		return nil, err
+	}
+	proof.PilotThresholdsMet = false
+	proof.OutcomeReceiptIntegrityValid = true
+	proof.VerifiedPrepaidSettledByCurrency = map[string]int64{}
+	proof.VerifiedPrepaidNetDebitedByCurrency = map[string]int64{}
+	proof.VerifiedTermsNetReceivableByCurrency = map[string]int64{}
+
+	err = tx.QueryRow(providerVerifiedCommercialCTEs+`
+		SELECT
+			COALESCE((SELECT id::text FROM pilot_scope),''),
+			COALESCE((SELECT demand_topic FROM pilot_scope),''),
+			COALESCE((SELECT status FROM pilot_scope),''),
+			(SELECT COUNT(DISTINCT company_id)::int FROM qualified_offers)`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID,
+	).Scan(
+		&proof.ProviderPilotEpochID,
+		&proof.ProviderPilotDemandTopic,
+		&proof.ProviderPilotStatus,
+		&proof.VerifiedProviderCompanies,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if proof.ProviderPilotEpochID == "" {
+		return nil, sql.ErrNoRows
+	}
+
+	outcomeRows, err := tx.Query(providerVerifiedCommercialCTEs+`
+		SELECT `+qualifiedOutcomeReceiptColumns+`,
+		       ticket.billing_mode_snapshot, ticket.pilot_activated_at
+		FROM outcome_receipts receipt
+		JOIN pilot_tickets ticket ON ticket.id=receipt.action_ticket_id
+		ORDER BY receipt.created_at, receipt.id`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]providerProofOutcome, 0)
+	for outcomeRows.Next() {
+		var candidate providerProofOutcome
+		if err := outcomeRows.Scan(
+			&candidate.receipt.ID, &candidate.receipt.NHSEventID,
+			&candidate.receipt.ProviderClaimID, &candidate.receipt.ProviderOfferID,
+			&candidate.receipt.ActionTicketID, &candidate.receipt.ProviderAPIKeyID,
+			&candidate.receipt.IdempotencyKeyHash, &candidate.receipt.PayloadHash,
+			&candidate.receipt.Outcome, &candidate.receipt.BilledCents,
+			&candidate.receipt.ChargeStatus, &candidate.receipt.Currency,
+			&candidate.receipt.SignedReceipt, &candidate.receipt.Signature,
+			&candidate.receipt.ProviderReportedAt, &candidate.receipt.CreatedAt,
+			&candidate.billingMode, &candidate.pilotActivatedAt,
+		); err != nil {
+			outcomeRows.Close()
+			return nil, err
+		}
+		candidates = append(candidates, candidate)
+	}
+	if err := outcomeRows.Err(); err != nil {
+		outcomeRows.Close()
+		return nil, err
+	}
+	outcomeRows.Close()
+
+	ticketStates := make(map[string]*providerProofTicketState)
+	verifiedLedgerIDs := make(map[int64]bool)
+	for i := range candidates {
+		candidate := &candidates[i]
+		signed, valid := verifyProviderProofOutcome(signer, &candidate.receipt)
+		if valid && signed.RecordedAt < candidate.pilotActivatedAt.Unix() {
+			valid = false
+		}
+		if valid {
+			var ledgerID int64
+			ledgerID, valid, err = providerProofLedgerMatches(tx, &candidate.receipt, signed)
+			if err != nil {
+				return nil, err
+			}
+			if valid && ledgerID > 0 {
+				verifiedLedgerIDs[ledgerID] = true
+			}
+		}
+		if !valid {
+			proof.OutcomeReceiptIntegrityValid = false
+			proof.RejectedOutcomeReceipts++
+			continue
+		}
+		proof.VerifiedOutcomeReceipts++
+		state := ticketStates[candidate.receipt.ActionTicketID]
+		if state == nil {
+			state = &providerProofTicketState{}
+			ticketStates[candidate.receipt.ActionTicketID] = state
+		}
+		switch signed.Outcome {
+		case providerexchange.OutcomeAccepted:
+			state.accepted = true
+		case providerexchange.OutcomeActivated:
+			state.activated = true
+		case providerexchange.OutcomeConverted:
+			state.converted = true
+		case providerexchange.OutcomeRejected,
+			providerexchange.OutcomeDuplicate,
+			providerexchange.OutcomeInvalid:
+			state.reversed = true
+		}
+		delta := int64(0)
+		switch signed.ChargeStatus {
+		case providerexchange.ChargeStatusCharged:
+			state.charged = true
+			delta = signed.ChargedMinor
+		case providerexchange.ChargeStatusCredited:
+			state.reversed = true
+			delta = -signed.ChargedMinor
+		}
+		if delta != 0 {
+			target := proof.VerifiedTermsNetReceivableByCurrency
+			if candidate.billingMode == "prepaid" {
+				target = proof.VerifiedPrepaidNetDebitedByCurrency
+			}
+			target[signed.Currency] += delta
+		}
+	}
+
+	// The receipt-to-ledger check above is only half of the accounting proof.
+	// Inspect every charge/credit attached to an otherwise qualifying pilot
+	// ticket and require the converse binding to one authenticated receipt. An
+	// unsigned credit is still an economic reversal, so it disqualifies the
+	// ticket even while the integrity flag explains why the row cannot become
+	// signed commercial proof.
+	ledgerRows, err := tx.Query(providerVerifiedCommercialCTEs+`
+		SELECT ledger.id, ledger.action_ticket_id::text, ledger.entry_type
+		FROM provider_budget_ledger ledger
+		JOIN pilot_tickets ticket ON ticket.id=ledger.action_ticket_id
+		WHERE ledger.entry_type IN ('charge','credit')
+		ORDER BY ledger.id`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID)
+	if err != nil {
+		return nil, err
+	}
+	for ledgerRows.Next() {
+		var ledgerID int64
+		var ticketID, entryType string
+		if err := ledgerRows.Scan(&ledgerID, &ticketID, &entryType); err != nil {
+			ledgerRows.Close()
+			return nil, err
+		}
+		if verifiedLedgerIDs[ledgerID] {
+			proof.VerifiedOutcomeLedgerEntries++
+		} else {
+			proof.OutcomeReceiptIntegrityValid = false
+			proof.RejectedOutcomeLedgerEntries++
+		}
+		if entryType == "credit" {
+			state := ticketStates[ticketID]
+			if state == nil {
+				state = &providerProofTicketState{}
+				ticketStates[ticketID] = state
+			}
+			state.reversed = true
+		}
+	}
+	if err := ledgerRows.Err(); err != nil {
+		ledgerRows.Close()
+		return nil, err
+	}
+	ledgerRows.Close()
+
+	verifiedChargedTickets := make([]string, 0, len(ticketStates))
+	for ticketID, state := range ticketStates {
+		if state.reversed {
+			continue
+		}
+		if state.accepted {
+			proof.VerifiedProviderAcceptedHandoffs++
+		}
+		if state.activated || state.converted {
+			proof.VerifiedProviderConfirmedActivations++
+		}
+		if state.converted {
+			proof.VerifiedProviderConfirmedConversions++
+		}
+		if state.charged {
+			verifiedChargedTickets = append(verifiedChargedTickets, ticketID)
+		}
+	}
+	sort.Strings(verifiedChargedTickets)
+	for currency, amount := range proof.VerifiedPrepaidNetDebitedByCurrency {
+		if amount == 0 {
+			delete(proof.VerifiedPrepaidNetDebitedByCurrency, currency)
+		}
+	}
+	for currency, amount := range proof.VerifiedTermsNetReceivableByCurrency {
+		if amount == 0 {
+			delete(proof.VerifiedTermsNetReceivableByCurrency, currency)
+		}
+	}
+
+	err = tx.QueryRow(providerVerifiedCommercialCTEs+`
+		SELECT COUNT(DISTINCT company_id)::int
+		FROM qualified_renewals
+		WHERE action_ticket_id=ANY($5::uuid[])`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID,
+		pq.Array(verifiedChargedTickets),
+	).Scan(&proof.VerifiedProviderRenewals)
+	if err != nil {
+		return nil, err
+	}
+
+	scanCurrencyRows := func(rows *sql.Rows, target map[string]int64) error {
+		defer rows.Close()
+		for rows.Next() {
+			var currency, rawAmount string
+			if err := rows.Scan(&currency, &rawAmount); err != nil {
+				return err
+			}
+			amount, err := parseProviderMoney(rawAmount)
+			if err != nil {
+				return err
+			}
+			target[currency] = amount
+		}
+		return rows.Err()
+	}
+
+	settledRows, err := tx.Query(providerVerifiedCommercialCTEs+`
+		SELECT fund.currency, SUM(fund.residual_cents::numeric)::text
+		FROM verified_fund_net fund
+		JOIN qualified_offers qualified
+		  ON qualified.company_id=fund.provider_pilot_company_id
+		 AND qualified.provider_claim_id=fund.provider_claim_id
+		 AND qualified.provider_offer_id=fund.provider_offer_id
+		 AND qualified.version=fund.offer_version_snapshot
+		 AND qualified.commercial_terms_contract_version=fund.terms_contract_version
+		 AND qualified.commercial_terms_sha256=fund.exact_terms_sha256
+		WHERE qualified.billing_mode='prepaid' AND fund.residual_cents > 0
+		  AND fund.source_effective_at >= qualified.pilot_created_at
+		  AND (qualified.pilot_closed_at IS NULL OR
+		       fund.source_effective_at <= qualified.pilot_closed_at)
+		GROUP BY fund.currency ORDER BY fund.currency`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID)
+	if err != nil {
+		return nil, err
+	}
+	if err := scanCurrencyRows(settledRows, proof.VerifiedPrepaidSettledByCurrency); err != nil {
+		return nil, err
+	}
+
+	proof.PilotThresholdsMet = proof.OutcomeReceiptIntegrityValid &&
+		proof.VerifiedProviderCompanies >= 3 &&
+		proof.VerifiedProviderAcceptedHandoffs >= 5 &&
+		proof.VerifiedProviderConfirmedActivations >= 2 &&
+		proof.VerifiedProviderRenewals >= 1
 	return proof, nil
 }
