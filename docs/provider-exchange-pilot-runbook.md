@@ -16,9 +16,11 @@ product, implementation, economics, telemetry, or proof gate described here.
   event recorded by an authenticated, idempotent provider callback.
 - The bounded launch pilot is exact capped CPA terms only. Provider offer
   creation rejects `prepaid`, and both legacy budget writes and verified-funding
-  admin actions fail closed. Prepaid accounting remains dormant test coverage
-  for a later release with an owner-approved collection and settlement path; it
-  is not a live pilot option and must not be represented as one.
+  admin actions fail closed. Migration 029 adds only an owner-created,
+  post-action Stripe Checkout for the exact charged terms outcome; it does not
+  enable prepaid accounting or charge an agent. Checkout creation is forbidden
+  unless both the Stripe secret and the signature-verification webhook secret
+  are present, and only a signed paid webhook can append a settlement receipt.
 - NHS never sells raw queries, per-agent histories, alleged agent identities,
   principal identities, or contact data.
 - A ticket contains controlled intent fields and the caller's exact

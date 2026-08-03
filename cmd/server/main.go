@@ -281,7 +281,7 @@ func main() {
 	var providerSettlementHandler *handlers.ProviderSettlementHandler
 	if providerExchangeMode == providerExchangeModePilot {
 		providerExchangeHandler, err = handlers.NewProviderExchangeHandler(database.DB, baseURL, authSvc, templatesDir)
-		providerSettlementHandler = handlers.NewProviderSettlementHandler(database.DB, baseURL)
+		providerSettlementHandler = handlers.NewProviderSettlementHandler(database.DB, baseURL, fixHandler.WebhookSecret)
 		fixHandler.ProviderSettlement = providerSettlementHandler
 	} else {
 		providerExchangeHandler, err = handlers.NewProviderExchangePageHandler(database.DB, baseURL, authSvc, templatesDir)

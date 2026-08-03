@@ -23,6 +23,7 @@ type providerSettlementCheckoutCreator func(*gostripe.CheckoutSessionParams) (*g
 type ProviderSettlementHandler struct {
 	DB                  modelsProviderSettlementDB
 	BaseURL             string
+	WebhookSecret       string
 	prepareSettlement   func(modelsProviderSettlementDB, string) (*models.ProviderSettlementOrder, bool, error)
 	recordCheckout      func(modelsProviderSettlementDB, string, string) (bool, error)
 	recordPayment       func(modelsProviderSettlementDB, models.ProviderSettlementPaymentInput) (*models.ProviderSettlementPaymentReceipt, bool, error)
@@ -35,10 +36,11 @@ type ProviderSettlementHandler struct {
 // the model remains the only place that writes receipt rows.
 type modelsProviderSettlementDB = *sql.DB
 
-func NewProviderSettlementHandler(db *sql.DB, baseURL string) *ProviderSettlementHandler {
+func NewProviderSettlementHandler(db *sql.DB, baseURL, webhookSecret string) *ProviderSettlementHandler {
 	return &ProviderSettlementHandler{
 		DB:                  db,
 		BaseURL:             strings.TrimSuffix(strings.TrimSpace(baseURL), "/"),
+		WebhookSecret:       strings.TrimSpace(webhookSecret),
 		prepareSettlement:   models.PrepareProviderSettlement,
 		recordCheckout:      models.RecordProviderSettlementCheckoutSession,
 		recordPayment:       models.RecordProviderSettlementPayment,
@@ -62,6 +64,12 @@ func (h *ProviderSettlementHandler) AdminCreateCheckout(w http.ResponseWriter, r
 	}
 	if strings.TrimSpace(gostripe.Key) == "" {
 		providerWriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "stripe_not_configured"})
+		return
+	}
+	if h.WebhookSecret == "" {
+		// Never create a payment opportunity that this binary is unable to
+		// authenticate and turn into the required immutable payment receipt.
+		providerWriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "stripe_webhook_not_configured"})
 		return
 	}
 	var request providerSettlementCheckoutRequest

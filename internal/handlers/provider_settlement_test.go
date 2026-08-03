@@ -27,7 +27,8 @@ func TestProviderSettlementCheckoutUsesOnlyFrozenOutcomeAmount(t *testing.T) {
 	}
 	checkoutRecorded := false
 	h := &ProviderSettlementHandler{
-		BaseURL: "https://nothumansearch.ai",
+		BaseURL:       "https://nothumansearch.ai",
+		WebhookSecret: "whsec_provider_settlement_test",
 		prepareSettlement: func(_ modelsProviderSettlementDB, outcomeID string) (*models.ProviderSettlementOrder, bool, error) {
 			if outcomeID != order.OutcomeReceiptID {
 				t.Fatalf("outcome id=%q", outcomeID)
@@ -84,6 +85,28 @@ func TestProviderSettlementCheckoutUsesOnlyFrozenOutcomeAmount(t *testing.T) {
 	}
 }
 
+func TestProviderSettlementCheckoutRequiresWebhookVerification(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "provider-settlement-test-admin")
+	priorStripeKey := gostripe.Key
+	gostripe.Key = "sk_test_provider_settlement"
+	t.Cleanup(func() { gostripe.Key = priorStripeKey })
+	called := false
+	h := &ProviderSettlementHandler{
+		prepareSettlement: func(_ modelsProviderSettlementDB, _ string) (*models.ProviderSettlementOrder, bool, error) {
+			called = true
+			return nil, false, nil
+		},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/provider-settlements/checkout", bytes.NewBufferString(`{"outcome_receipt_id":"22222222-2222-4222-8222-222222222222"}`))
+	req.Header.Set("Authorization", "Bearer provider-settlement-test-admin")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.AdminCreateCheckout(rr, req)
+	if rr.Code != http.StatusServiceUnavailable || called {
+		t.Fatalf("status=%d prepare_called=%t body=%s", rr.Code, called, rr.Body.String())
+	}
+}
+
 func TestProviderSettlementCheckoutRejectsCallerSuppliedPrice(t *testing.T) {
 	t.Setenv("ADMIN_API_KEY", "provider-settlement-test-admin")
 	priorStripeKey := gostripe.Key
@@ -91,6 +114,7 @@ func TestProviderSettlementCheckoutRejectsCallerSuppliedPrice(t *testing.T) {
 	t.Cleanup(func() { gostripe.Key = priorStripeKey })
 	called := false
 	h := &ProviderSettlementHandler{
+		WebhookSecret: "whsec_provider_settlement_test",
 		prepareSettlement: func(_ modelsProviderSettlementDB, _ string) (*models.ProviderSettlementOrder, bool, error) {
 			called = true
 			return nil, false, nil
