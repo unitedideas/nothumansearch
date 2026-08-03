@@ -103,8 +103,12 @@ any live commercial threshold has been met.
       Never deploy from the working checkout. Pass the same commit as Docker
       build argument `RELEASE_REVISION`; a missing or malformed argument must
       fail the image build. With two different disposable PostgreSQL DSNs set,
-      use `tools/prepare-exact-release.sh <commit> <base-commit>`. It verifies
-      the archive and deliberately emits no deploy command. The
+      use `tools/prepare-exact-release.sh <commit> <base-commit>`. For
+      local-only exact-archive verification, use
+      `go run ./cmd/provider-release-local-postgres --candidate <commit> --base <base-commit>`;
+      it starts exactly two temporary PostgreSQL 17 instances and invokes that
+      same verifier without printing their DSNs. Both paths verify the archive
+      and deliberately emit no deploy command. The
       archive-expanded `release-source-revision` must equal the build argument,
       so a normal working-tree context fails closed. Its
       `nhs-exact-release-verification-v2` receipt binds the exact source archive,
@@ -119,9 +123,9 @@ any live commercial threshold has been met.
       'TestProtectedMigrationLedgerPostgres|TestProviderExchangePostgresReleaseRegressions'
       ./internal/database ./internal/models`. This starts temporary
       PostgreSQL 17 fixtures and leaves ordinary test runs unchanged. It is not
-      an exact-archive release receipt and does not replace the two isolated
-      PostgreSQL DSNs, recovery smoke, snapshot drill, or protected cutover
-      requirements above.
+      an exact-archive release receipt; use the local release runner above or
+      separately provisioned DSNs for that full verification. Neither local
+      path replaces the snapshot drill or protected cutover requirements above.
 - [ ] After exact verification and separate owner authorization, adopt only the
       verified candidate into its durable namespaced canonical ref with
       `tools/adopt-provider-exchange-candidate.sh CANDIDATE_REPOSITORY COMMIT TREE PARENT EXACT_RELEASE_MANIFEST --confirm-owner-authorized`.
