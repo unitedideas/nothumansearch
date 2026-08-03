@@ -62,6 +62,7 @@ VERIFICATION_MIGRATION_025=$(manifest_value migration_025_sha256) || exit 1
 VERIFICATION_MIGRATION_026=$(manifest_value migration_026_sha256) || exit 1
 VERIFICATION_MIGRATION_027=$(manifest_value migration_027_sha256) || exit 1
 VERIFICATION_MIGRATION_028=$(manifest_value migration_028_sha256) || exit 1
+VERIFICATION_MIGRATION_029=$(manifest_value migration_029_sha256) || exit 1
 VERIFICATION_ARCHIVE_TESTS=$(manifest_value exact_archive_tests_passed) || exit 1
 VERIFICATION_POSTGRES_TESTS=$(manifest_value postgres_release_tests_passed) || exit 1
 VERIFICATION_RECOVERY_SMOKE=$(manifest_value disabled_recovery_smoke_passed) || exit 1
@@ -97,7 +98,8 @@ for migration_digest in \
     "$VERIFICATION_MIGRATION_021" "$VERIFICATION_MIGRATION_022" \
     "$VERIFICATION_MIGRATION_023" "$VERIFICATION_MIGRATION_024" \
     "$VERIFICATION_MIGRATION_025" "$VERIFICATION_MIGRATION_026" \
-    "$VERIFICATION_MIGRATION_027" "$VERIFICATION_MIGRATION_028"; do
+    "$VERIFICATION_MIGRATION_027" "$VERIFICATION_MIGRATION_028" \
+    "$VERIFICATION_MIGRATION_029"; do
     if ! [[ "$migration_digest" =~ ^[0-9a-f]{64}$ ]]; then
         echo "exact release verification manifest has an invalid migration digest" >&2
         exit 1
@@ -187,6 +189,7 @@ verify_migration_digest migrations/025_stage1_fact_integrity.sql "$VERIFICATION_
 verify_migration_digest migrations/026_provider_pilot_proof_integrity.sql "$VERIFICATION_MIGRATION_026"
 verify_migration_digest migrations/027_provider_pilot_review_evidence.sql "$VERIFICATION_MIGRATION_027"
 verify_migration_digest migrations/028_provider_commercial_proof_manifest.sql "$VERIFICATION_MIGRATION_028"
+verify_migration_digest migrations/029_provider_settlement_receipts.sql "$VERIFICATION_MIGRATION_029"
 
 REF="refs/nhs-provider-candidates/$EXPECTED_COMMIT"
 EXISTING_REF=$(git -C "$CANONICAL_REPOSITORY" rev-parse --verify "$REF" 2>/dev/null || true)

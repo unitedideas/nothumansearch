@@ -278,8 +278,11 @@ func main() {
 	apiKeyHandler.Auth = authSvc
 	webHandler.Auth = authSvc
 	var providerExchangeHandler *handlers.ProviderExchangeHandler
+	var providerSettlementHandler *handlers.ProviderSettlementHandler
 	if providerExchangeMode == providerExchangeModePilot {
 		providerExchangeHandler, err = handlers.NewProviderExchangeHandler(database.DB, baseURL, authSvc, templatesDir)
+		providerSettlementHandler = handlers.NewProviderSettlementHandler(database.DB, baseURL)
+		fixHandler.ProviderSettlement = providerSettlementHandler
 	} else {
 		providerExchangeHandler, err = handlers.NewProviderExchangePageHandler(database.DB, baseURL, authSvc, templatesDir)
 	}
@@ -528,6 +531,8 @@ func main() {
 		mux.HandleFunc("/api/v1/admin/provider-pilot-queue", providerExchangeHandler.AdminProviderPilotQueue)
 		mux.HandleFunc("/api/v1/admin/provider-pilot-review", providerExchangeHandler.AdminProviderPilotReview)
 		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeHandler.AdminProviderProofManifest)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/checkout", providerSettlementHandler.AdminCreateCheckout)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/status", providerSettlementHandler.AdminStatus)
 	} else {
 		mux.HandleFunc("/api/v1/admin/provider-pilot/action", providerExchangeDisabledHandler)
 		mux.HandleFunc("/api/v1/admin/provider-pilot/epoch", providerExchangeDisabledHandler)
@@ -536,6 +541,8 @@ func main() {
 		mux.HandleFunc("/api/v1/admin/provider-pilot-queue", providerExchangeDisabledHandler)
 		mux.HandleFunc("/api/v1/admin/provider-pilot-review", providerExchangeDisabledHandler)
 		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/checkout", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/status", providerExchangeDisabledHandler)
 	}
 	mux.HandleFunc("/api/v1/admin/provider-proof", providerExchangeHandler.AdminProof)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)

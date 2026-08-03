@@ -156,7 +156,7 @@ class RestoreReceiptTest(unittest.TestCase):
         self.assertEqual(result["restored_volume_id"], RESTORED_VOLUME)
         self.assertEqual(result["restored_machine_id"], RESTORED_MACHINE)
         self.assertEqual(result["postgres_major"], 17)
-        self.assertEqual(result["migration_receipt_count"], 10)
+        self.assertEqual(result["migration_receipt_count"], 11)
         self.assertEqual(result["cleanup_outcome"], "complete")
         self.assertFalse(result["deployment_ready"])
         self.assertLess(len(json.dumps(result)), 4096)
@@ -288,7 +288,7 @@ class DatabaseVerificationTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertTrue(result["read_only"])
         self.assertTrue(result["migrations_dir_verified"])
-        self.assertEqual(result["protected_migration_count"], 10)
+        self.assertEqual(result["protected_migration_count"], 11)
         self.assertFalse(result["deployment_ready"])
         self.assertEqual(len(calls), 1)
         command, child_environment, timeout = calls[0]

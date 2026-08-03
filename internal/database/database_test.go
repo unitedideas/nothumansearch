@@ -973,6 +973,67 @@ func TestProviderCommercialProofManifestProtectedContractCarries027(t *testing.T
 	}
 }
 
+func TestProviderSettlementProtectedContractCarries028(t *testing.T) {
+	prior := protectedMigrationSpecs["028_provider_commercial_proof_manifest.sql"]
+	current, ok := protectedMigrationSpecs["029_provider_settlement_receipts.sql"]
+	if !ok {
+		t.Fatal("provider settlement migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations)+7 ||
+		len(current.rules) != len(prior.rules)+6 ||
+		len(current.fingerprintTables) != len(prior.fingerprintTables) ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions) ||
+		len(current.footprintRelations) != 7 ||
+		len(current.footprintRules) != 6 ||
+		len(current.footprintFunctions) != 0 ||
+		len(current.footprintProbes) != 6 {
+		t.Fatalf(
+			"029 cumulative contract shape relations=%d/%d+7 rules=%d/%d+6 fingerprint_tables=%d/%d fingerprint_functions=%d/%d relation_delta=%d rule_delta=%d function_delta=%d probes=%d",
+			len(current.relations), len(prior.relations),
+			len(current.rules), len(prior.rules),
+			len(current.fingerprintTables), len(prior.fingerprintTables),
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintRelations), len(current.footprintRules),
+			len(current.footprintFunctions), len(current.footprintProbes),
+		)
+	}
+	if !reflect.DeepEqual(current.relations[:len(prior.relations)], prior.relations) {
+		t.Fatal("029 did not carry forward the exact 028 relation contract")
+	}
+	if !reflect.DeepEqual(current.rules[:len(prior.rules)], prior.rules) {
+		t.Fatal("029 did not carry forward the exact 028 rule contract")
+	}
+	if !reflect.DeepEqual(current.fingerprintTables, prior.fingerprintTables) ||
+		!reflect.DeepEqual(current.fingerprintFunctions, prior.fingerprintFunctions) {
+		t.Fatal("029 did not carry forward inherited fingerprint contracts")
+	}
+
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "029_provider_settlement_receipts.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"CREATE TABLE IF NOT EXISTS provider_settlement_orders",
+		"CREATE TABLE IF NOT EXISTS provider_settlement_checkout_sessions",
+		"CREATE TABLE IF NOT EXISTS provider_settlement_payment_receipts",
+		"enforce_provider_settlement_order",
+		"provider_settlement_order_enforced",
+		"enforce_provider_settlement_checkout_session",
+		"provider_settlement_checkout_session_enforced",
+		"enforce_provider_settlement_payment_receipt",
+		"provider_settlement_payment_receipt_enforced",
+		"provider_settlement_orders_no_update",
+		"provider_settlement_checkout_sessions_no_update",
+		"provider_settlement_payment_receipts_no_update",
+		"Stripe-signed webhook path proves a paid Checkout Session",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("029 provider settlement contract is missing %q", required)
+		}
+	}
+}
+
 func TestProtectedMigrationStateFailsClosed(t *testing.T) {
 	migration := migrationFile{name: "019_provider_exchange.sql", sha256: strings.Repeat("a", 64)}
 	for _, test := range []struct {
@@ -1026,7 +1087,7 @@ func TestProtectedMigrationRequiresExactReleaseRevision(t *testing.T) {
 	}
 }
 
-func TestRequiredProtectedMigrationSetIsExactThrough028(t *testing.T) {
+func TestRequiredProtectedMigrationSetIsExactThrough029(t *testing.T) {
 	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
 	if err != nil {
 		t.Fatal(err)
@@ -1036,17 +1097,17 @@ func TestRequiredProtectedMigrationSetIsExactThrough028(t *testing.T) {
 	}
 	withoutTerminal := make([]migrationFile, 0, len(migrations)-1)
 	for _, migration := range migrations {
-		if migration.name != "028_provider_commercial_proof_manifest.sql" {
+		if migration.name != "029_provider_settlement_receipts.sql" {
 			withoutTerminal = append(withoutTerminal, migration)
 		}
 	}
 	if err := validateRequiredProtectedMigrationSet(withoutTerminal); err == nil ||
-		!strings.Contains(err.Error(), "required protected migration is missing: 028_provider_commercial_proof_manifest.sql") {
+		!strings.Contains(err.Error(), "required protected migration is missing: 029_provider_settlement_receipts.sql") {
 		t.Fatalf("missing terminal protected migration error=%v", err)
 	}
-	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "029_unreviewed.sql"})
+	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "030_unreviewed.sql"})
 	if err := validateRequiredProtectedMigrationSet(withUnknown); err == nil ||
-		!strings.Contains(err.Error(), "protected migration set is not exact through 028_provider_commercial_proof_manifest.sql") {
+		!strings.Contains(err.Error(), "protected migration set is not exact through 029_provider_settlement_receipts.sql") {
 		t.Fatalf("extra protected migration error=%v", err)
 	}
 }

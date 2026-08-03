@@ -120,6 +120,7 @@ var requiredProtectedMigrationNames = []string{
 	"026_provider_pilot_proof_integrity.sql",
 	"027_provider_pilot_review_evidence.sql",
 	"028_provider_commercial_proof_manifest.sql",
+	"029_provider_settlement_receipts.sql",
 }
 
 // Historical migration tests deliberately replay prefix releases one at a
@@ -527,6 +528,56 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		},
 	}
 
+	providerSettlementReceipts := protectedMigrationSpec{
+		// 029 makes collection a first-class, append-only external fact. The
+		// current fingerprint remains cumulative; the new relations, rules, and
+		// insert triggers are the only 029 ambiguity footprint.
+		relations: append(append([]migrationRelation(nil), providerCommercialProofManifest.relations...),
+			migrationRelation{name: "provider_settlement_orders", relkind: "r"},
+			migrationRelation{name: "idx_provider_settlement_orders_claim_created", relkind: "i", parent: "provider_settlement_orders"},
+			migrationRelation{name: "idx_provider_settlement_orders_offer_created", relkind: "i", parent: "provider_settlement_orders"},
+			migrationRelation{name: "provider_settlement_checkout_sessions", relkind: "r"},
+			migrationRelation{name: "idx_provider_settlement_checkout_created", relkind: "i", parent: "provider_settlement_checkout_sessions"},
+			migrationRelation{name: "provider_settlement_payment_receipts", relkind: "r"},
+			migrationRelation{name: "idx_provider_settlement_payment_paid", relkind: "i", parent: "provider_settlement_payment_receipts"},
+		),
+		rules: append(append([]migrationRule(nil), providerCommercialProofManifest.rules...),
+			migrationRule{relation: "provider_settlement_orders", name: "provider_settlement_orders_no_update"},
+			migrationRule{relation: "provider_settlement_orders", name: "provider_settlement_orders_no_delete"},
+			migrationRule{relation: "provider_settlement_checkout_sessions", name: "provider_settlement_checkout_sessions_no_update"},
+			migrationRule{relation: "provider_settlement_checkout_sessions", name: "provider_settlement_checkout_sessions_no_delete"},
+			migrationRule{relation: "provider_settlement_payment_receipts", name: "provider_settlement_payment_receipts_no_update"},
+			migrationRule{relation: "provider_settlement_payment_receipts", name: "provider_settlement_payment_receipts_no_delete"},
+		),
+		fingerprintTables:    append([]string(nil), providerCommercialProofManifest.fingerprintTables...),
+		fingerprintFunctions: append([]string(nil), providerCommercialProofManifest.fingerprintFunctions...),
+		footprintRelations: map[string]bool{
+			"provider_settlement_orders":                   true,
+			"idx_provider_settlement_orders_claim_created": true,
+			"idx_provider_settlement_orders_offer_created": true,
+			"provider_settlement_checkout_sessions":        true,
+			"idx_provider_settlement_checkout_created":     true,
+			"provider_settlement_payment_receipts":         true,
+			"idx_provider_settlement_payment_paid":         true,
+		},
+		footprintRules: map[string]bool{
+			"provider_settlement_orders_no_update":            true,
+			"provider_settlement_orders_no_delete":            true,
+			"provider_settlement_checkout_sessions_no_update": true,
+			"provider_settlement_checkout_sessions_no_delete": true,
+			"provider_settlement_payment_receipts_no_update":  true,
+			"provider_settlement_payment_receipts_no_delete":  true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintTrigger, relation: "provider_settlement_orders", name: "provider_settlement_order_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_settlement_order"},
+			{kind: migrationFootprintTrigger, relation: "provider_settlement_checkout_sessions", name: "provider_settlement_checkout_session_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_settlement_checkout_session"},
+			{kind: migrationFootprintTrigger, relation: "provider_settlement_payment_receipts", name: "provider_settlement_payment_receipt_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_settlement_payment_receipt"},
+		},
+	}
+
 	return map[string]protectedMigrationSpec{
 		"019_provider_exchange.sql":                     providerExchange,
 		"020_action_interest_receipts.sql":              actionInterests,
@@ -538,6 +589,7 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		"026_provider_pilot_proof_integrity.sql":        providerPilotProofIntegrity,
 		"027_provider_pilot_review_evidence.sql":        providerPilotReviewEvidence,
 		"028_provider_commercial_proof_manifest.sql":    providerCommercialProofManifest,
+		"029_provider_settlement_receipts.sql":          providerSettlementReceipts,
 	}
 }
 

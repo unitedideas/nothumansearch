@@ -72,7 +72,7 @@ is required before:
 
 1. creating and storing the dedicated production signing secret and key ID, or
    the separate owner-only company-deduplication HMAC key;
-2. deploying migrations 019 through 028 and the provider exchange revision;
+2. deploying migrations 019 through 029 and the provider exchange revision;
 3. sending provider outreach or invitations;
 4. accepting a contract, affiliate term, CPA term, funding representation, or
    provider Merchant-of-Record acknowledgement;
@@ -107,7 +107,7 @@ any live commercial threshold has been met.
       so a normal working-tree context fails closed. Its
       `nhs-exact-release-verification-v2` receipt binds the exact source archive,
       candidate commit/tree/parent, changed-path count, and the raw SHA-256 of
-      every protected migration from 019 through 028.
+      every protected migration from 019 through 029.
 - [ ] Full Go tests, race tests, vet, build, formatting, OpenAPI parse, and
       changed-path secret scan pass on the exact candidate revision. The
       preparer must observe explicit pass events—not a package-level `PASS`
@@ -116,14 +116,14 @@ any live commercial threshold has been met.
       verified candidate into its durable namespaced canonical ref with
       `tools/adopt-provider-exchange-candidate.sh CANDIDATE_REPOSITORY COMMIT TREE PARENT EXACT_RELEASE_MANIFEST --confirm-owner-authorized`.
       The adoption command must independently reconstruct the exact source
-      archive, recompute every migration-019-through-028 digest, and preserve
+      archive, recompute every migration-019-through-029 digest, and preserve
       the exact-release manifest plus its SHA-256 beside the Git bundle. It
       emits no build or deployment command; an unadopted temporary-clone commit
       is not a release identity.
-- [ ] Migrations 001 through 028 and immediate replay pass on disposable real
+- [ ] Migrations 001 through 029 and immediate replay pass on disposable real
       PostgreSQL from an empty database.
 - [ ] The target database has neither an unreceipted
-      migration-019-through-028 footprint nor a newer protected receipt.
+      migration-019-through-029 footprint nor a newer protected receipt.
       Migration 019 must atomically create its
       schema and `nhs_schema_migrations` receipt with the raw-file SHA-256 and
       embedded release commit; migration 020 must do the same for the
@@ -149,7 +149,11 @@ any live commercial threshold has been met.
       immutable signed commercial-proof manifest, exact closed-pilot snapshot
       binding, database-owned issue time, privacy-redacted canonical payload,
       and append-only rules. A checksum mismatch, missing required object,
-      unreceipted footprint, or database-ahead state is a hard stop. Never adopt
+      unreceipted footprint, or database-ahead state is a hard stop. Migration
+      029 must add the immutable post-action settlement order, exact Stripe
+      Checkout binding, and Stripe-paid receipt tables. It must bind amount,
+      currency, provider claim, offer, ticket, charged outcome, and exact terms
+      snapshot without storing provider billing contact or agent data. Never adopt
       an unrecorded schema because it looks current.
 - [ ] The server is the sole schema-migration owner. Crawler and recrawl jobs
       connect to the already-current schema and contain no migration or direct
@@ -294,12 +298,12 @@ reach migrations until steps 1 through 6 are complete:
    never imply zero-loss rollback from the earlier snapshot.
 6. Run the exact digest's revision-bound `provider-cutover-preflight` against the
    target database. It must report the same binary/candidate revision, the exact
-   protected set through migration 028, zero other sessions, zero live tickets,
+   protected set through migration 029, zero other sessions, zero live tickets,
    valid signer retention for pilot mode, and `ready_for_quiesced_cutover=true`.
 7. Start one machine from the exact digest with traffic held. This is the first
    step allowed to run the automatic protected migrations.
 8. Before traffic release, verify `/health.release_revision`, the OCI label, and
-   every migration-019-through-028 `applied_by_commit` value against the same
+   every migration-019-through-029 `applied_by_commit` value against the same
    authorized commit. Run the safe smoke in the chosen `disabled` or `pilot`
    mode. On failure, use the same digest in disabled containment or execute the
    tested database recovery plan; never roll the upgraded database back to the
@@ -392,7 +396,7 @@ artifact may be substituted for those external receipts.
       `application_name`, is blocking. The receipt is point-in-time evidence,
       not a lock: all old machines must remain cordoned with autostart disabled
       until the candidate owns the migration lock and becomes healthy.
-- [ ] After the held candidate has applied migrations 019 through 028, verify
+- [ ] After the held candidate has applied migrations 019 through 029, verify
       their immutable ledger rows against the same exact 40-character revision.
       Inject the target URL from its canonical secret reference; never place it
       in argv. The verifier sets PostgreSQL read-only mode and emits bounded JSON
@@ -406,7 +410,7 @@ artifact may be substituted for those external receipts.
         --confirm-read-only-database-check
       ```
 
-      Require `protected_migration_count=10` and the exact migration names and
+      Require `protected_migration_count=11` and the exact migration names and
       require every ledger SHA-256 to match the exact local migration bytes.
       This is post-migration evidence only; it does not replace the
       quiesced preflight, private smoke, restore receipt, or traffic-release gate.
@@ -913,7 +917,7 @@ observation. Handoff reviews must be recorded at or after handoff observation;
 callback reviews must be recorded at or after callback creation. Review coverage
 does not increment any commercial counter; missing or late safety review keeps
 the manifest unavailable even if the underlying aggregate counters reach
-3/5/2/1. Until migration 028 is deployed and this exact candidate passes, the
+3/5/2/1. Until migration 029 is deployed and this exact candidate passes, the
 aggregate proof response is diagnostic evidence, not a public commercial-
 proof artifact.
 

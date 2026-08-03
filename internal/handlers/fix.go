@@ -52,6 +52,10 @@ type FixHandler struct {
 	DB            *sql.DB
 	BaseURL       string
 	WebhookSecret string
+	// ProviderSettlement is set only in the separately enabled provider-pilot
+	// mode. It receives an already signature-verified Stripe event and cannot
+	// create revenue from a redirect or an internal provider ledger entry.
+	ProviderSettlement *ProviderSettlementHandler
 	// PreviewEnabled gates the per-site "here's exactly what we'd ship for YOUR
 	// domain" block on the intake form (env NHS_FIX_PREVIEW=1). Reversible kill:
 	// unset the env var + redeploy → reverts to the generic deliverables list.
@@ -1259,6 +1263,35 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		var cs gostripe.CheckoutSession
 		if err := json.Unmarshal(event.Data.Raw, &cs); err != nil {
 			log.Printf("fix webhook: unmarshal: %v", err)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if cs.Metadata["product"] == providerSettlementStripeProduct {
+			if h.ProviderSettlement == nil {
+				log.Printf("provider settlement webhook: handler unavailable")
+				http.Error(w, "provider settlement unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			receipt, created, err := h.ProviderSettlement.RecordPaidCheckout(&cs, event.ID, time.Unix(event.Created, 0).UTC())
+			if err != nil {
+				log.Printf("provider settlement webhook: record payment: %v", err)
+				http.Error(w, "provider settlement could not be recorded", http.StatusInternalServerError)
+				return
+			}
+			if created {
+				alertRevenue("Provider action settlement paid",
+					fmt.Sprintf("Verified provider settlement receipt %s: $%.2f %s.", receipt.ID, float64(receipt.AmountCents)/100, strings.ToUpper(receipt.Currency)))
+				models.LogIntentEvent(h.DB, models.IntentEvent{
+					EventName:  "provider_settlement_paid",
+					EntityType: "provider_settlement_order",
+					EntityID:   receipt.OrderID,
+					Metadata: map[string]any{
+						"payment_receipt_id": receipt.ID,
+						"amount_cents":       receipt.AmountCents,
+						"currency":           receipt.Currency,
+					},
+				})
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
