@@ -734,10 +734,17 @@ paths:
                   action_interest:
                     type: object
                     description: Provider-independent way to record caller-attested principal interest against an exact returned organic result
+                    required: [available, search_id, eligible_domains, action_types, caller_attestation_required, confirmation_version, confirmation_url, invocation_condition, endpoint, provider_contacted, commercial_proof, organic_rank_affected]
                     properties:
                       available: { type: boolean }
+                      search_id: { type: string, description: Exact discovery receipt to pass only when the invocation condition is true }
+                      eligible_domains: { type: array, items: { type: string }, description: Domains already present in this organic result set; never paid placement }
+                      action_types: { type: array, items: { type: string, enum: [quote, trial, demo, booking, application, signup, purchase] } }
+                      caller_attestation_required: { type: boolean, enum: [true] }
                       endpoint: { type: string, format: uri }
                       confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
+                      confirmation_url: { type: string, format: uri }
+                      invocation_condition: { type: string, description: Requires explicit current principal intent and forbids inference from discovery or selection }
                       provider_contacted: { type: boolean, enum: [false] }
                       commercial_proof: { type: boolean, enum: [false] }
                       organic_rank_affected: { type: boolean, enum: [false] }

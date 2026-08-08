@@ -12,6 +12,46 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
+const actionInterestInvocationCondition = "Use only when the caller can truthfully attest that its principal currently wants one listed action with one eligible domain; do not infer interest from the search, result order, selection, or provider availability."
+
+// publicActionInterestOpportunity keeps the optional next step machine-readable
+// without converting discovery or a result selection into intent. Every domain
+// returned here was already present in the public organic result set.
+func publicActionInterestOpportunity(baseURL, searchID string, sites []models.Site, available bool) map[string]any {
+	domains := []string{}
+	if available {
+		seen := make(map[string]struct{}, len(sites))
+		for _, site := range sites {
+			domain := strings.ToLower(strings.TrimSpace(site.Domain))
+			if domain == "" {
+				continue
+			}
+			if _, exists := seen[domain]; exists {
+				continue
+			}
+			seen[domain] = struct{}{}
+			domains = append(domains, domain)
+		}
+	}
+	if len(domains) == 0 {
+		available = false
+		searchID = ""
+	}
+	return map[string]any{
+		"available":                   available,
+		"search_id":                   searchID,
+		"eligible_domains":            domains,
+		"action_types":                models.ActionInterestTypes(),
+		"caller_attestation_required": true,
+		"confirmation_version":        models.ActionInterestConfirmationV1,
+		"confirmation_url":            strings.TrimRight(baseURL, "/") + "/privacy#action-interest-v1",
+		"invocation_condition":        actionInterestInvocationCondition,
+		"provider_contacted":          false,
+		"commercial_proof":            false,
+		"organic_rank_affected":       false,
+	}
+}
+
 const actionInterestHourlyLimit = 120
 
 type ActionInterestHandler struct {

@@ -333,15 +333,14 @@ func (h *APIHandler) Search(w http.ResponseWriter, r *http.Request) {
 		"has_next":              page*perPage < total,
 		"paid_offers":           []publicProviderOffer{},
 		"paid_offers_available": false,
-		"action_interest": map[string]any{
-			"available":             searchID != "" && len(sites) > 0 && !synthetic,
-			"endpoint":              h.BaseURL + "/api/v1/action-interests",
-			"confirmation_version":  models.ActionInterestConfirmationV1,
-			"provider_contacted":    false,
-			"commercial_proof":      false,
-			"organic_rank_affected": false,
-		},
+		"action_interest": publicActionInterestOpportunity(
+			h.BaseURL,
+			searchID,
+			sites,
+			searchID != "" && len(sites) > 0 && !synthetic,
+		),
 	}
+	response["action_interest"].(map[string]any)["endpoint"] = h.BaseURL + "/api/v1/action-interests"
 	// The committed receipt belongs to free discovery, not the commercial
 	// exchange. Return it in pilot, disabled recovery, and synthetic smoke mode
 	// whenever the write succeeded; only provider-funded offer lookup is gated.

@@ -1296,7 +1296,7 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		"results":               sites,
 		"paid_offers":           paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
-		"action_interest":       mcpDiscoveryActionInterest(exchange),
+		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
 	}
 	if searchID != "" {
 		structured["search_id"] = searchID
@@ -1332,6 +1332,7 @@ func (h *MCPHandler) recordMCPSearchReceipt(p models.SearchParams, total int, si
 
 type mcpDiscoveryExchange struct {
 	searchID                string
+	sites                   []models.Site
 	paidOffers              []publicProviderOffer
 	paidOffersAvailable     bool
 	actionInterestAvailable bool
@@ -1354,6 +1355,9 @@ func (h *MCPHandler) mcpDiscoveryExchangeContext(
 	}
 	context.searchID = h.recordMCPSearchReceipt(p, total, sites, synthetic)
 	context.actionInterestAvailable = context.searchID != "" && len(sites) > 0 && !synthetic
+	if context.actionInterestAvailable {
+		context.sites = sites
+	}
 	if !h.ProviderExchangeEnabled || synthetic || context.searchID == "" {
 		return context
 	}
@@ -1371,15 +1375,10 @@ func (h *MCPHandler) mcpDiscoveryExchangeContext(
 	return context
 }
 
-func mcpDiscoveryActionInterest(context mcpDiscoveryExchange) map[string]any {
-	return map[string]any{
-		"available":             context.actionInterestAvailable,
-		"tool":                  "record_action_interest",
-		"confirmation_version":  models.ActionInterestConfirmationV1,
-		"provider_contacted":    false,
-		"commercial_proof":      false,
-		"organic_rank_affected": false,
-	}
+func mcpDiscoveryActionInterest(baseURL string, context mcpDiscoveryExchange) map[string]any {
+	opportunity := publicActionInterestOpportunity(baseURL, context.searchID, context.sites, context.actionInterestAvailable)
+	opportunity["tool"] = "record_action_interest"
+	return opportunity
 }
 
 func appendMCPProviderFundedActions(builder *strings.Builder, context mcpDiscoveryExchange) {
@@ -1842,7 +1841,7 @@ func (h *MCPHandler) toolGetTopSites(w http.ResponseWriter, id json.RawMessage, 
 		"results":               sites,
 		"paid_offers":           exchange.paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
-		"action_interest":       mcpDiscoveryActionInterest(exchange),
+		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
 	}
 	if exchange.searchID != "" {
 		structured["search_id"] = exchange.searchID
@@ -1936,7 +1935,7 @@ func (h *MCPHandler) toolRecentAdditions(w http.ResponseWriter, id json.RawMessa
 		"results":               sites,
 		"paid_offers":           exchange.paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
-		"action_interest":       mcpDiscoveryActionInterest(exchange),
+		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
 	}
 	if exchange.searchID != "" {
 		structured["search_id"] = exchange.searchID
@@ -2007,7 +2006,7 @@ func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessag
 		"results":               sites,
 		"paid_offers":           exchange.paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
-		"action_interest":       mcpDiscoveryActionInterest(exchange),
+		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
 	}
 	if searchID != "" {
 		structured["search_id"] = searchID

@@ -198,6 +198,71 @@ func TestRecordActionInterestMCPToolHasExactPrivacySchema(t *testing.T) {
 	}
 }
 
+func TestActionInterestOpportunityIsExplicitBoundedAndNonCommercial(t *testing.T) {
+	sites := []models.Site{
+		{Domain: "Example.COM"},
+		{Domain: "second.example"},
+		{Domain: "example.com"},
+	}
+	opportunity := publicActionInterestOpportunity(
+		"https://nothumansearch.ai/",
+		"nhs_sr_AAAAAAAAAAAAAAAA",
+		sites,
+		true,
+	)
+	if opportunity["available"] != true || opportunity["search_id"] != "nhs_sr_AAAAAAAAAAAAAAAA" {
+		t.Fatalf("available opportunity binding = %#v", opportunity)
+	}
+	domains, ok := opportunity["eligible_domains"].([]string)
+	if !ok || len(domains) != 2 || domains[0] != "example.com" || domains[1] != "second.example" {
+		t.Fatalf("eligible domains = %#v", opportunity["eligible_domains"])
+	}
+	if opportunity["caller_attestation_required"] != true || opportunity["invocation_condition"] != actionInterestInvocationCondition {
+		t.Fatalf("explicit invocation contract missing: %#v", opportunity)
+	}
+	if opportunity["confirmation_url"] != "https://nothumansearch.ai/privacy#action-interest-v1" {
+		t.Fatalf("confirmation url = %#v", opportunity["confirmation_url"])
+	}
+	for _, key := range []string{"provider_contacted", "commercial_proof", "organic_rank_affected"} {
+		if opportunity[key] != false {
+			t.Fatalf("truth field %s = %#v", key, opportunity[key])
+		}
+	}
+	for _, forbidden := range []string{"query", "prompt", "identity", "contact", "email", "paid_rank"} {
+		if _, exists := opportunity[forbidden]; exists {
+			t.Fatalf("opportunity exposes forbidden field %q", forbidden)
+		}
+	}
+
+	unavailable := publicActionInterestOpportunity(
+		"https://nothumansearch.ai",
+		"nhs_sr_AAAAAAAAAAAAAAAA",
+		sites,
+		false,
+	)
+	if unavailable["available"] != false || unavailable["search_id"] != "" {
+		t.Fatalf("unavailable opportunity retained a receipt: %#v", unavailable)
+	}
+	if got := unavailable["eligible_domains"].([]string); len(got) != 0 {
+		t.Fatalf("unavailable opportunity retained domains: %#v", got)
+	}
+}
+
+func TestMCPActionInterestOpportunityCarriesReadyInputsWithoutInferringIntent(t *testing.T) {
+	context := mcpDiscoveryExchange{
+		searchID:                "nhs_sr_AAAAAAAAAAAAAAAA",
+		sites:                   []models.Site{{Domain: "example.com"}},
+		actionInterestAvailable: true,
+	}
+	opportunity := mcpDiscoveryActionInterest("https://nothumansearch.ai", context)
+	if opportunity["tool"] != "record_action_interest" || opportunity["search_id"] != context.searchID {
+		t.Fatalf("MCP opportunity is not ready to bind: %#v", opportunity)
+	}
+	if opportunity["invocation_condition"] != actionInterestInvocationCondition {
+		t.Fatalf("MCP opportunity can infer intent: %#v", opportunity)
+	}
+}
+
 func TestRecordActionInterestBypassesMCPIdentityAndPaidUsageTelemetry(t *testing.T) {
 	source, err := os.ReadFile("mcp.go")
 	if err != nil {
