@@ -118,10 +118,23 @@ def proof_document():
             "verified_outcome_ledger_entries": 8,
             "rejected_outcome_ledger_entries": 0,
             "verified_provider_companies": 3,
+            "verified_observed_handoffs": 7,
             "verified_provider_accepted_handoffs": 5,
             "verified_provider_confirmed_activations": 2,
             "verified_provider_renewals": 1,
             "verified_provider_confirmed_conversions": 1,
+            "verified_accepted_latency_samples": 5,
+            "verified_activated_latency_samples": 2,
+            "verified_converted_latency_samples": 1,
+            "verified_accepted_median_handoff_to_outcome_seconds": 3600,
+            "verified_activated_median_handoff_to_outcome_seconds": 86400,
+            "verified_converted_median_handoff_to_outcome_seconds": 604800,
+            "settlement_receipt_integrity_valid": True,
+            "verified_provider_paid_settlements": 1,
+            "rejected_provider_settlement_receipts": 0,
+            "verified_paid_latency_samples": 1,
+            "verified_paid_median_handoff_to_settlement_seconds": 691200,
+            "verified_terms_paid_by_currency": {"usd": 500},
             "verified_prepaid_settled_by_currency": {"usd": 15000},
             "verified_prepaid_net_debited_by_currency": {"usd": 2500},
             "verified_terms_net_receivable_by_currency": {"usd": 500},
@@ -141,7 +154,9 @@ def proof_document():
         "operational_progress_scope": "diagnostic observations only",
         "organic_rank_sold": False,
         "raw_queries_sold": False,
+        "raw_prompts_sold": False,
         "agent_identities_sold": False,
+        "principal_identities_sold": False,
         "server_private": "must-not-emit",
     }
 
@@ -488,10 +503,34 @@ class ReadContractTest(unittest.TestCase):
         with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
             status_tool.project_proof(impossible, TEST_PILOT_ID)
 
+        impossible_observed = proof_document()
+        impossible_observed["proof"]["verified_observed_handoffs"] = 4
+        with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
+            status_tool.project_proof(impossible_observed, TEST_PILOT_ID)
+
+        missing_latency = proof_document()
+        missing_latency["proof"]["verified_activated_latency_samples"] = 1
+        with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
+            status_tool.project_proof(missing_latency, TEST_PILOT_ID)
+
+        contaminated_settlement = proof_document()
+        contaminated_settlement["proof"]["settlement_receipt_integrity_valid"] = False
+        contaminated_settlement["proof"]["rejected_provider_settlement_receipts"] = 1
+        contaminated_settlement["proof"]["pilot_thresholds_met"] = False
+        projected = status_tool.project_proof(contaminated_settlement, TEST_PILOT_ID)
+        self.assertFalse(projected["settlement_receipt_integrity_valid"])
+        self.assertFalse(projected["pilot_thresholds_met"])
+
         paid_rank = proof_document()
         paid_rank["organic_rank_sold"] = True
         with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
             status_tool.project_proof(paid_rank, TEST_PILOT_ID)
+
+        for forbidden in ("raw_prompts_sold", "principal_identities_sold"):
+            leaking = proof_document()
+            leaking[forbidden] = True
+            with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
+                status_tool.project_proof(leaking, TEST_PILOT_ID)
 
 
 class TransportAndFailureTest(unittest.TestCase):

@@ -563,10 +563,23 @@ type ProviderExchangeProof struct {
 	VerifiedOutcomeLedgerEntries         int              `json:"verified_outcome_ledger_entries"`
 	RejectedOutcomeLedgerEntries         int              `json:"rejected_outcome_ledger_entries"`
 	VerifiedProviderCompanies            int              `json:"verified_provider_companies"`
+	VerifiedObservedHandoffs             int              `json:"verified_observed_handoffs"`
 	VerifiedProviderAcceptedHandoffs     int              `json:"verified_provider_accepted_handoffs"`
 	VerifiedProviderConfirmedActivations int              `json:"verified_provider_confirmed_activations"`
 	VerifiedProviderRenewals             int              `json:"verified_provider_renewals"`
 	VerifiedProviderConfirmedConversions int              `json:"verified_provider_confirmed_conversions"`
+	VerifiedAcceptedLatencySamples       int              `json:"verified_accepted_latency_samples"`
+	VerifiedActivatedLatencySamples      int              `json:"verified_activated_latency_samples"`
+	VerifiedConvertedLatencySamples      int              `json:"verified_converted_latency_samples"`
+	VerifiedAcceptedMedianSeconds        int64            `json:"verified_accepted_median_handoff_to_outcome_seconds"`
+	VerifiedActivatedMedianSeconds       int64            `json:"verified_activated_median_handoff_to_outcome_seconds"`
+	VerifiedConvertedMedianSeconds       int64            `json:"verified_converted_median_handoff_to_outcome_seconds"`
+	SettlementReceiptIntegrityValid      bool             `json:"settlement_receipt_integrity_valid"`
+	VerifiedProviderPaidSettlements      int              `json:"verified_provider_paid_settlements"`
+	RejectedProviderSettlementReceipts   int              `json:"rejected_provider_settlement_receipts"`
+	VerifiedPaidLatencySamples           int              `json:"verified_paid_latency_samples"`
+	VerifiedPaidMedianSeconds            int64            `json:"verified_paid_median_handoff_to_settlement_seconds"`
+	VerifiedTermsPaidByCurrency          map[string]int64 `json:"verified_terms_paid_by_currency"`
 	VerifiedPrepaidSettledByCurrency     map[string]int64 `json:"verified_prepaid_settled_by_currency"`
 	VerifiedPrepaidNetDebitedByCurrency  map[string]int64 `json:"verified_prepaid_net_debited_by_currency"`
 	VerifiedTermsNetReceivableByCurrency map[string]int64 `json:"verified_terms_net_receivable_by_currency"`
@@ -5641,17 +5654,35 @@ const providerVerifiedCommercialCTEs = `
 	)`
 
 type providerProofOutcome struct {
-	receipt          OutcomeReceipt
-	billingMode      string
-	pilotActivatedAt time.Time
+	receipt           OutcomeReceipt
+	billingMode       string
+	pilotActivatedAt  time.Time
+	handoffObservedAt time.Time
 }
 
 type providerProofTicketState struct {
-	accepted  bool
-	activated bool
-	converted bool
-	charged   bool
-	reversed  bool
+	accepted          bool
+	activated         bool
+	converted         bool
+	charged           bool
+	reversed          bool
+	handoffObservedAt time.Time
+	acceptedAt        *time.Time
+	activatedAt       *time.Time
+	convertedAt       *time.Time
+}
+
+func providerProofMedianSeconds(values []int64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
+	middle := len(values) / 2
+	if len(values)%2 == 1 {
+		return values[middle]
+	}
+	lower, upper := values[middle-1], values[middle]
+	return lower + (upper-lower)/2
 }
 
 // verifyProviderProofOutcome authenticates the exact persisted canonical
@@ -5797,6 +5828,8 @@ func getProviderExchangeProof(
 	}
 	proof.PilotThresholdsMet = false
 	proof.OutcomeReceiptIntegrityValid = true
+	proof.SettlementReceiptIntegrityValid = true
+	proof.VerifiedTermsPaidByCurrency = map[string]int64{}
 	proof.VerifiedPrepaidSettledByCurrency = map[string]int64{}
 	proof.VerifiedPrepaidNetDebitedByCurrency = map[string]int64{}
 	proof.VerifiedTermsNetReceivableByCurrency = map[string]int64{}
@@ -5806,7 +5839,8 @@ func getProviderExchangeProof(
 			COALESCE((SELECT id::text FROM pilot_scope),''),
 			COALESCE((SELECT demand_topic FROM pilot_scope),''),
 			COALESCE((SELECT status FROM pilot_scope),''),
-			(SELECT COUNT(DISTINCT company_id)::int FROM qualified_offers)`,
+			(SELECT COUNT(DISTINCT company_id)::int FROM qualified_offers),
+			(SELECT COUNT(DISTINCT id)::int FROM pilot_tickets)`,
 		int64(ProviderClaimVerificationFreshness/time.Second),
 		ProviderCommercialTermsContractV1,
 		ProviderActionHandoffContractV1,
@@ -5816,6 +5850,7 @@ func getProviderExchangeProof(
 		&proof.ProviderPilotDemandTopic,
 		&proof.ProviderPilotStatus,
 		&proof.VerifiedProviderCompanies,
+		&proof.VerifiedObservedHandoffs,
 	)
 	if err != nil {
 		return nil, err
@@ -5826,7 +5861,8 @@ func getProviderExchangeProof(
 
 	outcomeRows, err := tx.Query(providerVerifiedCommercialCTEs+`
 		SELECT `+qualifiedOutcomeReceiptColumns+`,
-		       ticket.billing_mode_snapshot, ticket.pilot_activated_at
+		       ticket.billing_mode_snapshot, ticket.pilot_activated_at,
+		       ticket.handoff_observed_at
 		FROM outcome_receipts receipt
 		JOIN pilot_tickets ticket ON ticket.id=receipt.action_ticket_id
 		ORDER BY receipt.created_at, receipt.id`,
@@ -5850,6 +5886,7 @@ func getProviderExchangeProof(
 			&candidate.receipt.SignedReceipt, &candidate.receipt.Signature,
 			&candidate.receipt.ProviderReportedAt, &candidate.receipt.CreatedAt,
 			&candidate.billingMode, &candidate.pilotActivatedAt,
+			&candidate.handoffObservedAt,
 		); err != nil {
 			outcomeRows.Close()
 			return nil, err
@@ -5864,10 +5901,15 @@ func getProviderExchangeProof(
 
 	ticketStates := make(map[string]*providerProofTicketState)
 	verifiedLedgerIDs := make(map[int64]bool)
+	verifiedChargedReceiptIDs := make(map[string]bool)
 	for i := range candidates {
 		candidate := &candidates[i]
+		handoffObservedAt := candidate.handoffObservedAt.UTC().Truncate(time.Second)
 		signed, valid := verifyProviderProofOutcome(signer, &candidate.receipt)
 		if valid && signed.RecordedAt < candidate.pilotActivatedAt.Unix() {
+			valid = false
+		}
+		if valid && candidate.receipt.CreatedAt.Before(handoffObservedAt) {
 			valid = false
 		}
 		if valid {
@@ -5888,16 +5930,32 @@ func getProviderExchangeProof(
 		proof.VerifiedOutcomeReceipts++
 		state := ticketStates[candidate.receipt.ActionTicketID]
 		if state == nil {
-			state = &providerProofTicketState{}
+			state = &providerProofTicketState{handoffObservedAt: handoffObservedAt}
 			ticketStates[candidate.receipt.ActionTicketID] = state
+		} else if !state.handoffObservedAt.Equal(handoffObservedAt) {
+			proof.OutcomeReceiptIntegrityValid = false
+			proof.RejectedOutcomeReceipts++
+			continue
 		}
 		switch signed.Outcome {
 		case providerexchange.OutcomeAccepted:
 			state.accepted = true
+			if state.acceptedAt == nil {
+				value := candidate.receipt.CreatedAt
+				state.acceptedAt = &value
+			}
 		case providerexchange.OutcomeActivated:
 			state.activated = true
+			if state.activatedAt == nil {
+				value := candidate.receipt.CreatedAt
+				state.activatedAt = &value
+			}
 		case providerexchange.OutcomeConverted:
 			state.converted = true
+			if state.convertedAt == nil {
+				value := candidate.receipt.CreatedAt
+				state.convertedAt = &value
+			}
 		case providerexchange.OutcomeRejected,
 			providerexchange.OutcomeDuplicate,
 			providerexchange.OutcomeInvalid:
@@ -5907,6 +5965,7 @@ func getProviderExchangeProof(
 		switch signed.ChargeStatus {
 		case providerexchange.ChargeStatusCharged:
 			state.charged = true
+			verifiedChargedReceiptIDs[candidate.receipt.ID] = true
 			delta = signed.ChargedMinor
 		case providerexchange.ChargeStatusCredited:
 			state.reversed = true
@@ -5969,23 +6028,112 @@ func getProviderExchangeProof(
 	ledgerRows.Close()
 
 	verifiedChargedTickets := make([]string, 0, len(ticketStates))
+	acceptedLatencySeconds := make([]int64, 0, len(ticketStates))
+	activatedLatencySeconds := make([]int64, 0, len(ticketStates))
+	convertedLatencySeconds := make([]int64, 0, len(ticketStates))
 	for ticketID, state := range ticketStates {
 		if state.reversed {
 			continue
 		}
 		if state.accepted {
 			proof.VerifiedProviderAcceptedHandoffs++
+			if state.acceptedAt != nil {
+				acceptedLatencySeconds = append(acceptedLatencySeconds,
+					int64(state.acceptedAt.Sub(state.handoffObservedAt)/time.Second))
+			}
 		}
 		if state.activated || state.converted {
 			proof.VerifiedProviderConfirmedActivations++
+			activationTime := state.activatedAt
+			if activationTime == nil {
+				activationTime = state.convertedAt
+			}
+			if activationTime != nil {
+				activatedLatencySeconds = append(activatedLatencySeconds,
+					int64(activationTime.Sub(state.handoffObservedAt)/time.Second))
+			}
 		}
 		if state.converted {
 			proof.VerifiedProviderConfirmedConversions++
+			if state.convertedAt != nil {
+				convertedLatencySeconds = append(convertedLatencySeconds,
+					int64(state.convertedAt.Sub(state.handoffObservedAt)/time.Second))
+			}
 		}
 		if state.charged {
 			verifiedChargedTickets = append(verifiedChargedTickets, ticketID)
 		}
 	}
+	proof.VerifiedAcceptedMedianSeconds = providerProofMedianSeconds(acceptedLatencySeconds)
+	proof.VerifiedActivatedMedianSeconds = providerProofMedianSeconds(activatedLatencySeconds)
+	proof.VerifiedConvertedMedianSeconds = providerProofMedianSeconds(convertedLatencySeconds)
+	proof.VerifiedAcceptedLatencySamples = len(acceptedLatencySeconds)
+	proof.VerifiedActivatedLatencySamples = len(activatedLatencySeconds)
+	proof.VerifiedConvertedLatencySamples = len(convertedLatencySeconds)
+
+	settlementRows, err := tx.Query(providerVerifiedCommercialCTEs+`
+		SELECT settlement.action_ticket_id::text,
+		       settlement.outcome_receipt_id::text,
+		       settlement.amount_cents, settlement.currency,
+		       payment.amount_cents, payment.currency, payment.paid_at,
+		       payment.created_at, receipt.created_at,
+		       ticket.handoff_observed_at
+		FROM provider_settlement_payment_receipts payment
+		JOIN provider_settlement_orders settlement
+		  ON settlement.id=payment.provider_settlement_order_id
+		JOIN outcome_receipts receipt
+		  ON receipt.id=settlement.outcome_receipt_id
+		 AND receipt.action_ticket_id=settlement.action_ticket_id
+		JOIN pilot_tickets ticket
+		  ON ticket.id=settlement.action_ticket_id
+		 AND ticket.provider_offer_id=settlement.provider_offer_id
+		 AND ticket.provider_claim_id=settlement.provider_claim_id
+		ORDER BY payment.paid_at, payment.id`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID)
+	if err != nil {
+		return nil, err
+	}
+	paidLatencySeconds := make([]int64, 0)
+	for settlementRows.Next() {
+		var ticketID, outcomeReceiptID, orderCurrency, paidCurrency string
+		var orderAmount, paidAmount int64
+		var paidAt, paymentCreatedAt, outcomeCreatedAt, handoffObservedAt time.Time
+		if err := settlementRows.Scan(
+			&ticketID, &outcomeReceiptID, &orderAmount, &orderCurrency,
+			&paidAmount, &paidCurrency, &paidAt, &paymentCreatedAt,
+			&outcomeCreatedAt, &handoffObservedAt,
+		); err != nil {
+			settlementRows.Close()
+			return nil, err
+		}
+		state := ticketStates[ticketID]
+		handoffObservedAt = handoffObservedAt.UTC().Truncate(time.Second)
+		valid := state != nil && !state.reversed && state.charged &&
+			verifiedChargedReceiptIDs[outcomeReceiptID] &&
+			orderAmount > 0 && orderAmount == paidAmount &&
+			orderCurrency == paidCurrency && paidCurrency == "usd" &&
+			!paidAt.Before(handoffObservedAt) && !paidAt.Before(outcomeCreatedAt) &&
+			!paymentCreatedAt.Before(paidAt)
+		if !valid {
+			proof.SettlementReceiptIntegrityValid = false
+			proof.RejectedProviderSettlementReceipts++
+			continue
+		}
+		proof.VerifiedProviderPaidSettlements++
+		proof.VerifiedTermsPaidByCurrency[paidCurrency] += paidAmount
+		paidLatencySeconds = append(paidLatencySeconds,
+			int64(paidAt.Sub(handoffObservedAt)/time.Second))
+	}
+	if err := settlementRows.Err(); err != nil {
+		settlementRows.Close()
+		return nil, err
+	}
+	settlementRows.Close()
+	proof.VerifiedPaidLatencySamples = len(paidLatencySeconds)
+	proof.VerifiedPaidMedianSeconds = providerProofMedianSeconds(paidLatencySeconds)
 	sort.Strings(verifiedChargedTickets)
 	for currency, amount := range proof.VerifiedPrepaidNetDebitedByCurrency {
 		if amount == 0 {
@@ -6055,6 +6203,7 @@ func getProviderExchangeProof(
 	}
 
 	proof.PilotThresholdsMet = proof.OutcomeReceiptIntegrityValid &&
+		proof.SettlementReceiptIntegrityValid &&
 		proof.VerifiedProviderCompanies >= 3 &&
 		proof.VerifiedProviderAcceptedHandoffs >= 5 &&
 		proof.VerifiedProviderConfirmedActivations >= 2 &&

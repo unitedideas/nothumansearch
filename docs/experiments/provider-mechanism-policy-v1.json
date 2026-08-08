@@ -1,0 +1,8 @@
+{
+  "name": "developer-tools-policy-v1",
+  "demand_topic": "developer-tools",
+  "max_cost_per_activation_cents": 10000,
+  "max_median_days_to_charge": 14,
+  "min_charged_events": 5,
+  "bounty_points_cents": [2500, 7500, 20000]
+}

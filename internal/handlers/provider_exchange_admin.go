@@ -103,10 +103,12 @@ func (h *ProviderExchangeHandler) AdminProof(w http.ResponseWriter, r *http.Requ
 			"verified_provider_confirmed_activations": 2,
 			"verified_provider_renewals":              1,
 		},
-		"evidence_scope":             "pilot_thresholds_met is scoped to the exact requested pilot_id and uses only its enrolled verified companies, epoch-bound offers and tickets, observed handoffs, provider-authenticated outcomes, owner-verified funding or exact terms, and nonreversed renewal evidence.",
+		"evidence_scope":             "pilot_thresholds_met is scoped to the exact requested pilot_id and uses only its enrolled verified companies, epoch-bound offers and tickets, observed handoffs, provider-authenticated outcomes, owner-verified funding or exact terms, exact paid settlement aggregates, and nonreversed renewal evidence.",
 		"operational_progress_scope": "operator_recorded and provider_reported legacy fields remain diagnostic observations and cannot satisfy pilot_thresholds_met.",
 		"organic_rank_sold":          false,
 		"raw_queries_sold":           false,
+		"raw_prompts_sold":           false,
 		"agent_identities_sold":      false,
+		"principal_identities_sold":  false,
 	})
 }

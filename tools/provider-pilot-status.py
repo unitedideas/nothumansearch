@@ -752,7 +752,10 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
     targets = _integer_map(document.get("targets"), set(PROOF_TARGETS))
     if targets != PROOF_TARGETS:
         raise StatusError("invalid_response")
-    for key in ("organic_rank_sold", "raw_queries_sold", "agent_identities_sold"):
+    for key in (
+        "organic_rank_sold", "raw_queries_sold", "raw_prompts_sold",
+        "agent_identities_sold", "principal_identities_sold",
+    ):
         if _boolean(document, key) is not False:
             raise StatusError("invalid_response")
 
@@ -768,10 +771,31 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         raise StatusError("invalid_response")
 
     verified_companies = _integer(raw, "verified_provider_companies")
+    verified_observed_handoffs = _integer(raw, "verified_observed_handoffs")
     verified_handoffs = _integer(raw, "verified_provider_accepted_handoffs")
     verified_activations = _integer(raw, "verified_provider_confirmed_activations")
     verified_renewals = _integer(raw, "verified_provider_renewals")
     verified_conversions = _integer(raw, "verified_provider_confirmed_conversions")
+    accepted_latency_samples = _integer(raw, "verified_accepted_latency_samples")
+    activated_latency_samples = _integer(raw, "verified_activated_latency_samples")
+    converted_latency_samples = _integer(raw, "verified_converted_latency_samples")
+    accepted_median_seconds = _integer(
+        raw, "verified_accepted_median_handoff_to_outcome_seconds", 0, MAX_MONEY_CENTS
+    )
+    activated_median_seconds = _integer(
+        raw, "verified_activated_median_handoff_to_outcome_seconds", 0, MAX_MONEY_CENTS
+    )
+    converted_median_seconds = _integer(
+        raw, "verified_converted_median_handoff_to_outcome_seconds", 0, MAX_MONEY_CENTS
+    )
+    settlement_integrity = _boolean(raw, "settlement_receipt_integrity_valid")
+    verified_paid_settlements = _integer(raw, "verified_provider_paid_settlements")
+    rejected_settlements = _integer(raw, "rejected_provider_settlement_receipts")
+    paid_latency_samples = _integer(raw, "verified_paid_latency_samples")
+    paid_median_seconds = _integer(
+        raw, "verified_paid_median_handoff_to_settlement_seconds", 0, MAX_MONEY_CENTS
+    )
+    verified_terms_paid = _money_map(raw.get("verified_terms_paid_by_currency"))
     outcome_integrity = _boolean(raw, "outcome_receipt_integrity_valid")
     verified_outcomes = _integer(raw, "verified_outcome_receipts")
     rejected_outcomes = _integer(raw, "rejected_outcome_receipts")
@@ -779,10 +803,26 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
     rejected_outcome_ledger = _integer(raw, "rejected_outcome_ledger_entries")
     if outcome_integrity != (rejected_outcomes == 0 and rejected_outcome_ledger == 0):
         raise StatusError("invalid_response")
-    if verified_activations > verified_handoffs or verified_conversions > verified_activations:
+    if settlement_integrity != (rejected_settlements == 0):
+        raise StatusError("invalid_response")
+    if (
+        verified_handoffs > verified_observed_handoffs
+        or verified_activations > verified_handoffs
+        or verified_conversions > verified_activations
+        or accepted_latency_samples != verified_handoffs
+        or activated_latency_samples != verified_activations
+        or converted_latency_samples != verified_conversions
+        or (verified_handoffs == 0 and accepted_median_seconds != 0)
+        or (verified_activations == 0 and activated_median_seconds != 0)
+        or (verified_conversions == 0 and converted_median_seconds != 0)
+        or paid_latency_samples != verified_paid_settlements
+        or (verified_paid_settlements == 0) != (len(verified_terms_paid) == 0)
+        or (verified_paid_settlements == 0 and paid_median_seconds != 0)
+    ):
         raise StatusError("invalid_response")
     expected_met = (
         outcome_integrity
+        and settlement_integrity
         and verified_companies >= PROOF_TARGETS["verified_provider_companies"]
         and verified_handoffs >= PROOF_TARGETS["verified_provider_accepted_handoffs"]
         and verified_activations >= PROOF_TARGETS["verified_provider_confirmed_activations"]
@@ -811,10 +851,23 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         "verified_outcome_ledger_entries": verified_outcome_ledger,
         "rejected_outcome_ledger_entries": rejected_outcome_ledger,
         "verified_provider_companies": verified_companies,
+        "verified_observed_handoffs": verified_observed_handoffs,
         "verified_provider_accepted_handoffs": verified_handoffs,
         "verified_provider_confirmed_activations": verified_activations,
         "verified_provider_renewals": verified_renewals,
         "verified_provider_confirmed_conversions": verified_conversions,
+        "verified_accepted_latency_samples": accepted_latency_samples,
+        "verified_activated_latency_samples": activated_latency_samples,
+        "verified_converted_latency_samples": converted_latency_samples,
+        "verified_accepted_median_handoff_to_outcome_seconds": accepted_median_seconds,
+        "verified_activated_median_handoff_to_outcome_seconds": activated_median_seconds,
+        "verified_converted_median_handoff_to_outcome_seconds": converted_median_seconds,
+        "settlement_receipt_integrity_valid": settlement_integrity,
+        "verified_provider_paid_settlements": verified_paid_settlements,
+        "rejected_provider_settlement_receipts": rejected_settlements,
+        "verified_paid_latency_samples": paid_latency_samples,
+        "verified_paid_median_handoff_to_settlement_seconds": paid_median_seconds,
+        "verified_terms_paid_by_currency": verified_terms_paid,
         "verified_prepaid_settled_by_currency": _money_map(raw.get("verified_prepaid_settled_by_currency")),
         "verified_prepaid_net_debited_by_currency": _money_map(raw.get("verified_prepaid_net_debited_by_currency")),
         "verified_terms_net_receivable_by_currency": _money_map(raw.get("verified_terms_net_receivable_by_currency")),
@@ -823,7 +876,9 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         "diagnostic_observations_not_proof": diagnostics,
         "organic_rank_sold": False,
         "raw_queries_sold": False,
+        "raw_prompts_sold": False,
         "agent_identities_sold": False,
+        "principal_identities_sold": False,
     }
 
 
