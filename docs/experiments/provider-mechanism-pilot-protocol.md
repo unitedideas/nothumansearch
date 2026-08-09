@@ -27,6 +27,14 @@ and Merchant-of-Record acknowledgement before any real inventory is activated.
 - Three exact charge-event arms across the cohort: `accepted`, `activated`,
   and `converted`; every participating provider must accept the immutable terms
   for each arm it receives before that inventory is activated.
+- For one provider and action type, the three arms must be otherwise equivalent:
+  same provider, destination, action, principal price, disclosure, and response
+  and credit rules. A difference suppresses the whole group rather than
+  creating a confounded comparison.
+- The random search receipt assigns exactly one of the three arms before the
+  provider-funded sidecar is returned. The other two are neither disclosed nor
+  persisted as returned offers and therefore cannot mint a ticket. Callers and
+  providers cannot choose the accounting event for an individual opportunity.
 - No paid placement, ranking change, discovery paywall, or identity/query sale.
 - Each ticket has explicit authority and separate handoff consent.
 - A ticket is assigned to only one provider offer and can produce at most one

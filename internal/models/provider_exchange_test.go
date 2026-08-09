@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -28,6 +29,60 @@ func validOfferFixture() ProviderOfferInput {
 		PrincipalPriceCents: int64Pointer(0),
 		PrincipalCurrency:   "usd",
 		BillingMode:         "prepaid",
+	}
+}
+
+func mechanismArmFixture(chargeEvent, offerID string) PublicProviderOffer {
+	return PublicProviderOffer{
+		OfferID: offerID, providerClaimID: "11111111-1111-4111-8111-111111111111",
+		ProviderPilotEpochID: "22222222-2222-4222-8222-222222222222",
+		actionURL:            "https://provider.example/start", OfferVersion: 1,
+		SiteID: "33333333-3333-4333-8333-333333333333", Domain: "provider.example",
+		OfferName: "Start an API sandbox", OfferSummary: "Create one sandbox workspace.",
+		ActionType: "trial", ChargeEvent: chargeEvent, DisclosureLabel: ProviderDisclosureLabel,
+		ProviderFundedBountyCents: 2500, ProviderFundedCurrency: "usd",
+		PrincipalPriceMode: "free", PrincipalPriceCents: int64Pointer(0), PrincipalCurrency: "usd",
+		CommercialTermsContractVersion: ProviderCommercialTermsContractV1,
+		CommercialTermsSHA256:          strings.Repeat("a", 64),
+		CreditRule:                     ProviderCommercialCreditRuleV1, ResponseExpectation: ProviderCommercialResponseRuleV1,
+		TermsPeriodAnchorRule:                ProviderCommercialTermsAnchorRuleV1,
+		ProviderAcknowledgesMerchantOfRecord: true, OrganicPosition: 1,
+	}
+}
+
+func TestProviderMechanismArmAssignmentReturnsOneArmPerReceipt(t *testing.T) {
+	offers := []PublicProviderOffer{
+		mechanismArmFixture("accepted", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+		mechanismArmFixture("activated", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+		mechanismArmFixture("converted", "cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+	}
+	seen := map[string]bool{}
+	for i := 0; i < 1000; i++ {
+		selected := selectProviderMechanismArms("nhs_sr_"+strconv.Itoa(i), offers)
+		if len(selected) != 1 {
+			t.Fatalf("search %d selected %d arms, want exactly one", i, len(selected))
+		}
+		seen[selected[0].ChargeEvent] = true
+	}
+	for _, chargeEvent := range []string{"accepted", "activated", "converted"} {
+		if !seen[chargeEvent] {
+			t.Fatalf("deterministic assignment never selected %s", chargeEvent)
+		}
+	}
+}
+
+func TestProviderMechanismArmAssignmentSuppressesConfoundedGroup(t *testing.T) {
+	offers := []PublicProviderOffer{
+		mechanismArmFixture("accepted", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+		mechanismArmFixture("activated", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+		mechanismArmFixture("converted", "cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+	}
+	offers[2].actionURL = "https://provider.example/easier-conversion"
+	if selected := selectProviderMechanismArms("nhs_sr_confounded", offers); len(selected) != 0 {
+		t.Fatalf("confounded mechanism group selected %d offers, want none", len(selected))
+	}
+	if selected := selectProviderMechanismArms("nhs_sr_single", offers[:1]); len(selected) != 1 {
+		t.Fatalf("single legacy arm selected %d offers, want one", len(selected))
 	}
 }
 

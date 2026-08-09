@@ -234,7 +234,9 @@ type ProviderOffer struct {
 // excludes claim ownership, evidence references, and provider budget balances.
 type PublicProviderOffer struct {
 	OfferID                              string `json:"offer_id"`
+	providerClaimID                      string
 	ProviderPilotEpochID                 string `json:"-"`
+	actionURL                            string
 	OfferVersion                         int    `json:"offer_version"`
 	SiteID                               string `json:"site_id"`
 	Domain                               string `json:"domain"`
@@ -3699,9 +3701,11 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, searchPublicID string
 			continue
 		}
 		offers = append(offers, PublicProviderOffer{
-			OfferID: offer.ID, ProviderPilotEpochID: offer.ProviderPilotEpochID,
-			OfferVersion: offer.Version,
-			SiteID:       offer.SiteID, Domain: offer.Domain,
+			OfferID: offer.ID, providerClaimID: offer.ProviderClaimID,
+			ProviderPilotEpochID: offer.ProviderPilotEpochID,
+			actionURL:            offer.ActionURL,
+			OfferVersion:         offer.Version,
+			SiteID:               offer.SiteID, Domain: offer.Domain,
 			OfferName: offer.OfferName, OfferSummary: offer.OfferSummary,
 			ActionType: offer.ActionType, ChargeEvent: offer.ChargeEvent,
 			DisclosureLabel:                      offer.DisclosureLabel,
@@ -3719,7 +3723,98 @@ func ListPublicProviderOffersForOrganicResults(db *sql.DB, searchPublicID string
 			OrganicPosition:                      offer.OrganicPosition,
 		})
 	}
-	return offers, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return selectProviderMechanismArms(searchPublicID, offers), nil
+}
+
+// selectProviderMechanismArms prevents callers from choosing the accounting
+// event in the three-arm paid pilot. When one provider exposes one otherwise
+// equivalent accepted, activated, and converted offer, the random search
+// receipt assigns exactly one arm before disclosure. Only that selected offer
+// is persisted as returned and can later mint a ticket. Organic results and
+// their order have already been fixed and are not inputs to this allocation.
+func selectProviderMechanismArms(searchPublicID string, offers []PublicProviderOffer) []PublicProviderOffer {
+	if len(offers) < 2 || !strings.HasPrefix(searchPublicID, "nhs_sr_") {
+		return offers
+	}
+	type groupKey struct {
+		claimID, pilotID, actionType string
+	}
+	groups := make(map[groupKey][]PublicProviderOffer)
+	order := make([]groupKey, 0)
+	for _, offer := range offers {
+		key := groupKey{offer.providerClaimID, offer.ProviderPilotEpochID, offer.ActionType}
+		if _, exists := groups[key]; !exists {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], offer)
+	}
+	selected := make([]PublicProviderOffer, 0, len(groups))
+	for _, key := range order {
+		group := groups[key]
+		if len(group) == 1 {
+			selected = append(selected, group[0])
+			continue
+		}
+		arms := make(map[string]PublicProviderOffer, 3)
+		for _, offer := range group {
+			if _, duplicate := arms[offer.ChargeEvent]; duplicate {
+				arms = nil
+				break
+			}
+			arms[offer.ChargeEvent] = offer
+		}
+		accepted, acceptedOK := arms["accepted"]
+		activated, activatedOK := arms["activated"]
+		converted, convertedOK := arms["converted"]
+		if len(group) != 3 || !acceptedOK || !activatedOK || !convertedOK ||
+			!equivalentProviderMechanismArms(accepted, activated) ||
+			!equivalentProviderMechanismArms(accepted, converted) {
+			// Partial, duplicate, or commercially different arms would create
+			// caller choice or a confounded experiment. Suppress the whole group.
+			continue
+		}
+		sum := sha256.Sum256([]byte(strings.Join([]string{
+			"nhs-provider-mechanism-arm-v1", searchPublicID,
+			key.claimID, key.pilotID, key.actionType,
+		}, "\x00")))
+		armNames := [...]string{"accepted", "activated", "converted"}
+		selected = append(selected, arms[armNames[int(sum[0])%len(armNames)]])
+	}
+	sort.Slice(selected, func(i, j int) bool {
+		if selected[i].OrganicPosition != selected[j].OrganicPosition {
+			return selected[i].OrganicPosition < selected[j].OrganicPosition
+		}
+		if selected[i].ActionType != selected[j].ActionType {
+			return selected[i].ActionType < selected[j].ActionType
+		}
+		return selected[i].OfferID < selected[j].OfferID
+	})
+	return selected
+}
+
+func equivalentProviderMechanismArms(left, right PublicProviderOffer) bool {
+	if left.providerClaimID != right.providerClaimID ||
+		left.ProviderPilotEpochID != right.ProviderPilotEpochID ||
+		left.SiteID != right.SiteID || left.Domain != right.Domain ||
+		left.OfferName != right.OfferName || left.OfferSummary != right.OfferSummary ||
+		left.ActionType != right.ActionType || left.actionURL != right.actionURL ||
+		left.DisclosureLabel != right.DisclosureLabel ||
+		left.PrincipalPriceMode != right.PrincipalPriceMode ||
+		left.PrincipalCurrency != right.PrincipalCurrency ||
+		left.CommercialTermsContractVersion != right.CommercialTermsContractVersion ||
+		left.CreditRule != right.CreditRule ||
+		left.ResponseExpectation != right.ResponseExpectation ||
+		left.TermsPeriodAnchorRule != right.TermsPeriodAnchorRule ||
+		left.ProviderAcknowledgesMerchantOfRecord != right.ProviderAcknowledgesMerchantOfRecord {
+		return false
+	}
+	if left.PrincipalPriceCents == nil || right.PrincipalPriceCents == nil {
+		return left.PrincipalPriceCents == nil && right.PrincipalPriceCents == nil
+	}
+	return *left.PrincipalPriceCents == *right.PrincipalPriceCents
 }
 
 // RecordProviderOffersReturned commits the exact paid offer/version evidence
