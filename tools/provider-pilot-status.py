@@ -772,6 +772,7 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         raise StatusError("invalid_response")
 
     verified_companies = _integer(raw, "verified_provider_companies")
+    verified_offer_returns = _integer(raw, "verified_provider_offer_returns")
     verified_observed_handoffs = _integer(raw, "verified_observed_handoffs")
     verified_handoffs = _integer(raw, "verified_provider_accepted_handoffs")
     verified_activations = _integer(raw, "verified_provider_confirmed_activations")
@@ -805,13 +806,14 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
     for charge_event in CHARGE_EVENTS:
         item = mechanism_raw.get(charge_event)
         if not isinstance(item, dict) or set(item) != {
-            "charged_provider_companies", "observed_handoffs", "accepted", "activated", "converted", "reversed",
+            "charged_provider_companies", "offer_returns", "observed_handoffs", "accepted", "activated", "converted", "reversed",
             "paid_settlements", "paid_cents",
             "paid_median_handoff_to_settlement_seconds",
         }:
             raise StatusError("invalid_response")
         projected = {
             "charged_provider_companies": _integer(item, "charged_provider_companies"),
+            "offer_returns": _integer(item, "offer_returns"),
             "observed_handoffs": _integer(item, "observed_handoffs"),
             "accepted": _integer(item, "accepted"),
             "activated": _integer(item, "activated"),
@@ -824,7 +826,8 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
             ),
         }
         if (
-            projected["charged_provider_companies"] > projected["observed_handoffs"]
+            projected["observed_handoffs"] > projected["offer_returns"]
+            or projected["charged_provider_companies"] > projected["observed_handoffs"]
             or projected["charged_provider_companies"] > verified_companies
             or projected["observed_handoffs"] < projected["accepted"]
             or projected["accepted"] < projected["activated"]
@@ -860,6 +863,8 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         or (verified_paid_settlements == 0 and paid_median_seconds != 0)
         or sum(item["observed_handoffs"] for item in verified_mechanisms.values())
         != verified_observed_handoffs
+        or sum(item["offer_returns"] for item in verified_mechanisms.values())
+        != verified_offer_returns
         or sum(item["accepted"] for item in verified_mechanisms.values()) != verified_handoffs
         or sum(item["activated"] for item in verified_mechanisms.values()) != verified_activations
         or sum(item["converted"] for item in verified_mechanisms.values()) != verified_conversions
@@ -900,6 +905,7 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         "verified_outcome_ledger_entries": verified_outcome_ledger,
         "rejected_outcome_ledger_entries": rejected_outcome_ledger,
         "verified_provider_companies": verified_companies,
+        "verified_provider_offer_returns": verified_offer_returns,
         "verified_observed_handoffs": verified_observed_handoffs,
         "verified_provider_accepted_handoffs": verified_handoffs,
         "verified_provider_confirmed_activations": verified_activations,

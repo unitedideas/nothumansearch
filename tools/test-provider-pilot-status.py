@@ -118,6 +118,7 @@ def proof_document():
             "verified_outcome_ledger_entries": 8,
             "rejected_outcome_ledger_entries": 0,
             "verified_provider_companies": 3,
+            "verified_provider_offer_returns": 7,
             "verified_observed_handoffs": 7,
             "verified_provider_accepted_handoffs": 5,
             "verified_provider_confirmed_activations": 2,
@@ -137,17 +138,17 @@ def proof_document():
             "verified_terms_paid_by_currency": {"usd": 500},
             "verified_mechanisms": {
                 "accepted": {
-                    "charged_provider_companies": 0, "observed_handoffs": 3, "accepted": 2, "activated": 0,
+                    "charged_provider_companies": 0, "offer_returns": 3, "observed_handoffs": 3, "accepted": 2, "activated": 0,
                     "converted": 0, "reversed": 0, "paid_settlements": 0, "paid_cents": 0,
                     "paid_median_handoff_to_settlement_seconds": 0,
                 },
                 "activated": {
-                    "charged_provider_companies": 1, "observed_handoffs": 2, "accepted": 2, "activated": 1,
+                    "charged_provider_companies": 1, "offer_returns": 2, "observed_handoffs": 2, "accepted": 2, "activated": 1,
                     "converted": 0, "reversed": 0, "paid_settlements": 1, "paid_cents": 500,
                     "paid_median_handoff_to_settlement_seconds": 691200,
                 },
                 "converted": {
-                    "charged_provider_companies": 0, "observed_handoffs": 2, "accepted": 1, "activated": 1,
+                    "charged_provider_companies": 0, "offer_returns": 2, "observed_handoffs": 2, "accepted": 1, "activated": 1,
                     "converted": 1, "reversed": 0, "paid_settlements": 0, "paid_cents": 0,
                     "paid_median_handoff_to_settlement_seconds": 0,
                 },
@@ -381,6 +382,13 @@ class ReadContractTest(unittest.TestCase):
     def test_proof_rejects_mechanism_totals_that_do_not_reconcile(self):
         document = proof_document()
         document["proof"]["verified_mechanisms"]["accepted"]["paid_cents"] += 1
+        with self.assertRaises(status_tool.StatusError) as caught:
+            status_tool.project_proof(document, TEST_PILOT_ID)
+        self.assertEqual(caught.exception.code, "invalid_response")
+
+    def test_proof_rejects_offer_return_totals_that_do_not_reconcile(self):
+        document = proof_document()
+        document["proof"]["verified_mechanisms"]["accepted"]["offer_returns"] += 1
         with self.assertRaises(status_tool.StatusError) as caught:
             status_tool.project_proof(document, TEST_PILOT_ID)
         self.assertEqual(caught.exception.code, "invalid_response")

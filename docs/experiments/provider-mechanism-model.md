@@ -48,9 +48,11 @@ contains separate exact paid terms-settlement evidence for accepted-handoff,
 activated-CPA, and converted-CPA tickets. Each arm must also independently meet
 the policy's minimum distinct-provider coverage and charged-event sample. Only
 aggregate provider counts enter the projection; provider IDs remain excluded.
-The final selector compares verified paid revenue per observed handoff and uses
-paid-settlement latency as its tie-breaker. The initial 3/5/2/1 milestone proves
-the revenue rails but cannot
+The final selector compares verified paid revenue per exact non-synthetic
+provider offer returned to an agent and uses paid-settlement latency as its
+tie-breaker. Revenue per observed handoff remains a downstream diagnostic but
+cannot select the winner because it ignores agents that saw an offer and did
+not proceed. The initial 3/5/2/1 milestone proves the revenue rails but cannot
 by itself name a strongest mechanism. Aggregate payment from one charge event
 cannot qualify another. A Checkout, internal receivable, or unsigned payment
 claim is insufficient. The

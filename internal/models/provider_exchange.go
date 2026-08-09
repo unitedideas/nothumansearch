@@ -565,6 +565,7 @@ type ProviderExchangeProof struct {
 	VerifiedOutcomeLedgerEntries         int                               `json:"verified_outcome_ledger_entries"`
 	RejectedOutcomeLedgerEntries         int                               `json:"rejected_outcome_ledger_entries"`
 	VerifiedProviderCompanies            int                               `json:"verified_provider_companies"`
+	VerifiedProviderOfferReturns         int                               `json:"verified_provider_offer_returns"`
 	VerifiedObservedHandoffs             int                               `json:"verified_observed_handoffs"`
 	VerifiedProviderAcceptedHandoffs     int                               `json:"verified_provider_accepted_handoffs"`
 	VerifiedProviderConfirmedActivations int                               `json:"verified_provider_confirmed_activations"`
@@ -603,6 +604,7 @@ type ProviderExchangeProof struct {
 // evidence must never be reused as proof for a different charge event.
 type ProviderMechanismProof struct {
 	ChargedProviderCompanies int   `json:"charged_provider_companies"`
+	OfferReturns             int   `json:"offer_returns"`
 	ObservedHandoffs         int   `json:"observed_handoffs"`
 	Accepted                 int   `json:"accepted"`
 	Activated                int   `json:"activated"`
@@ -6011,6 +6013,58 @@ func getProviderExchangeProof(
 		return nil, err
 	}
 	mechanismHandoffRows.Close()
+
+	mechanismOfferRows, err := tx.Query(providerVerifiedCommercialCTEs+`
+		SELECT returned.charge_event_snapshot, COUNT(*)::int
+		FROM provider_offers_returned returned
+		JOIN search_receipts receipt
+		  ON receipt.id=returned.search_receipt_id
+		 AND NOT receipt.is_synthetic
+		JOIN qualified_offers qualified
+		  ON qualified.provider_offer_id=returned.provider_offer_id
+		 AND qualified.provider_claim_id=returned.provider_claim_id
+		 AND qualified.pilot_id=returned.provider_pilot_epoch_id_snapshot
+		 AND qualified.version=returned.offer_version_snapshot
+		 AND qualified.commercial_terms_contract_version=
+		     returned.commercial_terms_contract_version_snapshot
+		 AND qualified.commercial_terms_sha256=
+		     returned.commercial_terms_sha256_snapshot
+		WHERE receipt.created_at >= qualified.pilot_activated_at
+		  AND returned.returned_at >= qualified.pilot_activated_at
+		  AND (qualified.pilot_closed_at IS NULL OR (
+		       receipt.created_at <= qualified.pilot_closed_at AND
+		       returned.returned_at <= qualified.pilot_closed_at
+		  ))
+		GROUP BY returned.charge_event_snapshot
+		ORDER BY returned.charge_event_snapshot`,
+		int64(ProviderClaimVerificationFreshness/time.Second),
+		ProviderCommercialTermsContractV1,
+		ProviderActionHandoffContractV1,
+		pilotID)
+	if err != nil {
+		return nil, err
+	}
+	for mechanismOfferRows.Next() {
+		var chargeEvent string
+		var count int
+		if err := mechanismOfferRows.Scan(&chargeEvent, &count); err != nil {
+			mechanismOfferRows.Close()
+			return nil, err
+		}
+		evidence, ok := proof.VerifiedMechanisms[chargeEvent]
+		if !ok || count < 0 {
+			mechanismOfferRows.Close()
+			return nil, ErrInvalidProviderExchange
+		}
+		evidence.OfferReturns = count
+		proof.VerifiedMechanisms[chargeEvent] = evidence
+		proof.VerifiedProviderOfferReturns += count
+	}
+	if err := mechanismOfferRows.Err(); err != nil {
+		mechanismOfferRows.Close()
+		return nil, err
+	}
+	mechanismOfferRows.Close()
 
 	outcomeRows, err := tx.Query(providerVerifiedCommercialCTEs+`
 		SELECT `+qualifiedOutcomeReceiptColumns+`,

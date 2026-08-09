@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -4226,6 +4227,7 @@ func exerciseProviderActionHandoffPostgres(
 type postgresVerifiedProofSnapshot struct {
 	companies        int
 	chargedProviders map[string]int
+	offerReturns     map[string]int
 	acceptedHandoffs int
 	activations      int
 	renewals         int
@@ -4242,12 +4244,15 @@ func postgresVerifiedProof(proof *models.ProviderExchangeProof) postgresVerified
 		return postgresVerifiedProofSnapshot{}
 	}
 	chargedProviders := make(map[string]int, len(proof.VerifiedMechanisms))
+	offerReturns := make(map[string]int, len(proof.VerifiedMechanisms))
 	for chargeEvent, evidence := range proof.VerifiedMechanisms {
 		chargedProviders[chargeEvent] = evidence.ChargedProviderCompanies
+		offerReturns[chargeEvent] = evidence.OfferReturns
 	}
 	return postgresVerifiedProofSnapshot{
 		companies:        proof.VerifiedProviderCompanies,
 		chargedProviders: chargedProviders,
+		offerReturns:     offerReturns,
 		acceptedHandoffs: proof.VerifiedProviderAcceptedHandoffs,
 		activations:      proof.VerifiedProviderConfirmedActivations,
 		renewals:         proof.VerifiedProviderRenewals,
@@ -4992,12 +4997,14 @@ func exerciseProviderCommercialProofPostgres(
 	positiveProof := readPostgresVerifiedProof(t, db, signer)
 	if positiveProof.companies != baseline.companies+3 ||
 		positiveProof.chargedProviders["accepted"] != baseline.chargedProviders["accepted"]+3 ||
+		positiveProof.offerReturns["accepted"] != baseline.offerReturns["accepted"]+5 ||
 		positiveProof.acceptedHandoffs != baseline.acceptedHandoffs+5 ||
 		positiveProof.activations != baseline.activations+2 ||
 		positiveProof.renewals != baseline.renewals+1 {
-		t.Fatalf("verified commercial proof delta = companies:%d accepted-arm providers:%d handoffs:%d activations:%d renewals:%d; want 3/3/5/2/1 over %#v",
+		t.Fatalf("verified commercial proof delta = companies:%d accepted-arm providers:%d accepted-arm returns:%d handoffs:%d activations:%d renewals:%d; want 3/3/5/5/2/1 over %#v",
 			positiveProof.companies-baseline.companies,
 			positiveProof.chargedProviders["accepted"]-baseline.chargedProviders["accepted"],
+			positiveProof.offerReturns["accepted"]-baseline.offerReturns["accepted"],
 			positiveProof.acceptedHandoffs-baseline.acceptedHandoffs,
 			positiveProof.activations-baseline.activations,
 			positiveProof.renewals-baseline.renewals,
@@ -5013,7 +5020,8 @@ func exerciseProviderCommercialProofPostgres(
 	if err != nil {
 		t.Fatalf("read proof mechanism aggregates: %v", err)
 	}
-	if positiveAggregate.VerifiedObservedHandoffs < positiveAggregate.VerifiedProviderAcceptedHandoffs ||
+	if positiveAggregate.VerifiedProviderOfferReturns < positiveAggregate.VerifiedObservedHandoffs ||
+		positiveAggregate.VerifiedObservedHandoffs < positiveAggregate.VerifiedProviderAcceptedHandoffs ||
 		positiveAggregate.VerifiedAcceptedLatencySamples != positiveAggregate.VerifiedProviderAcceptedHandoffs ||
 		positiveAggregate.VerifiedActivatedLatencySamples != positiveAggregate.VerifiedProviderConfirmedActivations ||
 		positiveAggregate.VerifiedConvertedLatencySamples != positiveAggregate.VerifiedProviderConfirmedConversions ||
@@ -5024,7 +5032,8 @@ func exerciseProviderCommercialProofPostgres(
 	}
 
 	// A sixth accepted receipt that is later marked duplicate/invalid and fully
-	// credited must return to the same truthful positive state.
+	// credited must leave the financial proof unchanged. Its genuine offer
+	// return remains part of the top-of-funnel exposure denominator.
 	creditedTicket := createPostgresActionTicket(
 		t, db, signer, positiveProviders[0].site, positiveOffers[0].ID, "proof-positive-credited",
 	)
@@ -5034,8 +5043,13 @@ func exerciseProviderCommercialProofPostgres(
 	recordPostgresOutcome(
 		t, db, signer, positiveProviders[0].key, creditedTicket.ID, "duplicate", "proof-positive-credited-duplicate",
 	)
-	if got := readPostgresVerifiedProof(t, db, signer); !reflect.DeepEqual(got, positiveProof) {
-		t.Fatalf("duplicate/credited outcome changed truthful positive proof: before=%#v after=%#v", positiveProof, got)
+	if got := readPostgresVerifiedProof(t, db, signer); true {
+		want := positiveProof
+		want.offerReturns = maps.Clone(positiveProof.offerReturns)
+		want.offerReturns["accepted"]++
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("duplicate/credited outcome changed truthful proof beyond one offer return: want=%#v after=%#v", want, got)
+		}
 	}
 
 	// A terms click or owner verification recorded before any real charge is not

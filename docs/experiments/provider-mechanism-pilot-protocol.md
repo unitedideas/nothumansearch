@@ -96,21 +96,23 @@ redirect, or provider assertion remains unpaid.
   separately to each mechanism arm rather than to the pooled cohort;
 - distinct verified-provider coverage per arm, requiring the full three-company
   cohort so provider mix cannot masquerade as a mechanism effect;
-- actually paid value per observed handoff;
-- revenue per observed handoff;
+- exact non-synthetic provider-offer returns per arm;
+- actually paid value per returned provider offer, with revenue per observed
+  handoff retained only as a downstream diagnostic;
 - provider cost per activation and conversion;
 - invalid, duplicate, credit, and disputed-event rate; and
 - median and tail time to authenticated outcome and paid settlement.
 
 Sensitivity grids remain useful for pricing hypotheses, but modeled gross
 billables cannot select the winning mechanism. Final selection uses only exact
-paid receipts from tickets whose immutable terms actually charge that event.
+paid receipts from tickets whose immutable terms actually charge that event,
+divided by the exact eligible offers returned to agents in that arm.
 The initial 3-provider, 5-accepted-handoff, 2-activation, 1-renewal milestone
 proves that the consent, attribution, outcome, billing, renewal, and settlement
 rails can produce real revenue. It does not by itself select a strongest
 mechanism. Selection remains empty until every candidate arm independently
 meets `min_charged_provider_companies_per_mechanism`, `min_charged_events`, and
-the paid-settlement minimum.
+`min_offer_returns_per_mechanism`, plus the paid-settlement minimum.
 
 ## Decision rule
 
@@ -124,7 +126,7 @@ Keep `activated` for the next cohort only when all of the following hold:
 4. The activation sample and observation window are large enough that
    `accepted` does not win merely from earlier reporting and `converted` does
    not lose merely from incomplete observation.
-5. Activation produces the greatest verified paid revenue per observed handoff
+5. Activation produces the greatest verified paid revenue per returned offer
    among mechanisms that satisfy provider cost, sample, dispute/credit, and
    time-to-cash constraints.
 
