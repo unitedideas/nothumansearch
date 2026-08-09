@@ -115,23 +115,24 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		PaidLatencySamples: 3, PaidMedianSeconds: 691200, PaidByCurrency: map[string]int64{"usd": 12500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
-				ObservedHandoffs: 20, Accepted: 15, Activated: 8, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 20, Accepted: 15, Activated: 8, Converted: 1,
 				PaidSettlements: 1, PaidCents: 2000, PaidMedianSeconds: 172800,
 			},
 			"activated": {
-				ObservedHandoffs: 20, Accepted: 10, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 20, Accepted: 10, Activated: 3, Converted: 1,
 				PaidSettlements: 1, PaidCents: 7500, PaidMedianSeconds: 691200,
 			},
 			"converted": {
-				ObservedHandoffs: 10, Accepted: 5, Activated: 1, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 5, Activated: 1, Converted: 1,
 				PaidSettlements: 1, PaidCents: 3000, PaidMedianSeconds: 1036800,
 			},
 		},
 	}
 	decision := policy{
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
-		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinPaidSettlementsPerMechanism: 1,
-		BountyPointsCents: []int64{2500, 7500, 20000},
+		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 3,
+		MinPaidSettlementsPerMechanism: 1,
+		BountyPointsCents:              []int64{2500, 7500, 20000},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -181,15 +182,16 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 		SettlementIntegrity: &truth, PaidSettlements: 2, RejectedSettlements: &zero,
 		PaidLatencySamples: 2, PaidMedianSeconds: 172800, PaidByCurrency: map[string]int64{"usd": 5000},
 		VerifiedMechanisms: map[string]mechanismEvidence{
-			"accepted":  {ObservedHandoffs: 2, Accepted: 2, Activated: 1, PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400},
-			"activated": {ObservedHandoffs: 2, Accepted: 2, Activated: 1, PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 172800},
-			"converted": {ObservedHandoffs: 2, Accepted: 2, Activated: 1, Converted: 1},
+			"accepted":  {ChargedProviderCompanies: 1, ObservedHandoffs: 2, Accepted: 2, Activated: 1, PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400},
+			"activated": {ChargedProviderCompanies: 1, ObservedHandoffs: 2, Accepted: 2, Activated: 1, PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 172800},
+			"converted": {ChargedProviderCompanies: 1, ObservedHandoffs: 2, Accepted: 2, Activated: 1, Converted: 1},
 		},
 	}
 	decision := policy{
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
-		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinPaidSettlementsPerMechanism: 1,
-		BountyPointsCents: []int64{2500},
+		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 1,
+		MinPaidSettlementsPerMechanism: 1,
+		BountyPointsCents:              []int64{2500},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -205,19 +207,20 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		Name: "verified", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
 		Handoffs: 30, Accepted: 21, Activated: 9, Converted: 3,
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
-		MinChargedEvents: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
+		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
+		MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
-				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
 				Reversed: 1, PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400,
 			},
 			"activated": {
-				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
 				PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400,
 			},
 			"converted": {
-				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
 				PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400,
 			},
 		},
@@ -242,19 +245,20 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 		Name: "verified", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
 		Handoffs: 30, Accepted: 21, Activated: 9, Converted: 3,
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
-		MinChargedEvents: 5, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
+		MinChargedEvents: 5, MinChargedProviderCompanies: 3,
+		MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
-				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
 				PaidSettlements: 1, PaidCents: 1000, PaidMedianSeconds: 86400,
 			},
 			"activated": {
-				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
 				PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400,
 			},
 			"converted": {
-				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
 				PaidSettlements: 1, PaidCents: 4000, PaidMedianSeconds: 86400,
 			},
 		},
@@ -263,7 +267,7 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.SelectedEvent != "" || report.SelectionReason != "mechanism comparison incomplete because at least one arm lacks the declared charged-event sample" {
+	if report.SelectedEvent != "" || report.SelectionReason != "mechanism comparison incomplete because at least one arm lacks the declared provider coverage or charged-event sample" {
 		t.Fatalf("under-sampled comparison selected a winner: %+v", report)
 	}
 	for _, candidate := range report.Results {
@@ -277,4 +281,45 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 			t.Fatalf("under-sampled %s arm did not fail closed: %+v", candidate.ChargeEvent, candidate)
 		}
 	}
+}
+
+func TestEvaluateVerifiedMechanismsRequiresEveryProviderInEveryArm(t *testing.T) {
+	input := scenario{
+		Name: "verified", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
+		Handoffs: 30, Accepted: 21, Activated: 15, Converted: 6,
+		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
+		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
+		MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
+		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
+		VerifiedMechanisms: map[string]mechanismEvidence{
+			"accepted": {
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 5, Converted: 2,
+				PaidSettlements: 1, PaidCents: 1000, PaidMedianSeconds: 86400,
+			},
+			"activated": {
+				ChargedProviderCompanies: 2, ObservedHandoffs: 10, Accepted: 7, Activated: 5, Converted: 2,
+				PaidSettlements: 1, PaidCents: 5000, PaidMedianSeconds: 86400,
+			},
+			"converted": {
+				ChargedProviderCompanies: 3, ObservedHandoffs: 10, Accepted: 7, Activated: 5, Converted: 2,
+				PaidSettlements: 1, PaidCents: 1500, PaidMedianSeconds: 86400,
+			},
+		},
+	}
+	report, err := evaluate(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.SelectedEvent != "" {
+		t.Fatalf("provider-confounded comparison selected %q", report.SelectedEvent)
+	}
+	for _, candidate := range report.Results {
+		if candidate.ChargeEvent == "activated" {
+			if candidate.Viable || candidate.Failure != "insufficient provider coverage" {
+				t.Fatalf("provider coverage gate not applied: %+v", candidate)
+			}
+			return
+		}
+	}
+	t.Fatal("activated result missing")
 }

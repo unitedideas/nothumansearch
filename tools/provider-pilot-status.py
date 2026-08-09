@@ -805,12 +805,13 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
     for charge_event in CHARGE_EVENTS:
         item = mechanism_raw.get(charge_event)
         if not isinstance(item, dict) or set(item) != {
-            "observed_handoffs", "accepted", "activated", "converted", "reversed",
+            "charged_provider_companies", "observed_handoffs", "accepted", "activated", "converted", "reversed",
             "paid_settlements", "paid_cents",
             "paid_median_handoff_to_settlement_seconds",
         }:
             raise StatusError("invalid_response")
         projected = {
+            "charged_provider_companies": _integer(item, "charged_provider_companies"),
             "observed_handoffs": _integer(item, "observed_handoffs"),
             "accepted": _integer(item, "accepted"),
             "activated": _integer(item, "activated"),
@@ -823,7 +824,9 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
             ),
         }
         if (
-            projected["observed_handoffs"] < projected["accepted"]
+            projected["charged_provider_companies"] > projected["observed_handoffs"]
+            or projected["charged_provider_companies"] > verified_companies
+            or projected["observed_handoffs"] < projected["accepted"]
             or projected["accepted"] < projected["activated"]
             or projected["activated"] < projected["converted"]
             or projected["reversed"] > projected["observed_handoffs"]

@@ -24,6 +24,10 @@ and Merchant-of-Record acknowledgement before any real inventory is activated.
 
 - One demand topic: `developer-tools`.
 - Three externally deduplicated, DNS-verified provider companies.
+- Every one of those three companies must produce at least one authenticated
+  charged event in every mechanism arm before the comparison can select a
+  winner. The proof exposes only the distinct-company count per arm, never
+  company IDs.
 - Three exact charge-event arms across the cohort: `accepted`, `activated`,
   and `converted`; every participating provider must accept the immutable terms
   for each arm it receives before that inventory is activated.
@@ -90,6 +94,8 @@ redirect, or provider assertion remains unpaid.
 
 - charged-event and paid-settlement sample size, applying the declared minimum
   separately to each mechanism arm rather than to the pooled cohort;
+- distinct verified-provider coverage per arm, requiring the full three-company
+  cohort so provider mix cannot masquerade as a mechanism effect;
 - actually paid value per observed handoff;
 - revenue per observed handoff;
 - provider cost per activation and conversion;
@@ -103,7 +109,8 @@ The initial 3-provider, 5-accepted-handoff, 2-activation, 1-renewal milestone
 proves that the consent, attribution, outcome, billing, renewal, and settlement
 rails can produce real revenue. It does not by itself select a strongest
 mechanism. Selection remains empty until every candidate arm independently
-meets `min_charged_events` and the paid-settlement minimum.
+meets `min_charged_provider_companies_per_mechanism`, `min_charged_events`, and
+the paid-settlement minimum.
 
 ## Decision rule
 

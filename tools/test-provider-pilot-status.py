@@ -137,17 +137,17 @@ def proof_document():
             "verified_terms_paid_by_currency": {"usd": 500},
             "verified_mechanisms": {
                 "accepted": {
-                    "observed_handoffs": 3, "accepted": 2, "activated": 0,
+                    "charged_provider_companies": 0, "observed_handoffs": 3, "accepted": 2, "activated": 0,
                     "converted": 0, "reversed": 0, "paid_settlements": 0, "paid_cents": 0,
                     "paid_median_handoff_to_settlement_seconds": 0,
                 },
                 "activated": {
-                    "observed_handoffs": 2, "accepted": 2, "activated": 1,
+                    "charged_provider_companies": 1, "observed_handoffs": 2, "accepted": 2, "activated": 1,
                     "converted": 0, "reversed": 0, "paid_settlements": 1, "paid_cents": 500,
                     "paid_median_handoff_to_settlement_seconds": 691200,
                 },
                 "converted": {
-                    "observed_handoffs": 2, "accepted": 1, "activated": 1,
+                    "charged_provider_companies": 0, "observed_handoffs": 2, "accepted": 1, "activated": 1,
                     "converted": 1, "reversed": 0, "paid_settlements": 0, "paid_cents": 0,
                     "paid_median_handoff_to_settlement_seconds": 0,
                 },
@@ -388,6 +388,15 @@ class ReadContractTest(unittest.TestCase):
     def test_proof_rejects_missing_mechanism_arm(self):
         document = proof_document()
         del document["proof"]["verified_mechanisms"]["converted"]
+        with self.assertRaises(status_tool.StatusError) as caught:
+            status_tool.project_proof(document, TEST_PILOT_ID)
+        self.assertEqual(caught.exception.code, "invalid_response")
+
+    def test_proof_rejects_mechanism_provider_count_above_cohort(self):
+        document = proof_document()
+        document["proof"]["verified_mechanisms"]["activated"][
+            "charged_provider_companies"
+        ] = 4
         with self.assertRaises(status_tool.StatusError) as caught:
             status_tool.project_proof(document, TEST_PILOT_ID)
         self.assertEqual(caught.exception.code, "invalid_response")

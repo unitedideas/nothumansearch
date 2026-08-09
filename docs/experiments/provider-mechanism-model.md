@@ -46,9 +46,11 @@ no rejected receipt or ledger entry, preserves the free-organic privacy flags,
 has one aggregate latency sample for every verified positive ticket, and
 contains separate exact paid terms-settlement evidence for accepted-handoff,
 activated-CPA, and converted-CPA tickets. Each arm must also independently meet
-the policy's minimum charged-event sample. The final selector compares verified
-paid revenue per observed handoff and uses paid-settlement latency as its
-tie-breaker. The initial 3/5/2/1 milestone proves the revenue rails but cannot
+the policy's minimum distinct-provider coverage and charged-event sample. Only
+aggregate provider counts enter the projection; provider IDs remain excluded.
+The final selector compares verified paid revenue per observed handoff and uses
+paid-settlement latency as its tie-breaker. The initial 3/5/2/1 milestone proves
+the revenue rails but cannot
 by itself name a strongest mechanism. Aggregate payment from one charge event
 cannot qualify another. A Checkout, internal receivable, or unsigned payment
 claim is insufficient. The

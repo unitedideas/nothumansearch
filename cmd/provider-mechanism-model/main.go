@@ -24,6 +24,7 @@ type scenario struct {
 	MaxCostPerActivationCents      int64                        `json:"max_cost_per_activation_cents"`
 	MaxMedianDaysToCharge          float64                      `json:"max_median_days_to_charge"`
 	MinChargedEvents               int64                        `json:"min_charged_events"`
+	MinChargedProviderCompanies    int64                        `json:"min_charged_provider_companies_per_mechanism,omitempty"`
 	MinPaidSettlementsPerMechanism int64                        `json:"min_paid_settlements_per_mechanism,omitempty"`
 	MaxReversalRate                float64                      `json:"max_reversal_rate,omitempty"`
 	BountyPointsCents              []int64                      `json:"bounty_points_cents"`
@@ -35,14 +36,15 @@ type scenario struct {
 }
 
 type mechanismEvidence struct {
-	ObservedHandoffs  int64 `json:"observed_handoffs"`
-	Accepted          int64 `json:"accepted"`
-	Activated         int64 `json:"activated"`
-	Converted         int64 `json:"converted"`
-	Reversed          int64 `json:"reversed"`
-	PaidSettlements   int64 `json:"paid_settlements"`
-	PaidCents         int64 `json:"paid_cents"`
-	PaidMedianSeconds int64 `json:"paid_median_handoff_to_settlement_seconds"`
+	ChargedProviderCompanies int64 `json:"charged_provider_companies"`
+	ObservedHandoffs         int64 `json:"observed_handoffs"`
+	Accepted                 int64 `json:"accepted"`
+	Activated                int64 `json:"activated"`
+	Converted                int64 `json:"converted"`
+	Reversed                 int64 `json:"reversed"`
+	PaidSettlements          int64 `json:"paid_settlements"`
+	PaidCents                int64 `json:"paid_cents"`
+	PaidMedianSeconds        int64 `json:"paid_median_handoff_to_settlement_seconds"`
 }
 
 type chargeEvent struct {
@@ -51,20 +53,21 @@ type chargeEvent struct {
 }
 
 type result struct {
-	ChargeEvent             string  `json:"charge_event"`
-	BountyCents             int64   `json:"bounty_cents"`
-	ChargedEvents           int64   `json:"charged_events"`
-	GrossBillableCents      int64   `json:"gross_billable_cents"`
-	RevenuePerHandoffCents  float64 `json:"revenue_per_handoff_cents"`
-	CostPerActivationCents  float64 `json:"cost_per_activation_cents"`
-	CostPerConversionCents  float64 `json:"cost_per_conversion_cents"`
-	MedianDaysToCharge      float64 `json:"median_days_to_charge"`
-	ValueKind               string  `json:"value_kind"`
-	VerifiedPaidCents       int64   `json:"verified_paid_cents,omitempty"`
-	VerifiedPaidSettlements int64   `json:"verified_paid_settlements,omitempty"`
-	ReversalRate            float64 `json:"reversal_rate"`
-	Viable                  bool    `json:"viable"`
-	Failure                 string  `json:"failure,omitempty"`
+	ChargeEvent              string  `json:"charge_event"`
+	ChargedProviderCompanies int64   `json:"charged_provider_companies,omitempty"`
+	BountyCents              int64   `json:"bounty_cents"`
+	ChargedEvents            int64   `json:"charged_events"`
+	GrossBillableCents       int64   `json:"gross_billable_cents"`
+	RevenuePerHandoffCents   float64 `json:"revenue_per_handoff_cents"`
+	CostPerActivationCents   float64 `json:"cost_per_activation_cents"`
+	CostPerConversionCents   float64 `json:"cost_per_conversion_cents"`
+	MedianDaysToCharge       float64 `json:"median_days_to_charge"`
+	ValueKind                string  `json:"value_kind"`
+	VerifiedPaidCents        int64   `json:"verified_paid_cents,omitempty"`
+	VerifiedPaidSettlements  int64   `json:"verified_paid_settlements,omitempty"`
+	ReversalRate             float64 `json:"reversal_rate"`
+	Viable                   bool    `json:"viable"`
+	Failure                  string  `json:"failure,omitempty"`
 }
 
 type report struct {
@@ -90,6 +93,7 @@ type policy struct {
 	MaxCostPerActivationCents      int64   `json:"max_cost_per_activation_cents"`
 	MaxMedianDaysToCharge          float64 `json:"max_median_days_to_charge"`
 	MinChargedEvents               int64   `json:"min_charged_events"`
+	MinChargedProviderCompanies    int64   `json:"min_charged_provider_companies_per_mechanism"`
 	MinPaidSettlementsPerMechanism int64   `json:"min_paid_settlements_per_mechanism"`
 	MaxReversalRate                float64 `json:"max_reversal_rate"`
 	BountyPointsCents              []int64 `json:"bounty_points_cents"`
@@ -230,6 +234,7 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 		MaxCostPerActivationCents:      policy.MaxCostPerActivationCents,
 		MaxMedianDaysToCharge:          policy.MaxMedianDaysToCharge,
 		MinChargedEvents:               policy.MinChargedEvents,
+		MinChargedProviderCompanies:    policy.MinChargedProviderCompanies,
 		MinPaidSettlementsPerMechanism: policy.MinPaidSettlementsPerMechanism,
 		MaxReversalRate:                policy.MaxReversalRate,
 		BountyPointsCents:              policy.BountyPointsCents,
@@ -356,7 +361,8 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	if !input.MatureCohort {
 		return report{}, errors.New("mature_cohort must be true; incomplete downstream outcomes cannot select a charge event")
 	}
-	if input.MinChargedEvents < 1 || input.MinPaidSettlementsPerMechanism < 1 || input.MaxCostPerActivationCents < 1 ||
+	if input.MinChargedEvents < 1 || input.MinChargedProviderCompanies < 1 ||
+		input.MinPaidSettlementsPerMechanism < 1 || input.MaxCostPerActivationCents < 1 ||
 		input.MaxMedianDaysToCharge < 0 || input.MaxReversalRate < 0 || input.MaxReversalRate > 1 {
 		return report{}, errors.New("verified selection constraints must be positive")
 	}
@@ -386,6 +392,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		if !ok || evidence.ObservedHandoffs < evidence.Accepted ||
 			evidence.Accepted < evidence.Activated || evidence.Activated < evidence.Converted ||
 			evidence.Reversed < 0 || evidence.Reversed > evidence.ObservedHandoffs ||
+			evidence.ChargedProviderCompanies < 1 || evidence.ChargedProviderCompanies > evidence.ObservedHandoffs ||
 			evidence.ObservedHandoffs < 1 || evidence.Activated < 1 ||
 			evidence.PaidSettlements < input.MinPaidSettlementsPerMechanism ||
 			evidence.PaidCents < evidence.PaidSettlements || evidence.PaidMedianSeconds <= 0 {
@@ -411,19 +418,24 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 			costPerConversion = float64(evidence.PaidCents) / float64(evidence.Converted)
 		}
 		item := result{
-			ChargeEvent:             chargeEvent,
-			ChargedEvents:           chargedEvents,
-			RevenuePerHandoffCents:  float64(evidence.PaidCents) / float64(evidence.ObservedHandoffs),
-			CostPerActivationCents:  costPerActivation,
-			CostPerConversionCents:  costPerConversion,
-			MedianDaysToCharge:      float64(evidence.PaidMedianSeconds) / 86400,
-			ValueKind:               "verified_paid",
-			VerifiedPaidCents:       evidence.PaidCents,
-			VerifiedPaidSettlements: evidence.PaidSettlements,
-			ReversalRate:            float64(evidence.Reversed) / float64(evidence.ObservedHandoffs),
-			Viable:                  true,
+			ChargeEvent:              chargeEvent,
+			ChargedProviderCompanies: evidence.ChargedProviderCompanies,
+			ChargedEvents:            chargedEvents,
+			RevenuePerHandoffCents:   float64(evidence.PaidCents) / float64(evidence.ObservedHandoffs),
+			CostPerActivationCents:   costPerActivation,
+			CostPerConversionCents:   costPerConversion,
+			MedianDaysToCharge:       float64(evidence.PaidMedianSeconds) / 86400,
+			ValueKind:                "verified_paid",
+			VerifiedPaidCents:        evidence.PaidCents,
+			VerifiedPaidSettlements:  evidence.PaidSettlements,
+			ReversalRate:             float64(evidence.Reversed) / float64(evidence.ObservedHandoffs),
+			Viable:                   true,
 		}
 		switch {
+		case evidence.ChargedProviderCompanies < input.MinChargedProviderCompanies:
+			item.Viable = false
+			item.Failure = "insufficient provider coverage"
+			mechanismSamplesComplete = false
 		case chargedEvents < input.MinChargedEvents:
 			item.Viable = false
 			item.Failure = "insufficient charged-event sample"
@@ -456,7 +468,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		return output.Results[i].RevenuePerHandoffCents > output.Results[j].RevenuePerHandoffCents
 	})
 	if !mechanismSamplesComplete {
-		output.SelectionReason = "mechanism comparison incomplete because at least one arm lacks the declared charged-event sample"
+		output.SelectionReason = "mechanism comparison incomplete because at least one arm lacks the declared provider coverage or charged-event sample"
 		return output, nil
 	}
 	for _, candidate := range output.Results {

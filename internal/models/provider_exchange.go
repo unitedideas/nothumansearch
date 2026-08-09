@@ -602,14 +602,15 @@ type ProviderExchangeProof struct {
 // outcomes, and exact Stripe-paid settlement receipts; aggregate pilot payment
 // evidence must never be reused as proof for a different charge event.
 type ProviderMechanismProof struct {
-	ObservedHandoffs  int   `json:"observed_handoffs"`
-	Accepted          int   `json:"accepted"`
-	Activated         int   `json:"activated"`
-	Converted         int   `json:"converted"`
-	Reversed          int   `json:"reversed"`
-	PaidSettlements   int   `json:"paid_settlements"`
-	PaidCents         int64 `json:"paid_cents"`
-	PaidMedianSeconds int64 `json:"paid_median_handoff_to_settlement_seconds"`
+	ChargedProviderCompanies int   `json:"charged_provider_companies"`
+	ObservedHandoffs         int   `json:"observed_handoffs"`
+	Accepted                 int   `json:"accepted"`
+	Activated                int   `json:"activated"`
+	Converted                int   `json:"converted"`
+	Reversed                 int   `json:"reversed"`
+	PaidSettlements          int   `json:"paid_settlements"`
+	PaidCents                int64 `json:"paid_cents"`
+	PaidMedianSeconds        int64 `json:"paid_median_handoff_to_settlement_seconds"`
 }
 
 type ProviderAdminAuditEvent struct {
@@ -5768,12 +5769,14 @@ type providerProofOutcome struct {
 	receipt           OutcomeReceipt
 	billingMode       string
 	chargeEvent       string
+	companyID         string
 	pilotActivatedAt  time.Time
 	handoffObservedAt time.Time
 }
 
 type providerProofTicketState struct {
 	chargeEvent       string
+	companyID         string
 	accepted          bool
 	activated         bool
 	converted         bool
@@ -6012,6 +6015,7 @@ func getProviderExchangeProof(
 	outcomeRows, err := tx.Query(providerVerifiedCommercialCTEs+`
 		SELECT `+qualifiedOutcomeReceiptColumns+`,
 		       ticket.billing_mode_snapshot, ticket.charge_event_snapshot,
+		       ticket.company_id::text,
 		       ticket.pilot_activated_at,
 		       ticket.handoff_observed_at
 		FROM outcome_receipts receipt
@@ -6036,7 +6040,7 @@ func getProviderExchangeProof(
 			&candidate.receipt.ChargeStatus, &candidate.receipt.Currency,
 			&candidate.receipt.SignedReceipt, &candidate.receipt.Signature,
 			&candidate.receipt.ProviderReportedAt, &candidate.receipt.CreatedAt,
-			&candidate.billingMode, &candidate.chargeEvent,
+			&candidate.billingMode, &candidate.chargeEvent, &candidate.companyID,
 			&candidate.pilotActivatedAt,
 			&candidate.handoffObservedAt,
 		); err != nil {
@@ -6083,10 +6087,11 @@ func getProviderExchangeProof(
 		state := ticketStates[candidate.receipt.ActionTicketID]
 		if state == nil {
 			state = &providerProofTicketState{
-				chargeEvent: candidate.chargeEvent, handoffObservedAt: handoffObservedAt,
+				chargeEvent: candidate.chargeEvent, companyID: candidate.companyID,
+				handoffObservedAt: handoffObservedAt,
 			}
 			ticketStates[candidate.receipt.ActionTicketID] = state
-		} else if state.chargeEvent != candidate.chargeEvent ||
+		} else if state.chargeEvent != candidate.chargeEvent || state.companyID != candidate.companyID ||
 			!state.handoffObservedAt.Equal(handoffObservedAt) {
 			proof.OutcomeReceiptIntegrityValid = false
 			proof.RejectedOutcomeReceipts++
@@ -6186,6 +6191,9 @@ func getProviderExchangeProof(
 	acceptedLatencySeconds := make([]int64, 0, len(ticketStates))
 	activatedLatencySeconds := make([]int64, 0, len(ticketStates))
 	convertedLatencySeconds := make([]int64, 0, len(ticketStates))
+	chargedProviderCompanies := map[string]map[string]bool{
+		"accepted": {}, "activated": {}, "converted": {},
+	}
 	for ticketID, state := range ticketStates {
 		if state.reversed {
 			if evidence, ok := proof.VerifiedMechanisms[state.chargeEvent]; ok {
@@ -6230,7 +6238,15 @@ func getProviderExchangeProof(
 		}
 		if state.charged {
 			verifiedChargedTickets = append(verifiedChargedTickets, ticketID)
+			if providers, ok := chargedProviderCompanies[state.chargeEvent]; ok && state.companyID != "" {
+				providers[state.companyID] = true
+			}
 		}
+	}
+	for chargeEvent, providers := range chargedProviderCompanies {
+		evidence := proof.VerifiedMechanisms[chargeEvent]
+		evidence.ChargedProviderCompanies = len(providers)
+		proof.VerifiedMechanisms[chargeEvent] = evidence
 	}
 	proof.VerifiedAcceptedMedianSeconds = providerProofMedianSeconds(acceptedLatencySeconds)
 	proof.VerifiedActivatedMedianSeconds = providerProofMedianSeconds(activatedLatencySeconds)

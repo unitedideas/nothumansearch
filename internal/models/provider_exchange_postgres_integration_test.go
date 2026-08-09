@@ -4225,6 +4225,7 @@ func exerciseProviderActionHandoffPostgres(
 
 type postgresVerifiedProofSnapshot struct {
 	companies        int
+	chargedProviders map[string]int
 	acceptedHandoffs int
 	activations      int
 	renewals         int
@@ -4240,8 +4241,13 @@ func postgresVerifiedProof(proof *models.ProviderExchangeProof) postgresVerified
 	if proof == nil {
 		return postgresVerifiedProofSnapshot{}
 	}
+	chargedProviders := make(map[string]int, len(proof.VerifiedMechanisms))
+	for chargeEvent, evidence := range proof.VerifiedMechanisms {
+		chargedProviders[chargeEvent] = evidence.ChargedProviderCompanies
+	}
 	return postgresVerifiedProofSnapshot{
 		companies:        proof.VerifiedProviderCompanies,
+		chargedProviders: chargedProviders,
 		acceptedHandoffs: proof.VerifiedProviderAcceptedHandoffs,
 		activations:      proof.VerifiedProviderConfirmedActivations,
 		renewals:         proof.VerifiedProviderRenewals,
@@ -4985,11 +4991,13 @@ func exerciseProviderCommercialProofPostgres(
 
 	positiveProof := readPostgresVerifiedProof(t, db, signer)
 	if positiveProof.companies != baseline.companies+3 ||
+		positiveProof.chargedProviders["accepted"] != baseline.chargedProviders["accepted"]+3 ||
 		positiveProof.acceptedHandoffs != baseline.acceptedHandoffs+5 ||
 		positiveProof.activations != baseline.activations+2 ||
 		positiveProof.renewals != baseline.renewals+1 {
-		t.Fatalf("verified commercial proof delta = companies:%d handoffs:%d activations:%d renewals:%d; want 3/5/2/1 over %#v",
+		t.Fatalf("verified commercial proof delta = companies:%d accepted-arm providers:%d handoffs:%d activations:%d renewals:%d; want 3/3/5/2/1 over %#v",
 			positiveProof.companies-baseline.companies,
+			positiveProof.chargedProviders["accepted"]-baseline.chargedProviders["accepted"],
 			positiveProof.acceptedHandoffs-baseline.acceptedHandoffs,
 			positiveProof.activations-baseline.activations,
 			positiveProof.renewals-baseline.renewals,
