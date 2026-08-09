@@ -69,6 +69,7 @@ ALLOWED_TOPICS = frozenset(
 ALLOWED_ACTION_TYPES = frozenset(
     {"quote", "trial", "demo", "booking", "application", "signup", "purchase"}
 )
+CHARGE_EVENTS = ("accepted", "activated", "converted")
 _CURRENCY_PATTERN = re.compile(r"^[a-z]{3}$")
 _HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 _KEY_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
@@ -796,6 +797,42 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         raw, "verified_paid_median_handoff_to_settlement_seconds", 0, MAX_MONEY_CENTS
     )
     verified_terms_paid = _money_map(raw.get("verified_terms_paid_by_currency"))
+
+    mechanism_raw = raw.get("verified_mechanisms")
+    if not isinstance(mechanism_raw, dict) or set(mechanism_raw) != set(CHARGE_EVENTS):
+        raise StatusError("invalid_response")
+    verified_mechanisms: dict[str, dict[str, int]] = {}
+    for charge_event in CHARGE_EVENTS:
+        item = mechanism_raw.get(charge_event)
+        if not isinstance(item, dict) or set(item) != {
+            "observed_handoffs", "accepted", "activated", "converted", "reversed",
+            "paid_settlements", "paid_cents",
+            "paid_median_handoff_to_settlement_seconds",
+        }:
+            raise StatusError("invalid_response")
+        projected = {
+            "observed_handoffs": _integer(item, "observed_handoffs"),
+            "accepted": _integer(item, "accepted"),
+            "activated": _integer(item, "activated"),
+            "converted": _integer(item, "converted"),
+            "reversed": _integer(item, "reversed"),
+            "paid_settlements": _integer(item, "paid_settlements"),
+            "paid_cents": _integer(item, "paid_cents", 0, MAX_MONEY_CENTS),
+            "paid_median_handoff_to_settlement_seconds": _integer(
+                item, "paid_median_handoff_to_settlement_seconds", 0, MAX_MONEY_CENTS
+            ),
+        }
+        if (
+            projected["observed_handoffs"] < projected["accepted"]
+            or projected["accepted"] < projected["activated"]
+            or projected["activated"] < projected["converted"]
+            or projected["reversed"] > projected["observed_handoffs"]
+            or (projected["paid_settlements"] == 0) != (projected["paid_cents"] == 0)
+            or (projected["paid_settlements"] == 0)
+            != (projected["paid_median_handoff_to_settlement_seconds"] == 0)
+        ):
+            raise StatusError("invalid_response")
+        verified_mechanisms[charge_event] = projected
     outcome_integrity = _boolean(raw, "outcome_receipt_integrity_valid")
     verified_outcomes = _integer(raw, "verified_outcome_receipts")
     rejected_outcomes = _integer(raw, "rejected_outcome_receipts")
@@ -818,6 +855,15 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         or paid_latency_samples != verified_paid_settlements
         or (verified_paid_settlements == 0) != (len(verified_terms_paid) == 0)
         or (verified_paid_settlements == 0 and paid_median_seconds != 0)
+        or sum(item["observed_handoffs"] for item in verified_mechanisms.values())
+        != verified_observed_handoffs
+        or sum(item["accepted"] for item in verified_mechanisms.values()) != verified_handoffs
+        or sum(item["activated"] for item in verified_mechanisms.values()) != verified_activations
+        or sum(item["converted"] for item in verified_mechanisms.values()) != verified_conversions
+        or sum(item["paid_settlements"] for item in verified_mechanisms.values())
+        != verified_paid_settlements
+        or sum(item["paid_cents"] for item in verified_mechanisms.values())
+        != verified_terms_paid.get("usd", 0)
     ):
         raise StatusError("invalid_response")
     expected_met = (
@@ -868,6 +914,7 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         "verified_paid_latency_samples": paid_latency_samples,
         "verified_paid_median_handoff_to_settlement_seconds": paid_median_seconds,
         "verified_terms_paid_by_currency": verified_terms_paid,
+        "verified_mechanisms": verified_mechanisms,
         "verified_prepaid_settled_by_currency": _money_map(raw.get("verified_prepaid_settled_by_currency")),
         "verified_prepaid_net_debited_by_currency": _money_map(raw.get("verified_prepaid_net_debited_by_currency")),
         "verified_terms_net_receivable_by_currency": _money_map(raw.get("verified_terms_net_receivable_by_currency")),

@@ -8,11 +8,12 @@
 Test which provider-funded event creates defensible NHS revenue while free REST
 and MCP discovery, organic inclusion, and organic rank remain unchanged.
 
-The first real cohort should charge one event only: `activated`. The provider
-callback may still record the ticket's normal `accepted`, `activated`, and
-`converted` state transitions. Those later authenticated observations permit a
-counterfactual comparison of all three mechanisms without charging a ticket
-more than once or changing accepted terms after activation.
+The real pilot must contain three separately settled mechanism arms:
+`accepted`, `activated`, and `converted`. Every ticket is immutably assigned to
+one provider offer and therefore one charge event before handoff. The provider
+callback still records the ticket's normal state transitions, but a ticket can
+produce at most one charge and one settlement. Aggregate payment from one arm
+must never be reused as proof that another mechanism reached the billing rail.
 
 The provisional $75 activation package in the synthetic model is not an offer.
 Each provider must supply and accept its exact event definition, bounty, hard
@@ -23,7 +24,9 @@ and Merchant-of-Record acknowledgement before any real inventory is activated.
 
 - One demand topic: `developer-tools`.
 - Three externally deduplicated, DNS-verified provider companies.
-- One charge event across the cohort: `activated`.
+- Three exact charge-event arms across the cohort: `accepted`, `activated`,
+  and `converted`; every participating provider must accept the immutable terms
+  for each arm it receives before that inventory is activated.
 - No paid placement, ranking change, discovery paywall, or identity/query sale.
 - Each ticket has explicit authority and separate handoff consent.
 - A ticket is assigned to only one provider offer and can produce at most one
@@ -60,11 +63,13 @@ The proof-to-model projection must carry explicit false assertions for sold
 organic rank, raw queries, raw prompts, agent identities, and principal
 identities. Missing assertions fail closed; absence is not inferred as false.
 
-## Counterfactual comparison
+## Paid mechanism comparison
 
-After the cohort is mature, run the mechanism model with the observed handoff,
-accepted, activated, and converted counts and median event latencies. Evaluate
-all three events across the same bounty grid. For each package compare:
+After all three arms are mature, run the mechanism model with each arm's own
+observed handoffs, accepted, activated, and converted outcomes, paid settlement
+count and amount, and median handoff-to-payment latency. The selector fails
+closed unless every mechanism has at least one exact signed paid settlement.
+For each mechanism compare:
 
 Use the reviewed `provider-pilot-status.py --scope proof` projection as the
 count and latency source; do not transcribe database rows or reconstruct a
@@ -75,17 +80,16 @@ contains an integrity-valid exact paid terms-settlement receipt and its
 privacy-safe currency total. A receivable, settlement order, Checkout session,
 redirect, or provider assertion remains unpaid.
 
-- charged-event sample size;
-- gross billable value and actually paid value;
+- charged-event and paid-settlement sample size;
+- actually paid value per observed handoff;
 - revenue per observed handoff;
 - provider cost per activation and conversion;
 - invalid, duplicate, credit, and disputed-event rate; and
 - median and tail time to authenticated outcome and paid settlement.
 
-Accepted-event revenue is a counterfactual unless the provider's immutable
-terms actually charge `accepted`; converted-event revenue is likewise a
-counterfactual in an activation cohort. Label both as modeled and never append
-ledger entries or settlement orders for them.
+Sensitivity grids remain useful for pricing hypotheses, but modeled gross
+billables cannot select the winning mechanism. Final selection uses only exact
+paid receipts from tickets whose immutable terms actually charge that event.
 
 ## Decision rule
 
@@ -99,12 +103,12 @@ Keep `activated` for the next cohort only when all of the following hold:
 4. The activation sample and observation window are large enough that
    `accepted` does not win merely from earlier reporting and `converted` does
    not lose merely from incomplete observation.
-5. Activation produces the greatest paid value among packages that satisfy
-   provider cost, sample, dispute/credit, and time-to-cash constraints.
+5. Activation produces the greatest verified paid revenue per observed handoff
+   among mechanisms that satisfy provider cost, sample, dispute/credit, and
+   time-to-cash constraints.
 
-If accepted wins, draft a new accepted-event cohort with new immutable terms;
-do not reinterpret old tickets. If converted wins, wait for a complete
-conversion window before drafting new terms. If no mechanism satisfies the
+If accepted or converted wins, use that event only in a new immutable offer
+version; do not reinterpret old tickets. If no mechanism satisfies the
 constraints, keep discovery free and stop the commercial experiment rather
 than weakening privacy, ranking neutrality, consent, or proof gates.
 

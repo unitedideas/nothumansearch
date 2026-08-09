@@ -4,5 +4,7 @@
   "max_cost_per_activation_cents": 10000,
   "max_median_days_to_charge": 14,
   "min_charged_events": 5,
+  "min_paid_settlements_per_mechanism": 1,
+  "max_reversal_rate": 0.2,
   "bounty_points_cents": [2500, 7500, 20000]
 }

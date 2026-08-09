@@ -1,8 +1,9 @@
 # Provider mechanism model
 
-This read-only command compares `accepted`, `activated`, and `converted`
-provider charge events across the same bounty grid. It does not call NHS,
-Stripe, or a provider and cannot change production.
+This read-only command tests the selection logic on a synthetic bounty grid and
+selects among `accepted`, `activated`, and `converted` only when a closed real
+pilot supplies separate paid evidence for all three mechanisms. It does not
+call NHS, Stripe, or a provider and cannot change production.
 
 Run the current synthetic scenario:
 
@@ -43,17 +44,22 @@ Proof ingestion fails closed unless the evidence identifies the closed
 `developer-tools` pilot, passes the 3/5/2/1 and outcome-integrity gates, contains
 no rejected receipt or ledger entry, preserves the free-organic privacy flags,
 has one aggregate latency sample for every verified positive ticket, and
-contains at least one exact paid terms-settlement receipt. A Checkout, internal
-receivable, or unsigned payment claim is insufficient. The
-decision policy stays separate because its price grid, acquisition-cost ceiling,
-sample threshold, and cash-latency ceiling are provider/business constraints,
-not facts NHS should infer from outcome receipts.
+contains separate exact paid terms-settlement evidence for accepted-handoff,
+activated-CPA, and converted-CPA tickets. The final selector compares verified
+paid revenue per observed handoff and uses paid-settlement latency as its
+tie-breaker. Aggregate payment from one charge event cannot qualify another. A
+Checkout, internal receivable, or unsigned payment claim is insufficient. The
+decision policy stays separate because its acquisition-cost ceiling, minimum
+paid evidence, reversal-rate ceiling, and cash-latency ceiling are
+provider/business constraints, not facts NHS should infer from outcome
+receipts.
 
 The private proof endpoint now reports only the extra aggregates required by the
 comparison: verified observed-handoff count, positive-event latency sample
 counts, and median seconds from observed handoff to each authenticated outcome.
-It also reports paid-settlement count, collected amount by currency, and median
-handoff-to-payment time. Settlement proof rejects a payment not bound to a
+It also reports each mechanism's own handoff funnel, paid-settlement count,
+collected amount, and median handoff-to-payment time, plus reconciled pilot
+totals. Settlement proof rejects a payment not bound to a
 verified charged receipt, an amount/currency mismatch, a reversed ticket, or a
 payment timestamp outside the outcome-to-receipt chronology. It does not expose
 ticket IDs, provider IDs, Stripe IDs, queries, intent, or identity data.
@@ -76,7 +82,7 @@ outcome definitions; production observation must supply the event counts and
 latencies.
 
 For a real experiment, do not edit synthetic numbers to resemble observations.
-Export a new, reviewable scenario from a closed production cohort after the
-owner has separately authorized the provider pilot. Preserve the source receipt
-references outside this privacy-safe aggregate and never include raw queries,
-prompts, agent identifiers, principal identifiers, or provider credentials.
+Use only the reviewed proof projection from a closed production pilot after the
+owner has separately authorized it. Preserve source receipt references outside
+this privacy-safe aggregate and never include raw queries, prompts, agent
+identifiers, principal identifiers, or provider credentials.
