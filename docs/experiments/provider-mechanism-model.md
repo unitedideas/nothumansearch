@@ -45,10 +45,13 @@ Proof ingestion fails closed unless the evidence identifies the closed
 no rejected receipt or ledger entry, preserves the free-organic privacy flags,
 has one aggregate latency sample for every verified positive ticket, and
 contains separate exact paid terms-settlement evidence for accepted-handoff,
-activated-CPA, and converted-CPA tickets. The final selector compares verified
+activated-CPA, and converted-CPA tickets. Each arm must also independently meet
+the policy's minimum charged-event sample. The final selector compares verified
 paid revenue per observed handoff and uses paid-settlement latency as its
-tie-breaker. Aggregate payment from one charge event cannot qualify another. A
-Checkout, internal receivable, or unsigned payment claim is insufficient. The
+tie-breaker. The initial 3/5/2/1 milestone proves the revenue rails but cannot
+by itself name a strongest mechanism. Aggregate payment from one charge event
+cannot qualify another. A Checkout, internal receivable, or unsigned payment
+claim is insufficient. The
 decision policy stays separate because its acquisition-cost ceiling, minimum
 paid evidence, reversal-rate ceiling, and cash-latency ceiling are
 provider/business constraints, not facts NHS should infer from outcome

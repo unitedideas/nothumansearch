@@ -356,7 +356,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	if !input.MatureCohort {
 		return report{}, errors.New("mature_cohort must be true; incomplete downstream outcomes cannot select a charge event")
 	}
-	if input.MinPaidSettlementsPerMechanism < 1 || input.MaxCostPerActivationCents < 1 ||
+	if input.MinChargedEvents < 1 || input.MinPaidSettlementsPerMechanism < 1 || input.MaxCostPerActivationCents < 1 ||
 		input.MaxMedianDaysToCharge < 0 || input.MaxReversalRate < 0 || input.MaxReversalRate > 1 {
 		return report{}, errors.New("verified selection constraints must be positive")
 	}
@@ -380,6 +380,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	var mechanismSettlementTotal int64
 	var mechanismHandoffTotal, mechanismAcceptedTotal int64
 	var mechanismActivatedTotal, mechanismConvertedTotal int64
+	mechanismSamplesComplete := true
 	for _, chargeEvent := range expected {
 		evidence, ok := input.VerifiedMechanisms[chargeEvent]
 		if !ok || evidence.ObservedHandoffs < evidence.Accepted ||
@@ -423,6 +424,10 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 			Viable:                  true,
 		}
 		switch {
+		case chargedEvents < input.MinChargedEvents:
+			item.Viable = false
+			item.Failure = "insufficient charged-event sample"
+			mechanismSamplesComplete = false
 		case item.ReversalRate > input.MaxReversalRate:
 			item.Viable = false
 			item.Failure = "exceeds reversal-rate ceiling"
@@ -450,10 +455,14 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		}
 		return output.Results[i].RevenuePerHandoffCents > output.Results[j].RevenuePerHandoffCents
 	})
+	if !mechanismSamplesComplete {
+		output.SelectionReason = "mechanism comparison incomplete because at least one arm lacks the declared charged-event sample"
+		return output, nil
+	}
 	for _, candidate := range output.Results {
 		if candidate.Viable {
 			output.SelectedEvent = candidate.ChargeEvent
-			output.SelectionReason = "highest verified paid revenue per observed handoff among mechanisms meeting provider cost-per-activation and time-to-paid-settlement constraints"
+			output.SelectionReason = "highest verified paid revenue per observed handoff among mechanisms meeting charged-event sample, provider cost-per-activation, reversal-rate, and time-to-paid-settlement constraints"
 			return output, nil
 		}
 	}

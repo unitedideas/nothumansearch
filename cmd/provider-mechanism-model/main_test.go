@@ -130,7 +130,7 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 	}
 	decision := policy{
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
-		MaxMedianDaysToCharge: 14, MinChargedEvents: 5, MinPaidSettlementsPerMechanism: 1,
+		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinPaidSettlementsPerMechanism: 1,
 		BountyPointsCents: []int64{2500, 7500, 20000},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
@@ -205,7 +205,7 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		Name: "verified", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
 		Handoffs: 30, Accepted: 21, Activated: 9, Converted: 3,
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
-		MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
+		MinChargedEvents: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -235,4 +235,46 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		}
 	}
 	t.Fatal("accepted result missing")
+}
+
+func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T) {
+	input := scenario{
+		Name: "verified", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
+		Handoffs: 30, Accepted: 21, Activated: 9, Converted: 3,
+		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
+		MinChargedEvents: 5, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
+		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
+		VerifiedMechanisms: map[string]mechanismEvidence{
+			"accepted": {
+				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				PaidSettlements: 1, PaidCents: 1000, PaidMedianSeconds: 86400,
+			},
+			"activated": {
+				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				PaidSettlements: 1, PaidCents: 2500, PaidMedianSeconds: 86400,
+			},
+			"converted": {
+				ObservedHandoffs: 10, Accepted: 7, Activated: 3, Converted: 1,
+				PaidSettlements: 1, PaidCents: 4000, PaidMedianSeconds: 86400,
+			},
+		},
+	}
+	report, err := evaluate(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.SelectedEvent != "" || report.SelectionReason != "mechanism comparison incomplete because at least one arm lacks the declared charged-event sample" {
+		t.Fatalf("under-sampled comparison selected a winner: %+v", report)
+	}
+	for _, candidate := range report.Results {
+		if candidate.ChargeEvent == "accepted" {
+			if !candidate.Viable {
+				t.Fatalf("accepted arm should meet sample gate: %+v", candidate)
+			}
+			continue
+		}
+		if candidate.Viable || candidate.Failure != "insufficient charged-event sample" {
+			t.Fatalf("under-sampled %s arm did not fail closed: %+v", candidate.ChargeEvent, candidate)
+		}
+	}
 }

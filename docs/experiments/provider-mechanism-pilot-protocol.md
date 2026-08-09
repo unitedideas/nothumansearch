@@ -88,7 +88,8 @@ contains an integrity-valid exact paid terms-settlement receipt and its
 privacy-safe currency total. A receivable, settlement order, Checkout session,
 redirect, or provider assertion remains unpaid.
 
-- charged-event and paid-settlement sample size;
+- charged-event and paid-settlement sample size, applying the declared minimum
+  separately to each mechanism arm rather than to the pooled cohort;
 - actually paid value per observed handoff;
 - revenue per observed handoff;
 - provider cost per activation and conversion;
@@ -98,6 +99,11 @@ redirect, or provider assertion remains unpaid.
 Sensitivity grids remain useful for pricing hypotheses, but modeled gross
 billables cannot select the winning mechanism. Final selection uses only exact
 paid receipts from tickets whose immutable terms actually charge that event.
+The initial 3-provider, 5-accepted-handoff, 2-activation, 1-renewal milestone
+proves that the consent, attribution, outcome, billing, renewal, and settlement
+rails can produce real revenue. It does not by itself select a strongest
+mechanism. Selection remains empty until every candidate arm independently
+meets `min_charged_events` and the paid-settlement minimum.
 
 ## Decision rule
 
