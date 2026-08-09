@@ -24,10 +24,11 @@ const preflightContract = "nhs-provider-cutover-preflight-v2"
 var releaseRevision = "development"
 
 type sessionReport struct {
-	CandidateSessions      int  `json:"candidate_sessions"`
-	OtherTaggedNHSSessions int  `json:"other_tagged_nhs_sessions"`
-	UnattributedSessions   int  `json:"unattributed_sessions"`
-	OldWriterSessionsZero  bool `json:"old_writer_sessions_zero"`
+	CandidateSessions        int  `json:"candidate_sessions"`
+	OtherTaggedNHSSessions   int  `json:"other_tagged_nhs_sessions"`
+	DatabaseInternalSessions int  `json:"database_internal_sessions"`
+	UnattributedSessions     int  `json:"unattributed_sessions"`
+	OldWriterSessionsZero    bool `json:"old_writer_sessions_zero"`
 }
 
 type cutoverReport struct {
@@ -192,22 +193,34 @@ func countLivePreHandoffTickets(ctx context.Context) (int, error) {
 func inspectSessions(ctx context.Context, revision string) (sessionReport, error) {
 	report := sessionReport{}
 	applicationName := "nhs-server:" + revision
-	err := database.DB.QueryRowContext(ctx, `
-		SELECT
-		  COUNT(*) FILTER (WHERE application_name=$1)::int,
-		  COUNT(*) FILTER (
-		    WHERE application_name LIKE 'nhs-server:%' AND application_name<>$1
-		  )::int,
-		  COUNT(*) FILTER (WHERE application_name NOT LIKE 'nhs-server:%')::int
+	rows, err := database.DB.QueryContext(ctx, `
+		SELECT usename, application_name, COALESCE(client_addr::text,''),
+		       COALESCE(inet_server_addr()::text,''), state
 		FROM pg_stat_activity
 		WHERE datname=current_database()
 		  AND pid<>pg_backend_pid()
-		  AND backend_type='client backend'`, applicationName).Scan(
-		&report.CandidateSessions,
-		&report.OtherTaggedNHSSessions,
-		&report.UnattributedSessions,
-	)
+		  AND backend_type='client backend'`)
 	if err != nil {
+		return report, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var user, app, clientAddress, serverAddress, state string
+		if err := rows.Scan(&user, &app, &clientAddress, &serverAddress, &state); err != nil {
+			return report, err
+		}
+		switch {
+		case app == applicationName:
+			report.CandidateSessions++
+		case strings.HasPrefix(app, "nhs-server:"):
+			report.OtherTaggedNHSSessions++
+		case databaseInternalAdministrativeSession(user, app, clientAddress, serverAddress, state):
+			report.DatabaseInternalSessions++
+		default:
+			report.UnattributedSessions++
+		}
+	}
+	if err := rows.Err(); err != nil {
 		return report, err
 	}
 	// The current preflight backend is excluded above. Every other client
@@ -216,6 +229,15 @@ func inspectSessions(ctx context.Context, revision string) (sessionReport, error
 	report.OldWriterSessionsZero = report.CandidateSessions == 0 &&
 		report.OtherTaggedNHSSessions == 0 && report.UnattributedSessions == 0
 	return report, nil
+}
+
+// postgres-flex keeps one idle flypgadmin connection from the database
+// machine to each database. It is not an application writer. The exception is
+// deliberately exact and counted in the receipt: a remote, active, named, or
+// differently owned session remains unattributed and blocks the cutover.
+func databaseInternalAdministrativeSession(user, app, clientAddress, serverAddress, state string) bool {
+	return user == "flypgadmin" && app == "" && state == "idle" &&
+		clientAddress != "" && clientAddress == serverAddress
 }
 
 func fail(code string) {

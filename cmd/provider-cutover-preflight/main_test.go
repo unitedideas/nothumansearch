@@ -20,10 +20,11 @@ func TestCutoverPreflightOutputContractIsBounded(t *testing.T) {
 		"candidate_revision_mismatch",
 		"binary_revision",
 		"live_pre_handoff_tickets",
+		"database_internal_sessions",
 		"old_writer_sessions_zero",
 		"report_sha256",
 		"if !report.ReadyForQuiescedCutover",
-		"application_name NOT LIKE 'nhs-server:%'",
+		"databaseInternalAdministrativeSession",
 		"report.CandidateSessions == 0",
 	} {
 		if !strings.Contains(text, required) {
@@ -39,6 +40,28 @@ func TestCutoverPreflightOutputContractIsBounded(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("preflight source contains forbidden output path %q", forbidden)
 		}
+	}
+}
+
+func TestDatabaseInternalAdministrativeSessionIsExact(t *testing.T) {
+	server := "fdaa:54:1487:a7b::2"
+	if !databaseInternalAdministrativeSession("flypgadmin", "", server, server, "idle") {
+		t.Fatal("exact local idle flypgadmin session was not classified as database-internal")
+	}
+	for _, test := range []struct {
+		name, user, app, client, server, state string
+	}{
+		{"active", "flypgadmin", "", server, server, "active"},
+		{"remote", "flypgadmin", "", "fdaa:54:1487:a7b::3", server, "idle"},
+		{"named", "flypgadmin", "maintenance", server, server, "idle"},
+		{"other user", "postgres", "", server, server, "idle"},
+		{"missing address", "flypgadmin", "", "", "", "idle"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if databaseInternalAdministrativeSession(test.user, test.app, test.client, test.server, test.state) {
+				t.Fatal("non-exact session was classified as database-internal")
+			}
+		})
 	}
 }
 
