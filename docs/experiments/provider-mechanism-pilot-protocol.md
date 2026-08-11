@@ -102,9 +102,9 @@ redirect, or provider assertion remains unpaid.
 - distinct verified-provider coverage per arm, requiring the full three-company
   cohort so provider mix cannot masquerade as a mechanism effect;
 - exact non-synthetic provider-offer returns per arm;
-- processing-net value per 1,000 returned provider offers after the declared
-  percentage-plus-fixed payment-processing allowance, with gross revenue per
-  returned offer and revenue per observed handoff retained only as diagnostics;
+- actual available processor-net value per 1,000 returned provider offers,
+  with gross revenue per returned offer and revenue per observed handoff
+  retained only as diagnostics;
 - provider cost per activation and conversion;
 - invalid, duplicate, credit, and disputed-event rate; and
 - median and tail time to authenticated outcome and paid settlement.
@@ -112,12 +112,11 @@ redirect, or provider assertion remains unpaid.
 Sensitivity grids remain useful for pricing hypotheses, but modeled gross
 billables cannot select the winning mechanism. Final selection uses only exact
 paid receipts from tickets whose immutable terms actually charge that event,
-subtracts the policy's conservative payment-processing allowance, and divides
-the retained amount by the exact eligible offers returned to agents in that
-arm. The policy must declare the processing basis points, fixed per-settlement
-fee, minimum processing-net margin, and minimum processing-net cents per 1,000
-returns. These are policy allowances rather than observed balance-transaction
-fees, and the result must not be called full profit.
+requires the matching Stripe balance transaction to be verified available,
+and divides its exact processor net by the exact eligible offers returned to
+agents in that arm. The policy declares the minimum processor-net margin and
+minimum processor-net cents per 1,000 returns, but never supplies a modeled fee
+for winner selection. The result must not be called full profit.
 The initial 3-provider, 5-accepted-handoff, 2-activation, 1-renewal milestone
 proves that the consent, attribution, outcome, billing, renewal, and settlement
 rails can produce real revenue. It does not by itself select a strongest

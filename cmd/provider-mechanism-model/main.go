@@ -28,8 +28,6 @@ type scenario struct {
 	MinOfferReturnsPerMechanism    int64                        `json:"min_offer_returns_per_mechanism,omitempty"`
 	MinPaidSettlementsPerMechanism int64                        `json:"min_paid_settlements_per_mechanism,omitempty"`
 	MaxReversalRate                float64                      `json:"max_reversal_rate,omitempty"`
-	PaymentProcessingBasisPoints   int64                        `json:"payment_processing_basis_points,omitempty"`
-	PaymentProcessingFixedCents    int64                        `json:"payment_processing_fixed_cents,omitempty"`
 	MinProcessingNetMarginRate     float64                      `json:"min_processing_net_margin_rate,omitempty"`
 	MinProcessingNetPerThousand    int64                        `json:"min_processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
 	BountyPointsCents              []int64                      `json:"bounty_points_cents"`
@@ -62,26 +60,26 @@ type chargeEvent struct {
 }
 
 type result struct {
-	ChargeEvent                 string  `json:"charge_event"`
-	ChargedProviderCompanies    int64   `json:"charged_provider_companies,omitempty"`
-	BountyCents                 int64   `json:"bounty_cents"`
-	ChargedEvents               int64   `json:"charged_events"`
-	GrossBillableCents          int64   `json:"gross_billable_cents"`
-	RevenuePerHandoffCents      float64 `json:"revenue_per_handoff_cents"`
-	RevenuePerOfferReturnCents  float64 `json:"revenue_per_offer_return_cents"`
-	CostPerActivationCents      float64 `json:"cost_per_activation_cents"`
-	CostPerConversionCents      float64 `json:"cost_per_conversion_cents"`
-	MedianDaysToCharge          float64 `json:"median_days_to_charge"`
-	ValueKind                   string  `json:"value_kind"`
-	VerifiedPaidCents           int64   `json:"verified_paid_cents,omitempty"`
-	VerifiedPaidSettlements     int64   `json:"verified_paid_settlements,omitempty"`
-	ProcessingFeeAllowanceCents int64   `json:"processing_fee_allowance_cents,omitempty"`
-	ProcessingNetRevenueCents   int64   `json:"processing_net_revenue_cents,omitempty"`
-	ProcessingNetPerThousand    float64 `json:"processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
-	ProcessingNetMarginRate     float64 `json:"processing_net_margin_rate,omitempty"`
-	ReversalRate                float64 `json:"reversal_rate"`
-	Viable                      bool    `json:"viable"`
-	Failure                     string  `json:"failure,omitempty"`
+	ChargeEvent                string  `json:"charge_event"`
+	ChargedProviderCompanies   int64   `json:"charged_provider_companies,omitempty"`
+	BountyCents                int64   `json:"bounty_cents"`
+	ChargedEvents              int64   `json:"charged_events"`
+	GrossBillableCents         int64   `json:"gross_billable_cents"`
+	RevenuePerHandoffCents     float64 `json:"revenue_per_handoff_cents"`
+	RevenuePerOfferReturnCents float64 `json:"revenue_per_offer_return_cents"`
+	CostPerActivationCents     float64 `json:"cost_per_activation_cents"`
+	CostPerConversionCents     float64 `json:"cost_per_conversion_cents"`
+	MedianDaysToCharge         float64 `json:"median_days_to_charge"`
+	ValueKind                  string  `json:"value_kind"`
+	VerifiedPaidCents          int64   `json:"verified_paid_cents,omitempty"`
+	VerifiedPaidSettlements    int64   `json:"verified_paid_settlements,omitempty"`
+	ActualProcessorFeeCents    int64   `json:"actual_processor_fee_cents,omitempty"`
+	ActualProcessorNetCents    int64   `json:"actual_processor_net_cents,omitempty"`
+	ProcessingNetPerThousand   float64 `json:"processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
+	ProcessingNetMarginRate    float64 `json:"processing_net_margin_rate,omitempty"`
+	ReversalRate               float64 `json:"reversal_rate"`
+	Viable                     bool    `json:"viable"`
+	Failure                    string  `json:"failure,omitempty"`
 }
 
 type report struct {
@@ -111,11 +109,8 @@ type policy struct {
 	MinOfferReturnsPerMechanism    int64   `json:"min_offer_returns_per_mechanism"`
 	MinPaidSettlementsPerMechanism int64   `json:"min_paid_settlements_per_mechanism"`
 	MaxReversalRate                float64 `json:"max_reversal_rate"`
-	PaymentProcessingBasisPoints   int64   `json:"payment_processing_basis_points"`
-	PaymentProcessingFixedCents    int64   `json:"payment_processing_fixed_cents"`
 	MinProcessingNetMarginRate     float64 `json:"min_processing_net_margin_rate"`
 	MinProcessingNetPerThousand    int64   `json:"min_processing_net_revenue_per_1000_offer_returns_cents"`
-	BountyPointsCents              []int64 `json:"bounty_points_cents"`
 }
 
 type proofStatusDocument struct {
@@ -238,7 +233,7 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 		proof.RejectedProcessorNet == nil || *proof.RejectedProcessorNet != 0 ||
 		proof.PaidSettlements < 1 || proof.PaidLatencySamples != proof.PaidSettlements ||
 		proof.AvailableSettlements != proof.PaidSettlements || proof.PaidMedianSeconds < 0 ||
-		len(proof.PaidByCurrency) != 1 || len(proof.ProcessorNetByCurrency) != 1 ||
+		len(proof.PaidByCurrency) != 1 || len(proof.ProcessorFeesByCurrency) != 1 || len(proof.ProcessorNetByCurrency) != 1 ||
 		proof.PaidByCurrency["usd"] < 1 || proof.ProcessorNetByCurrency["usd"] < 1 ||
 		proof.ProcessorFeesByCurrency["usd"]+proof.ProcessorNetByCurrency["usd"] != proof.PaidByCurrency["usd"] {
 		return scenario{}, errors.New("proof must contain integrity-valid paid terms settlements with actual available processor net")
@@ -267,11 +262,8 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 		MinOfferReturnsPerMechanism:    policy.MinOfferReturnsPerMechanism,
 		MinPaidSettlementsPerMechanism: policy.MinPaidSettlementsPerMechanism,
 		MaxReversalRate:                policy.MaxReversalRate,
-		PaymentProcessingBasisPoints:   policy.PaymentProcessingBasisPoints,
-		PaymentProcessingFixedCents:    policy.PaymentProcessingFixedCents,
 		MinProcessingNetMarginRate:     policy.MinProcessingNetMarginRate,
 		MinProcessingNetPerThousand:    policy.MinProcessingNetPerThousand,
-		BountyPointsCents:              policy.BountyPointsCents,
 		ChargeEvents: []chargeEvent{
 			{Name: "accepted", MedianDaysToCharge: float64(proof.AcceptedMedianSeconds) / 86400},
 			{Name: "activated", MedianDaysToCharge: float64(proof.ActivatedMedianSeconds) / 86400},
@@ -398,8 +390,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	if input.MinChargedEvents < 1 || input.MinChargedProviderCompanies < 1 || input.MinOfferReturnsPerMechanism < 1 ||
 		input.MinPaidSettlementsPerMechanism < 1 || input.MaxCostPerActivationCents < 1 ||
 		input.MaxMedianDaysToCharge < 0 || input.MaxReversalRate < 0 || input.MaxReversalRate > 1 ||
-		input.PaymentProcessingBasisPoints < 1 || input.PaymentProcessingBasisPoints >= 10000 ||
-		input.PaymentProcessingFixedCents < 0 || input.MinProcessingNetMarginRate <= 0 ||
+		input.MinProcessingNetMarginRate <= 0 ||
 		input.MinProcessingNetMarginRate > 1 || input.MinProcessingNetPerThousand < 1 {
 		return report{}, errors.New("verified selection constraints must be positive")
 	}
@@ -408,7 +399,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		return report{}, errors.New("verified proof must contain accepted, activated, and converted mechanism evidence")
 	}
 	output := report{
-		Contract:                 "nhs-provider-mechanism-model-v2",
+		Contract:                 "nhs-provider-mechanism-model-v3",
 		Scenario:                 input.Name,
 		EvidenceKind:             input.EvidenceKind,
 		Synthetic:                false,
@@ -461,23 +452,23 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		processingFees := evidence.ProcessorFeeCents
 		processingNet := evidence.ProcessorNetCents
 		item := result{
-			ChargeEvent:                 chargeEvent,
-			ChargedProviderCompanies:    evidence.ChargedProviderCompanies,
-			ChargedEvents:               chargedEvents,
-			RevenuePerHandoffCents:      float64(evidence.PaidCents) / float64(evidence.ObservedHandoffs),
-			RevenuePerOfferReturnCents:  float64(evidence.PaidCents) / float64(evidence.OfferReturns),
-			CostPerActivationCents:      costPerActivation,
-			CostPerConversionCents:      costPerConversion,
-			MedianDaysToCharge:          float64(evidence.PaidMedianSeconds) / 86400,
-			ValueKind:                   "verified_processor_net_available",
-			VerifiedPaidCents:           evidence.PaidCents,
-			VerifiedPaidSettlements:     evidence.PaidSettlements,
-			ProcessingFeeAllowanceCents: processingFees,
-			ProcessingNetRevenueCents:   processingNet,
-			ProcessingNetPerThousand:    float64(processingNet) * 1000 / float64(evidence.OfferReturns),
-			ProcessingNetMarginRate:     float64(processingNet) / float64(evidence.PaidCents),
-			ReversalRate:                float64(evidence.Reversed) / float64(evidence.ObservedHandoffs),
-			Viable:                      true,
+			ChargeEvent:                chargeEvent,
+			ChargedProviderCompanies:   evidence.ChargedProviderCompanies,
+			ChargedEvents:              chargedEvents,
+			RevenuePerHandoffCents:     float64(evidence.PaidCents) / float64(evidence.ObservedHandoffs),
+			RevenuePerOfferReturnCents: float64(evidence.PaidCents) / float64(evidence.OfferReturns),
+			CostPerActivationCents:     costPerActivation,
+			CostPerConversionCents:     costPerConversion,
+			MedianDaysToCharge:         float64(evidence.PaidMedianSeconds) / 86400,
+			ValueKind:                  "verified_processor_net_available",
+			VerifiedPaidCents:          evidence.PaidCents,
+			VerifiedPaidSettlements:    evidence.PaidSettlements,
+			ActualProcessorFeeCents:    processingFees,
+			ActualProcessorNetCents:    processingNet,
+			ProcessingNetPerThousand:   float64(processingNet) * 1000 / float64(evidence.OfferReturns),
+			ProcessingNetMarginRate:    float64(processingNet) / float64(evidence.PaidCents),
+			ReversalRate:               float64(evidence.Reversed) / float64(evidence.ObservedHandoffs),
+			Viable:                     true,
 		}
 		switch {
 		case evidence.OfferReturns < input.MinOfferReturnsPerMechanism:
@@ -538,26 +529,4 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	}
 	output.SelectionReason = "no mechanism meets the declared verified-paid selection constraints"
 	return output, nil
-}
-
-// conservativeProcessingFeeAllowance upper-bounds standard percentage-plus-
-// fixed per-transaction processing at the declared policy rate. The extra one
-// cent per settlement covers the unavailable per-transaction percentage
-// rounding distribution when only privacy-safe aggregate paid cents are read.
-// It is a decision allowance, not an observed Stripe balance-transaction fee.
-func conservativeProcessingFeeAllowance(paidCents, paidSettlements, basisPoints, fixedCents int64) (int64, error) {
-	if paidCents < 1 || paidSettlements < 1 || basisPoints < 1 || basisPoints >= 10000 || fixedCents < 0 {
-		return 0, errors.New("invalid processing allowance inputs")
-	}
-	percentageWhole := paidCents / 10000 * basisPoints
-	percentageRemainder := paidCents % 10000 * basisPoints
-	percentageFee := percentageWhole + (percentageRemainder+9999)/10000
-	if fixedCents > (1<<63-1)/paidSettlements {
-		return 0, errors.New("processing fixed-fee allowance overflows")
-	}
-	fixedFee := paidSettlements * fixedCents
-	if percentageFee > (1<<63-1)-fixedFee-paidSettlements {
-		return 0, errors.New("processing fee allowance overflows")
-	}
-	return percentageFee + fixedFee + paidSettlements, nil
 }

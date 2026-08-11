@@ -14,13 +14,7 @@ func attachActualProcessorNetScenario(input scenario) scenario {
 		if evidence.PaidSettlements == 0 {
 			continue
 		}
-		fee, err := conservativeProcessingFeeAllowance(
-			evidence.PaidCents, evidence.PaidSettlements,
-			input.PaymentProcessingBasisPoints, input.PaymentProcessingFixedCents,
-		)
-		if err != nil {
-			panic(err)
-		}
+		fee := testPublishedProcessingFee(evidence.PaidCents, evidence.PaidSettlements)
 		evidence.AvailableSettlements = evidence.PaidSettlements
 		evidence.ProcessorFeeCents = fee
 		evidence.ProcessorNetCents = evidence.PaidCents - fee
@@ -35,13 +29,7 @@ func attachActualProcessorNetProof(proof *verifiedProof) {
 		if evidence.PaidSettlements == 0 {
 			continue
 		}
-		fee, err := conservativeProcessingFeeAllowance(
-			evidence.PaidCents, evidence.PaidSettlements,
-			testProcessingBasisPoints, testProcessingFixedCents,
-		)
-		if err != nil {
-			panic(err)
-		}
+		fee := testPublishedProcessingFee(evidence.PaidCents, evidence.PaidSettlements)
 		evidence.AvailableSettlements = evidence.PaidSettlements
 		evidence.ProcessorFeeCents = fee
 		evidence.ProcessorNetCents = evidence.PaidCents - fee
@@ -56,6 +44,14 @@ func attachActualProcessorNetProof(proof *verifiedProof) {
 	proof.AvailableSettlements = proof.PaidSettlements
 	proof.ProcessorFeesByCurrency = map[string]int64{"usd": fees}
 	proof.ProcessorNetByCurrency = map[string]int64{"usd": net}
+}
+
+// testPublishedProcessingFee creates realistic exact processor values for
+// fixtures. Production selection consumes Stripe-observed fee/net evidence;
+// it never computes these values from a published rate.
+func testPublishedProcessingFee(paidCents, paidSettlements int64) int64 {
+	percentage := (paidCents*testProcessingBasisPoints + 9999) / 10000
+	return percentage + paidSettlements*(testProcessingFixedCents+1)
 }
 
 func TestEvaluateSelectsActivatedForPilotScenario(t *testing.T) {
@@ -189,9 +185,7 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
-		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
-		BountyPointsCents: []int64{2500, 7500, 20000},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -221,6 +215,11 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		t.Fatal("expected missing privacy-boundary field to fail closed")
 	}
 	proof.RawQueriesSold = &falsity
+	proof.ProcessorFeesByCurrency["eur"] = 1
+	if _, err := scenarioFromVerifiedProof(proof, decision); err == nil {
+		t.Fatal("expected non-USD processor fee aggregate to fail closed")
+	}
+	delete(proof.ProcessorFeesByCurrency, "eur")
 	proof.PaidSettlements = 0
 	if _, err := scenarioFromVerifiedProof(proof, decision); err == nil {
 		t.Fatal("expected proof without a paid settlement to fail closed")
@@ -251,9 +250,7 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 1,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
-		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
-		BountyPointsCents: []int64{2500},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -271,7 +268,6 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
-		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
@@ -311,7 +307,6 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 5, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
-		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
@@ -356,7 +351,6 @@ func TestEvaluateVerifiedMechanismsRequiresEveryProviderInEveryArm(t *testing.T)
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
-		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
@@ -399,7 +393,6 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
-		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MaxReversalRate: 0.2, PaidSettlements: 3,
 		PaidByCurrency: map[string]int64{"usd": 8000},
@@ -447,11 +440,9 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MaxReversalRate: 0.2, PaidSettlements: 7,
-		PaidByCurrency:               map[string]int64{"usd": 6900},
-		PaymentProcessingBasisPoints: testProcessingBasisPoints,
-		PaymentProcessingFixedCents:  testProcessingFixedCents,
-		MinProcessingNetMarginRate:   testMinProcessingNetRate,
-		MinProcessingNetPerThousand:  testMinProcessingNetPerThousand,
+		PaidByCurrency:              map[string]int64{"usd": 6900},
+		MinProcessingNetMarginRate:  testMinProcessingNetRate,
+		MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
 				ChargedProviderCompanies: 3, OfferReturns: 10, ObservedHandoffs: 10,
@@ -478,8 +469,8 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 		t.Fatalf("selected event = %q, want activated by processing-net value", report.SelectedEvent)
 	}
 	if report.Results[0].RevenuePerOfferReturnCents != 290 ||
-		report.Results[0].ProcessingFeeAllowanceCents != 116 ||
-		report.Results[0].ProcessingNetRevenueCents != 2784 ||
+		report.Results[0].ActualProcessorFeeCents != 116 ||
+		report.Results[0].ActualProcessorNetCents != 2784 ||
 		report.Results[0].ProcessingNetPerThousand != 278400 {
 		t.Fatalf("unexpected activated processing-net economics: %+v", report.Results[0])
 	}

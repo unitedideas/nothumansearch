@@ -2,6 +2,8 @@
 Dockerfile
 cmd/monitor-check/main.go
 cmd/openapi-dump/main.go
+cmd/provider-mechanism-model/main.go
+cmd/provider-mechanism-model/main_test.go
 cmd/provider-cutover-preflight/main.go
 cmd/provider-cutover-preflight/main_test.go
 cmd/server/main.go
@@ -36,6 +38,10 @@ design/reviews/evidence/2026-08-02-provider-decision-path-mobile.png
 design/reviews/evidence/2026-08-02-provider-setup-desktop.png
 design/reviews/evidence/2026-08-02-provider-setup-mobile.png
 docs/experiments/nhs-cost-baseline-2026-08-11.json
+docs/experiments/provider-mechanism-model.md
+docs/experiments/provider-mechanism-pilot-protocol.md
+docs/experiments/provider-mechanism-policy-v1.json
+docs/experiments/provider-mechanism-proof-matrix-2026-08-11.md
 docs/provider-exchange-pilot-runbook.md
 internal/database/database.go
 internal/database/database_test.go
