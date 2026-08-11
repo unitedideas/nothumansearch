@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCutoverPreflightOutputContractIsBounded(t *testing.T) {
@@ -75,5 +76,11 @@ func TestValidRevision(t *testing.T) {
 		if validRevision(invalid) {
 			t.Fatalf("invalid revision was accepted: %q", invalid)
 		}
+	}
+}
+
+func TestPreflightTimeoutIsBoundedForColdSchemaInspection(t *testing.T) {
+	if preflightTimeout != 90*time.Second {
+		t.Fatalf("preflight timeout = %s, want 90s", preflightTimeout)
 	}
 }

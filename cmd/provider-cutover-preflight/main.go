@@ -16,7 +16,10 @@ import (
 	"github.com/unitedideas/nothumansearch/internal/handlers"
 )
 
-const preflightContract = "nhs-provider-cutover-preflight-v2"
+const (
+	preflightContract = "nhs-provider-cutover-preflight-v2"
+	preflightTimeout  = 90 * time.Second
+)
 
 // releaseRevision is injected into the exact container binary at build time.
 // The operator-supplied revision is only an expected value and cannot relabel a
@@ -78,7 +81,7 @@ func main() {
 		*migrationsDir = filepath.Join(root, "migrations")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), preflightTimeout)
 	defer cancel()
 	if err := database.ConnectWithReleaseRevisionContext(ctx, *revision); err != nil {
 		fail("database_connection_failed")
