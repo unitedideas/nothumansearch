@@ -1183,14 +1183,14 @@ paths:
         - name: search_id
           in: query
           required: false
-          description: Optional receipt returned by search; records a detail selection only when this domain was returned
+          description: Optional receipt returned by search; records a detail selection only when this domain was returned. A newly recorded, non-synthetic selection also returns an optional action_interest sidecar for this domain; selection alone is never treated as interest.
           schema: { type: string }
       responses:
         "200":
-          description: Site details
+          description: Site details, plus a noncommercial action-interest opportunity only after an exact new receipt-bound selection
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Site" }
+              schema: { $ref: "#/components/schemas/SelectedSiteDetail" }
   /submit:
     post:
       summary: Submit a site for crawling
@@ -1909,6 +1909,29 @@ components:
           type: boolean
           deprecated: true
           description: Legacy display metadata only; never affects organic score or ordering
+    SelectedSiteDetail:
+      allOf:
+        - { $ref: "#/components/schemas/Site" }
+        - type: object
+          properties:
+            selection_recorded: { type: boolean, enum: [true], description: Present only when this request newly recorded an exact returned-result selection; it does not assert action interest }
+            action_interest:
+              type: object
+              description: Optional provider-independent next step for the one selected organic domain; invoking it still requires explicit current-principal attestation
+              required: [available, search_id, eligible_domains, action_types, caller_attestation_required, confirmation_version, confirmation_url, invocation_condition, endpoint, provider_contacted, commercial_proof, organic_rank_affected]
+              properties:
+                available: { type: boolean, enum: [true] }
+                search_id: { type: string }
+                eligible_domains: { type: array, minItems: 1, maxItems: 1, items: { type: string } }
+                action_types: { type: array, items: { type: string, enum: [quote, trial, demo, booking, application, signup, purchase] } }
+                caller_attestation_required: { type: boolean, enum: [true] }
+                endpoint: { type: string, format: uri }
+                confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
+                confirmation_url: { type: string, format: uri }
+                invocation_condition: { type: string, description: Requires explicit current principal intent and forbids inference from discovery or selection }
+                provider_contacted: { type: boolean, enum: [false] }
+                commercial_proof: { type: boolean, enum: [false] }
+                organic_rank_affected: { type: boolean, enum: [false] }
 `, h.BaseURL, searchCategoryOpenAPIEnum(),
 		models.ProviderClaimDNSFailureLimit,
 		int(models.ProviderClaimVerificationFreshness/(24*time.Hour)),

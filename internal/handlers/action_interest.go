@@ -53,6 +53,18 @@ func publicActionInterestOpportunity(baseURL, searchID string, sites []models.Si
 	}
 }
 
+// selectedActionInterestOpportunity is returned only after NHS has just
+// recorded an exact receipt-to-organic-result selection. It moves the truthful
+// optional next step to the point where an agent has inspected one result,
+// without treating that inspection as intent. The caller still has to make the
+// separate current-principal attestation in record_action_interest.
+func selectedActionInterestOpportunity(baseURL, searchID string, site *models.Site) map[string]any {
+	if site == nil {
+		return publicActionInterestOpportunity(baseURL, "", nil, false)
+	}
+	return publicActionInterestOpportunity(baseURL, searchID, []models.Site{*site}, true)
+}
+
 const actionInterestHourlyLimit = 120
 
 type ActionInterestHandler struct {

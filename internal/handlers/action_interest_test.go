@@ -94,6 +94,58 @@ func TestActionInterestAttemptOutcomesAreStableAndNonCommercial(t *testing.T) {
 	}
 }
 
+func TestSelectedActionInterestOpportunityIsExactAndNonCommercial(t *testing.T) {
+	site := &models.Site{Domain: "Example.COM"}
+	opportunity := selectedActionInterestOpportunity("https://nothumansearch.ai/", "nhs_sr_AAAAAAAAAAAAAAAA", site)
+	if available, _ := opportunity["available"].(bool); !available {
+		t.Fatalf("selected opportunity unavailable: %#v", opportunity)
+	}
+	if got := opportunity["search_id"]; got != "nhs_sr_AAAAAAAAAAAAAAAA" {
+		t.Fatalf("search_id = %#v", got)
+	}
+	domains, ok := opportunity["eligible_domains"].([]string)
+	if !ok || len(domains) != 1 || domains[0] != "example.com" {
+		t.Fatalf("eligible domains = %#v, want exact selected domain", opportunity["eligible_domains"])
+	}
+	for _, key := range []string{"provider_contacted", "commercial_proof", "organic_rank_affected"} {
+		if value, ok := opportunity[key].(bool); !ok || value {
+			t.Fatalf("truth field %s = %#v, want false", key, opportunity[key])
+		}
+	}
+	if condition, _ := opportunity["invocation_condition"].(string); !strings.Contains(condition, "do not infer interest") {
+		t.Fatalf("invocation condition lost anti-inference boundary: %#v", condition)
+	}
+
+	unavailable := selectedActionInterestOpportunity("https://nothumansearch.ai", "nhs_sr_AAAAAAAAAAAAAAAA", nil)
+	if available, _ := unavailable["available"].(bool); available || unavailable["search_id"] != "" {
+		t.Fatalf("nil-site opportunity did not fail closed: %#v", unavailable)
+	}
+}
+
+func TestGetSiteDetailsDescribesPostSelectionAttestationBoundary(t *testing.T) {
+	handler := NewMCPHandler(nil, "https://nothumansearch.ai")
+	for _, definition := range handler.toolDefinitions() {
+		if definition["name"] != "get_site_details" {
+			continue
+		}
+		description, _ := definition["description"].(string)
+		for _, required := range []string{"record_action_interest", "Selection alone is never interest", "never contacts the provider"} {
+			if !strings.Contains(description, required) {
+				t.Fatalf("get_site_details description missing %q: %s", required, description)
+			}
+		}
+		schema, _ := definition["inputSchema"].(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		searchID, _ := properties["search_id"].(map[string]any)
+		searchDescription, _ := searchID["description"].(string)
+		if !strings.Contains(searchDescription, "explicit current-principal attestation") {
+			t.Fatalf("search_id description lost separate-attestation requirement: %s", searchDescription)
+		}
+		return
+	}
+	t.Fatal("get_site_details tool missing")
+}
+
 func TestActionInterestRESTAndMCPShareFreeAbuseGuard(t *testing.T) {
 	shared := NewActionInterestHandler(nil, "https://nothumansearch.ai")
 	shared.limiter = newMCPDiscoveryRateLimiter(1, time.Hour)

@@ -55,9 +55,14 @@ func exerciseProviderExchangeHTTPLoopback(t *testing.T, db *sql.DB) {
 			UPDATE sites
 			SET name='Loopbackneedle Provider',
 			    description='Disposable HTTP provider exchange fixture.',
+			    llms_txt_content='',
+			    openapi_summary='',
 			    has_mcp_server=true,
 			    mcp_endpoint='https://http-loopback.example/mcp',
 			    agentic_score=100,
+			    crawl_status='success',
+			    has_favicon=false,
+			    favicon_url='',
 			    created_at=clock_timestamp()
 			WHERE id=$1::uuid`, provider.site.ID); err != nil {
 			t.Fatalf("prepare loopback provider search fixture: %v", err)
@@ -89,6 +94,8 @@ func exerciseProviderExchangeHTTPLoopback(t *testing.T, db *sql.DB) {
 		mux := http.NewServeMux()
 		mux.Handle("/mcp", mcp)
 		mux.HandleFunc("/api/v1/search", api.Search)
+		mux.HandleFunc("/api/v1/site/", api.GetSite)
+		mux.HandleFunc("/api/v1/sites/", api.GetSite)
 		mux.HandleFunc("/api/v1/provider/claims", exchange.Claims)
 		mux.HandleFunc("/api/v1/provider/claims/", exchange.ClaimAction)
 		mux.HandleFunc("/api/v1/provider/offers", exchange.Offers)
@@ -225,6 +232,25 @@ func exerciseProviderExchangeHTTPLoopback(t *testing.T, db *sql.DB) {
 			t.Fatal("loopback paid sidecar lost exact active-offer evidence")
 		}
 		searchID := loopbackString(t, search, "search_id")
+		selectedRESTDetail := loopbackExpectJSON(t, client, "receipt-bound REST detail", http.MethodGet,
+			server.URL+"/api/v1/site/"+url.PathEscape(domain)+"?search_id="+url.QueryEscape(searchID),
+			nil, nil, http.StatusOK)
+		if !loopbackBool(t, selectedRESTDetail, "selection_recorded") {
+			t.Fatalf("receipt-bound REST detail did not report the newly recorded selection: %#v", selectedRESTDetail)
+		}
+		restInterest := loopbackObject(t, selectedRESTDetail, "action_interest")
+		if !loopbackBool(t, restInterest, "available") ||
+			loopbackString(t, restInterest, "search_id") != searchID ||
+			loopbackString(t, restInterest, "endpoint") != server.URL+"/api/v1/action-interests" ||
+			loopbackBool(t, restInterest, "provider_contacted") ||
+			loopbackBool(t, restInterest, "commercial_proof") ||
+			loopbackBool(t, restInterest, "organic_rank_affected") {
+			t.Fatalf("selected REST detail action-interest boundary = %#v", restInterest)
+		}
+		restEligibleDomains := loopbackArray(t, restInterest, "eligible_domains")
+		if len(restEligibleDomains) != 1 || restEligibleDomains[0] != domain {
+			t.Fatalf("selected REST detail eligible domains = %#v, want [%q]", restEligibleDomains, domain)
+		}
 		providerDemand := loopbackExpectJSON(t, client, "read claim-scoped provider demand", http.MethodGet,
 			server.URL+"/api/v1/provider/demand?days=30", nil, providerHeaders, http.StatusOK)
 		demand := loopbackObject(t, providerDemand, "demand")
@@ -450,6 +476,31 @@ func exerciseProviderExchangeMCPDiscoverySurfaces(
 		"limit":    mcpParams.Limit,
 	})
 	loopbackRequireMCPDiscoveryExchange(t, "MCP-server discovery", mcpServers, mcpExpected, providerDomain, offerID)
+
+	// The truthful opt-in belongs at the decision point too, not only on the
+	// search response. An exact receipt-bound detail selection exposes one
+	// eligible domain without treating the selection itself as interest.
+	mcpSearchID := loopbackString(t, mcpServers, "search_id")
+	selectedDetails := loopbackMCPCall(t, client, baseURL, "get_site_details", map[string]any{
+		"domain":    providerDomain,
+		"search_id": mcpSearchID,
+	})
+	if !loopbackBool(t, selectedDetails, "selection_recorded") {
+		t.Fatalf("receipt-bound MCP detail did not report the newly recorded selection: %#v", selectedDetails)
+	}
+	selectedInterest := loopbackObject(t, selectedDetails, "action_interest")
+	if !loopbackBool(t, selectedInterest, "available") ||
+		loopbackString(t, selectedInterest, "search_id") != mcpSearchID ||
+		loopbackString(t, selectedInterest, "tool") != "record_action_interest" ||
+		loopbackBool(t, selectedInterest, "provider_contacted") ||
+		loopbackBool(t, selectedInterest, "commercial_proof") ||
+		loopbackBool(t, selectedInterest, "organic_rank_affected") {
+		t.Fatalf("selected MCP detail action-interest boundary = %#v", selectedInterest)
+	}
+	eligibleDomains := loopbackArray(t, selectedInterest, "eligible_domains")
+	if len(eligibleDomains) != 1 || eligibleDomains[0] != providerDomain {
+		t.Fatalf("selected MCP detail eligible domains = %#v, want [%q]", eligibleDomains, providerDomain)
+	}
 
 	unfilteredTopExpected, err := models.GetTopSites(db, "", 1)
 	if err != nil {

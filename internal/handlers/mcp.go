@@ -340,7 +340,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 		{
 			"name":        "get_site_details",
 			"title":       "Get Site Agentic Readiness Report",
-			"description": "Get the full agentic readiness report for a specific domain: score, category, all 7 signal checks (llms.txt, ai-plugin.json, OpenAPI, structured API, MCP server, robots.txt AI rules, Schema.org), plus any cached llms.txt content and OpenAPI summary.",
+			"description": "Get the full agentic readiness report for a specific domain: score, category, all 7 signal checks (llms.txt, ai-plugin.json, OpenAPI, structured API, MCP server, robots.txt AI rules, Schema.org), plus any cached llms.txt content and OpenAPI summary. When an exact search_id newly records this organic-result selection, the response also carries an optional record_action_interest opportunity for this domain. Selection alone is never interest and never contacts the provider.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -350,7 +350,7 @@ func (h *MCPHandler) toolDefinitions() []map[string]any {
 					},
 					"search_id": map[string]any{
 						"type":        "string",
-						"description": "Optional receipt returned by a receipt-bearing NHS discovery tool. If this domain was returned, NHS records a detail selection.",
+						"description": "Optional receipt returned by a receipt-bearing NHS discovery tool. If this domain was returned, NHS records a detail selection and may return a separate, noncommercial action-interest opportunity requiring explicit current-principal attestation.",
 					},
 				},
 				"required": []string{"domain"},
@@ -738,7 +738,7 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 		// surveying the tool list. Route both to the same handler.
 		h.toolSearchAgents(toolResponse, req.ID, params.Arguments, demandRequestIsSynthetic(r))
 	case "get_site_details":
-		h.toolGetSiteDetails(toolResponse, req.ID, params.Arguments)
+		h.toolGetSiteDetails(toolResponse, req.ID, params.Arguments, demandRequestIsSynthetic(r))
 	case "get_stats":
 		h.toolGetStats(toolResponse, req.ID)
 	case "submit_site":
@@ -1520,7 +1520,7 @@ func stringInSet(value string, allowed []string) bool {
 	return false
 }
 
-func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessage, args map[string]any) {
+func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessage, args map[string]any, synthetic bool) {
 	domain := asString(args["domain"])
 	if domain == "" {
 		h.writeToolError(w, id, "domain required")
@@ -1542,11 +1542,14 @@ func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessag
 		h.writeToolError(w, id, fmt.Sprintf("site not found: %s (try search_agents first)", domain))
 		return
 	}
-	if searchID := strings.TrimSpace(asString(args["search_id"])); searchID != "" {
+	searchID := strings.TrimSpace(asString(args["search_id"]))
+	selectionRecorded := false
+	if searchID != "" {
 		recorded, selectionErr := models.RecordDemandSelection(h.DB, searchID, site.Domain, "mcp")
 		if selectionErr != nil {
 			log.Printf("demand selection MCP detail: %v", selectionErr)
 		} else {
+			selectionRecorded = recorded
 			w.Header().Set("NHS-Selection-Recorded", strconv.FormatBool(recorded))
 		}
 	}
@@ -1571,11 +1574,27 @@ func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessag
 	fmt.Fprintf(&b, "  Schema.org:        %s\n", yesNo(site.HasSchemaOrg))
 	fmt.Fprintf(&b, "\nFull report: %s/site/%s\n", h.BaseURL, site.Domain)
 
+	structuredContent := any(site)
+	if selectionRecorded && !synthetic {
+		opportunity := selectedActionInterestOpportunity(h.BaseURL, searchID, site)
+		opportunity["tool"] = "record_action_interest"
+		structuredContent = struct {
+			*models.Site
+			SelectionRecorded bool           `json:"selection_recorded"`
+			ActionInterest    map[string]any `json:"action_interest"`
+		}{
+			Site:              site,
+			SelectionRecorded: true,
+			ActionInterest:    opportunity,
+		}
+		fmt.Fprintf(&b, "\nOptional next step: only if the principal currently wants a quote, trial, demo, booking, application, signup, or purchase from %s, call record_action_interest with this search_id and domain. Selection alone is not interest. No provider is contacted and no ticket, charge, rank change, or commercial proof is created.\n", site.Domain)
+	}
+
 	h.writeResult(w, id, map[string]any{
 		"content": []map[string]any{
 			{"type": "text", "text": b.String()},
 		},
-		"structuredContent": site,
+		"structuredContent": structuredContent,
 	})
 }
 

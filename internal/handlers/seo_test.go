@@ -151,6 +151,10 @@ func TestOpenAPIDescribesFreeFallbackAndOptionalPriorityThroughput(t *testing.T)
 		"organic_rank_paid",
 		"provider_acknowledges_merchant_of_record",
 		"Update an owned draft offer",
+		"#/components/schemas/SelectedSiteDetail",
+		"selection alone is never treated as interest",
+		"newly recorded an exact returned-result selection",
+		"maxItems: 1",
 	} {
 		if !strings.Contains(body, required) {
 			t.Fatalf("OpenAPI priority/free contract missing %q", required)

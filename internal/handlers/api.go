@@ -371,6 +371,7 @@ func parsePositivePage(raw string) int {
 // GET /api/v1/site/:domain
 func (h *APIHandler) GetSite(w http.ResponseWriter, r *http.Request) {
 	searchID := strings.TrimSpace(r.URL.Query().Get("search_id"))
+	selectionRecorded := false
 	if searchID != "" {
 		protectReceiptBearingResponse(w)
 	}
@@ -392,10 +393,25 @@ func (h *APIHandler) GetSite(w http.ResponseWriter, r *http.Request) {
 		if selectionErr != nil {
 			log.Printf("demand selection REST detail: %v", selectionErr)
 		} else {
+			selectionRecorded = recorded
 			w.Header().Set("NHS-Selection-Recorded", strconv.FormatBool(recorded))
 		}
 	}
 
+	if selectionRecorded && !demandRequestIsSynthetic(r) {
+		opportunity := selectedActionInterestOpportunity(h.BaseURL, searchID, site)
+		opportunity["endpoint"] = h.BaseURL + "/api/v1/action-interests"
+		h.writeJSON(w, 200, struct {
+			*models.Site
+			SelectionRecorded bool           `json:"selection_recorded"`
+			ActionInterest    map[string]any `json:"action_interest"`
+		}{
+			Site:              site,
+			SelectionRecorded: true,
+			ActionInterest:    opportunity,
+		})
+		return
+	}
 	h.writeJSON(w, 200, site)
 }
 
