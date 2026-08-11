@@ -21,7 +21,7 @@ or a winning mechanism.
 | --- | --- | --- | --- |
 | Organic REST/MCP discovery remains free | Live search response says `access=free`; provider sidecar cannot affect organic rank | Exact-revision disabled smoke passes free REST and MCP checks | Proved current |
 | Neutrality and privacy | Explicit false assertions for sold rank, queries, prompts, agent identity, and principal identity; no prohibited fields in the proof projection | Production projection and selector fail closed on missing or true assertions | Implemented, no commercial cohort |
-| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The sealed post-smoke checkpoint at `2026-08-11T10:34:34Z` contains 0 eligible searches, selections, or genuine action-interest receipts | Unmet |
+| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The sealed `2026-08-11T23:52:31Z` checkpoint contains 148 meaningful searches, including 13 developer-tools searches, but 0 selections and 0 genuine action-interest receipts | Discovery demand observed; action intent unmet |
 | Consent before handoff | Immutable ticket authority plus separate handoff consent | Rail and rejection tests exist; no real pilot ticket | Implemented, unobserved |
 | Attribution | One randomly assigned offer arm, immutable terms, exact ticket-to-outcome binding | Database and proof-verifier gates exist; no real pilot outcome | Implemented, unobserved |
 | Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcome and available processor net; no real provider evidence | Rail proved, business proof unmet |
@@ -63,15 +63,19 @@ producing this matrix. Production provider exchange remains disabled.
 ## Sealed post-selection checkpoint
 
 The current comparison baseline is
-`NHS_POST_SMOKE_CHECKPOINT_2026-08-11_a025939.json`, checked at
-`2026-08-11T10:34:34.792956Z` with report SHA-256
-`3d73461b8fde0829e9349412b6eefcfdd733026622db325358f7ec2cbd4f1a0d`.
-It contains 20 boundary-spanning unavailable attempts and zero eligible
-experiment searches, selections, interests, provider activations, handoffs,
-outcomes, payments, or settlements. The two-attempt increase from the prior
-checkpoint is consistent with the two known disabled-mode smoke rejection
-probes; it is aggregate consistency, not row-level attribution. These attempts
-are excluded from demand.
+`NHS_AGENT_INTEREST_CHECKPOINT_2026-08-11_235231Z_a025939.json`, checked at
+`2026-08-11T23:52:31.910135Z` with report SHA-256
+`a376d2600cbe204e7dcfef287eac2a2937a526e5b7c76fec546387142331d166`.
+It contains 148 meaningful eligible searches: 15 MCP, 133 REST, and 13 whose
+demand topic was developer tools. It contains zero result selections, explicit
+action-interest receipts, provider activations, handoffs, outcomes, payments,
+or settlements. The prior 20 boundary-spanning unavailable attempts did not
+increase. They remain excluded from demand.
+
+This is evidence that agents use free discovery, not evidence that a principal
+wants a provider action or that any provider-funded mechanism will convert.
+Counts are search receipts, not unique agents. The current monetizable-intent
+rate is unobserved at zero; the system must not relabel discovery as a lead.
 
 ## Current agent-only readiness
 
@@ -81,6 +85,6 @@ MCP/REST search receipts, 20 selections, 7 search receipts with a selection, 32
 span is six days. Stage 1 remains false because the 14-day window, 20 distinct
 selected-search receipts, and 10 genuine action-interest-backed search receipts
 are unmet. The newer sealed post-selection checkpoint above is the authoritative
-baseline for incremental action-interest measurement. A live refresh is pending
-restoration of the registered Fly credential bridge; this does not weaken or
-reclassify the sealed receipt.
+baseline for incremental action-interest measurement. The registered Fly
+credential bridge was restored by running the approved injector outside the
+sandbox; no token value was exposed.
