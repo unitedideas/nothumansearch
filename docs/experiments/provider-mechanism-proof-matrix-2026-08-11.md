@@ -19,7 +19,7 @@ or a winning mechanism.
 | --- | --- | --- | --- |
 | Organic REST/MCP discovery remains free | Live search response says `access=free`; provider sidecar cannot affect organic rank | Exact-revision disabled smoke passes free REST and MCP checks | Proved current |
 | Neutrality and privacy | Explicit false assertions for sold rank, queries, prompts, agent identity, and principal identity; no prohibited fields in the proof projection | Production projection and selector fail closed on missing or true assertions | Implemented, no commercial cohort |
-| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | 0 genuine action-interest receipts in the latest corrected agent-only Stage 1 read | Unmet |
+| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | 0 genuine action-interest receipts at `2026-08-11T08:30:56Z` | Unmet |
 | Consent before handoff | Immutable ticket authority plus separate handoff consent | Rail and rejection tests exist; no real pilot ticket | Implemented, unobserved |
 | Attribution | One randomly assigned offer arm, immutable terms, exact ticket-to-outcome binding | Database and proof-verifier gates exist; no real pilot outcome | Implemented, unobserved |
 | Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Synthetic fixtures only | Unmet business proof |
@@ -51,3 +51,13 @@ appearing strongest.
 
 No provider was contacted, invited, enrolled, activated, or charged while
 producing this matrix. Production provider exchange remains disabled.
+
+## Current agent-only readiness
+
+The production aggregate at `2026-08-11T08:30:56Z` contains 538 meaningful
+MCP/REST search receipts, 20 selections, 7 search receipts with a selection, 32
+`developer-tools` receipts, and zero action-interest receipts. The observation
+span is six days. Stage 1 remains false because the 14-day window, 20 distinct
+selected-search receipts, and 10 genuine action-interest-backed search receipts
+are unmet. Nine diagnostic attempts are explicitly non-demand: one invalid MCP
+request and eight disabled-mode REST refusals.
