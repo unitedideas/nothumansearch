@@ -2720,6 +2720,12 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 	if _, err := models.RecordActionInterest(db, restInterest); err != nil {
 		t.Fatalf("record REST post-selection experiment interest: %v", err)
 	}
+	if err := models.RecordActionInterestAttempt(db, "rest", "created"); err != nil {
+		t.Fatalf("record boundary-spanning experiment attempt: %v", err)
+	}
+	if err := models.RecordActionInterestAttempt(db, "rest", "unavailable"); err != nil {
+		t.Fatalf("record exact post-boundary experiment attempt: %v", err)
+	}
 	experiment, err := models.ReadPostSelectionActionInterestExperiment(context.Background(), db, experimentSince)
 	if err != nil {
 		t.Fatalf("read post-selection experiment: %v", err)
@@ -2736,6 +2742,16 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 		experiment.MCPPostSelectionInterests != 0 ||
 		experiment.RESTSearchReceipts != 1 || experiment.RESTResultSelections != 1 ||
 		experiment.RESTPostSelectionInterests != 1 ||
+		experiment.SyntheticActionInterestReceipts != 0 ||
+		experiment.ExactPostBoundaryAttempts != 1 ||
+		experiment.BoundarySpanningAttemptBuckets != 1 ||
+		experiment.BoundarySpanningAttemptCount != 3 ||
+		experiment.ExactUnavailableAttempts != 1 ||
+		experiment.SpanningUnavailableAttemptCount != 0 ||
+		experiment.ExactInvalidAttempts != 0 ||
+		experiment.SpanningInvalidAttemptCount != 0 ||
+		experiment.AttemptCoverageExact ||
+		experiment.CommercialStateEventsTotal != 0 ||
 		experiment.PostSelectionConversionRate == nil || *experiment.PostSelectionConversionRate != 0.5 ||
 		!reflect.DeepEqual(experiment.EligibleSurfaces, []string{"mcp", "rest"}) {
 		t.Fatalf("post-selection experiment = %#v", experiment)

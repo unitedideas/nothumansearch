@@ -18,24 +18,24 @@ import (
 )
 
 const (
-	readContract = "nhs-post-selection-action-interest-experiment-read-v1"
+	readContract = "nhs-post-selection-action-interest-experiment-read-v2"
 	readTimeout  = 30 * time.Second
 )
 
 var releaseRevision = "development"
 
 type readReceipt struct {
-	Contract                 string                                        `json:"contract"`
-	ReportSHA256             string                                        `json:"report_sha256"`
-	CandidateRevision        string                                        `json:"candidate_revision"`
-	BinaryRevision           string                                        `json:"binary_revision"`
-	Report                   *models.PostSelectionActionInterestExperiment `json:"report"`
-	ContainsIdentifiers      bool                                          `json:"contains_identifiers"`
-	ContainsQueriesOrPrompts bool                                          `json:"contains_queries_or_prompts"`
-	ContainsContactData      bool                                          `json:"contains_contact_data"`
-	ProviderContacted        bool                                          `json:"provider_contacted"`
-	CommercialStateChanged   bool                                          `json:"commercial_state_changed"`
-	OrganicRankAffected      bool                                          `json:"organic_rank_affected"`
+	Contract                       string                                        `json:"contract"`
+	ReportSHA256                   string                                        `json:"report_sha256"`
+	CandidateRevision              string                                        `json:"candidate_revision"`
+	BinaryRevision                 string                                        `json:"binary_revision"`
+	Report                         *models.PostSelectionActionInterestExperiment `json:"report"`
+	ContainsIdentifiers            bool                                          `json:"contains_identifiers"`
+	ContainsQueriesOrPrompts       bool                                          `json:"contains_queries_or_prompts"`
+	ContainsContactData            bool                                          `json:"contains_contact_data"`
+	OperatorContactedProvider      bool                                          `json:"operator_contacted_provider"`
+	OperatorChangedCommercialState bool                                          `json:"operator_changed_commercial_state"`
+	OperatorAffectedOrganicRank    bool                                          `json:"operator_affected_organic_rank"`
 }
 
 func main() {
@@ -82,17 +82,17 @@ func main() {
 	}
 	digest := sha256.Sum256(reportJSON)
 	receipt := readReceipt{
-		Contract:                 readContract,
-		ReportSHA256:             hex.EncodeToString(digest[:]),
-		CandidateRevision:        candidate,
-		BinaryRevision:           compiled,
-		Report:                   report,
-		ContainsIdentifiers:      false,
-		ContainsQueriesOrPrompts: false,
-		ContainsContactData:      false,
-		ProviderContacted:        false,
-		CommercialStateChanged:   false,
-		OrganicRankAffected:      false,
+		Contract:                       readContract,
+		ReportSHA256:                   hex.EncodeToString(digest[:]),
+		CandidateRevision:              candidate,
+		BinaryRevision:                 compiled,
+		Report:                         report,
+		ContainsIdentifiers:            false,
+		ContainsQueriesOrPrompts:       false,
+		ContainsContactData:            false,
+		OperatorContactedProvider:      false,
+		OperatorChangedCommercialState: false,
+		OperatorAffectedOrganicRank:    false,
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(receipt); err != nil {
 		os.Exit(1)

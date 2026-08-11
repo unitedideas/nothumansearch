@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const PostSelectionActionInterestExperimentContract = "nhs-post-selection-action-interest-experiment-v1"
+const PostSelectionActionInterestExperimentContract = "nhs-post-selection-action-interest-experiment-v2"
 
 var ErrInvalidPostSelectionExperimentWindow = errors.New("invalid post-selection experiment window")
 
@@ -37,6 +37,26 @@ type PostSelectionActionInterestExperiment struct {
 	RESTSearchReceipts               int       `json:"rest_search_receipts"`
 	RESTResultSelections             int       `json:"rest_result_selections"`
 	RESTPostSelectionInterests       int       `json:"rest_post_selection_action_interests"`
+	SyntheticActionInterestReceipts  int       `json:"synthetic_action_interest_receipts"`
+	ExactPostBoundaryAttempts        int64     `json:"exact_post_boundary_attempts"`
+	BoundarySpanningAttemptBuckets   int       `json:"boundary_spanning_attempt_buckets"`
+	BoundarySpanningAttemptCount     int64     `json:"boundary_spanning_attempt_count"`
+	ExactUnavailableAttempts         int64     `json:"exact_unavailable_attempts"`
+	SpanningUnavailableAttemptCount  int64     `json:"spanning_unavailable_attempt_count"`
+	ExactInvalidAttempts             int64     `json:"exact_invalid_request_attempts"`
+	SpanningInvalidAttemptCount      int64     `json:"spanning_invalid_request_attempt_count"`
+	AttemptCoverageExact             bool      `json:"attempt_coverage_exact"`
+	ProviderPilotActivations         int       `json:"provider_pilot_activations"`
+	ProviderOfferActivations         int       `json:"provider_offer_activations"`
+	ProviderCommercialAcceptances    int       `json:"provider_commercial_acceptances"`
+	ProviderCommercialCommitments    int       `json:"provider_commercial_commitments"`
+	ProviderOffersReturned           int       `json:"provider_offers_returned"`
+	ProviderTicketsCreated           int       `json:"provider_tickets_created"`
+	ProviderHandoffsObserved         int       `json:"provider_handoffs_observed"`
+	ProviderOutcomesReported         int       `json:"provider_outcomes_reported"`
+	ProviderPaidSettlements          int       `json:"provider_paid_settlements"`
+	ProviderAvailableSettlements     int       `json:"provider_available_settlements"`
+	CommercialStateEventsTotal       int       `json:"commercial_state_events_total"`
 }
 
 // ReadPostSelectionActionInterestExperiment performs one repeatable-read,
@@ -161,6 +181,95 @@ func ReadPostSelectionActionInterestExperiment(
 			float64(report.SearchReceiptsWithSelection)
 		report.PostSelectionConversionRate = &rate
 	}
+	err = tx.QueryRowContext(ctx, `
+		SELECT
+		  (SELECT COUNT(*)::int
+		     FROM action_interest_receipts
+		    WHERE source_is_synthetic
+		      AND created_at >= $1 AND created_at <= $2),
+		  (SELECT COALESCE(SUM(attempt_count),0)::bigint
+		     FROM action_interest_attempt_daily
+		    WHERE first_observed_at >= $1 AND first_observed_at <= $2),
+		  (SELECT COUNT(*)::int
+		     FROM action_interest_attempt_daily
+		    WHERE first_observed_at < $1 AND last_observed_at >= $1
+		      AND last_observed_at <= $2),
+		  (SELECT COALESCE(SUM(attempt_count),0)::bigint
+		     FROM action_interest_attempt_daily
+		    WHERE first_observed_at < $1 AND last_observed_at >= $1
+		      AND last_observed_at <= $2),
+		  (SELECT COALESCE(SUM(attempt_count),0)::bigint
+		     FROM action_interest_attempt_daily
+		    WHERE outcome='unavailable'
+		      AND first_observed_at >= $1 AND first_observed_at <= $2),
+		  (SELECT COALESCE(SUM(attempt_count),0)::bigint
+		     FROM action_interest_attempt_daily
+		    WHERE outcome='unavailable' AND first_observed_at < $1
+		      AND last_observed_at >= $1 AND last_observed_at <= $2),
+		  (SELECT COALESCE(SUM(attempt_count),0)::bigint
+		     FROM action_interest_attempt_daily
+		    WHERE outcome='invalid_request'
+		      AND first_observed_at >= $1 AND first_observed_at <= $2),
+		  (SELECT COALESCE(SUM(attempt_count),0)::bigint
+		     FROM action_interest_attempt_daily
+		    WHERE outcome='invalid_request' AND first_observed_at < $1
+		      AND last_observed_at >= $1 AND last_observed_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_pilot_epochs
+		    WHERE activated_at >= $1 AND activated_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_offers
+		    WHERE activated_at >= $1 AND activated_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_commercial_acceptance_events
+		    WHERE created_at >= $1 AND created_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_commercial_commitment_events
+		    WHERE created_at >= $1 AND created_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_offers_returned
+		    WHERE returned_at >= $1 AND returned_at <= $2),
+		  (SELECT COUNT(*)::int FROM action_tickets
+		    WHERE created_at >= $1 AND created_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_action_handoff_receipts
+		    WHERE created_at >= $1 AND created_at <= $2),
+		  (SELECT COUNT(*)::int FROM outcome_receipts
+		    WHERE created_at >= $1 AND created_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_settlement_payment_receipts
+		    WHERE created_at >= $1 AND created_at <= $2),
+		  (SELECT COUNT(*)::int FROM provider_settlement_processor_availability_receipts
+		    WHERE created_at >= $1 AND created_at <= $2)`,
+		since, checkedAt,
+	).Scan(
+		&report.SyntheticActionInterestReceipts,
+		&report.ExactPostBoundaryAttempts,
+		&report.BoundarySpanningAttemptBuckets,
+		&report.BoundarySpanningAttemptCount,
+		&report.ExactUnavailableAttempts,
+		&report.SpanningUnavailableAttemptCount,
+		&report.ExactInvalidAttempts,
+		&report.SpanningInvalidAttemptCount,
+		&report.ProviderPilotActivations,
+		&report.ProviderOfferActivations,
+		&report.ProviderCommercialAcceptances,
+		&report.ProviderCommercialCommitments,
+		&report.ProviderOffersReturned,
+		&report.ProviderTicketsCreated,
+		&report.ProviderHandoffsObserved,
+		&report.ProviderOutcomesReported,
+		&report.ProviderPaidSettlements,
+		&report.ProviderAvailableSettlements,
+	)
+	if err != nil {
+		return nil, err
+	}
+	report.AttemptCoverageExact = report.BoundarySpanningAttemptBuckets == 0
+	report.CommercialStateEventsTotal =
+		report.ProviderPilotActivations +
+			report.ProviderOfferActivations +
+			report.ProviderCommercialAcceptances +
+			report.ProviderCommercialCommitments +
+			report.ProviderOffersReturned +
+			report.ProviderTicketsCreated +
+			report.ProviderHandoffsObserved +
+			report.ProviderOutcomesReported +
+			report.ProviderPaidSettlements +
+			report.ProviderAvailableSettlements
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}

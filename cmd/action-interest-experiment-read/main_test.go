@@ -56,9 +56,10 @@ func TestReadReceiptPrivacyShape(t *testing.T) {
 		t.Fatalf("decode privacy receipt: %v", err)
 	}
 	wantKeys := []string{
-		"binary_revision", "candidate_revision", "commercial_state_changed",
+		"binary_revision", "candidate_revision",
 		"contains_contact_data", "contains_identifiers", "contains_queries_or_prompts",
-		"contract", "organic_rank_affected", "provider_contacted", "report", "report_sha256",
+		"contract", "operator_affected_organic_rank", "operator_changed_commercial_state",
+		"operator_contacted_provider", "report", "report_sha256",
 	}
 	gotKeys := make([]string, 0, len(decoded))
 	for key := range decoded {
@@ -70,7 +71,8 @@ func TestReadReceiptPrivacyShape(t *testing.T) {
 	}
 	for _, key := range []string{
 		"contains_identifiers", "contains_queries_or_prompts", "contains_contact_data",
-		"provider_contacted", "commercial_state_changed", "organic_rank_affected",
+		"operator_contacted_provider", "operator_changed_commercial_state",
+		"operator_affected_organic_rank",
 	} {
 		if value, ok := decoded[key].(bool); !ok || value {
 			t.Fatalf("receipt %s = %#v, want false", key, decoded[key])
