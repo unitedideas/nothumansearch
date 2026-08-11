@@ -2,7 +2,9 @@
 
 **Scope:** Not Human Search only
 
-**Production revision checked:** `e5dc7f03d07b69c8ef824d4740ad38743fac7ff4`
+**Production revision checked:** `56e0acbb1c480390f61e835eb658daab0b1441b7`
+
+**Production OCI digest checked:** `sha256:92cf7c3a75afb7684d11ddda74d1a7a02dc3ddaf273df6b27037416c811385ef`
 
 **Production mode checked:** `disabled`
 
@@ -19,13 +21,13 @@ or a winning mechanism.
 | --- | --- | --- | --- |
 | Organic REST/MCP discovery remains free | Live search response says `access=free`; provider sidecar cannot affect organic rank | Exact-revision disabled smoke passes free REST and MCP checks | Proved current |
 | Neutrality and privacy | Explicit false assertions for sold rank, queries, prompts, agent identity, and principal identity; no prohibited fields in the proof projection | Production projection and selector fail closed on missing or true assertions | Implemented, no commercial cohort |
-| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | 0 genuine action-interest receipts at `2026-08-11T08:30:56Z` | Unmet |
+| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The sealed post-smoke checkpoint at `2026-08-11T10:34:34Z` contains 0 eligible searches, selections, or genuine action-interest receipts | Unmet |
 | Consent before handoff | Immutable ticket authority plus separate handoff consent | Rail and rejection tests exist; no real pilot ticket | Implemented, unobserved |
 | Attribution | One randomly assigned offer arm, immutable terms, exact ticket-to-outcome binding | Database and proof-verifier gates exist; no real pilot outcome | Implemented, unobserved |
-| Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Synthetic fixtures only | Unmet business proof |
-| Activated-CPA mechanism | Authenticated activation and exact available processor-net settlement for its own arm | Synthetic fixtures only | Unmet business proof |
-| Converted-CPA mechanism | Authenticated conversion and exact available processor-net settlement for its own arm | Synthetic fixtures only | Unmet business proof |
-| Billing and settlement | Signed paid webhook bound to the exact charged outcome, matching Stripe balance transaction, and a later availability receipt | Rails are deployed and fail closed; no provider has been charged | Implemented, unobserved |
+| Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcome and available processor net; no real provider evidence | Rail proved, business proof unmet |
+| Activated-CPA mechanism | Authenticated activation and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcomes and available processor net; no real provider evidence | Rail proved, business proof unmet |
+| Converted-CPA mechanism | Authenticated conversion and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcomes and available processor net; no real provider evidence | Rail proved, business proof unmet |
+| Billing and settlement | Signed paid webhook bound to the exact charged outcome, matching Stripe balance transaction, and a later availability receipt | All three arms traverse exact settlement-order and available processor-net aggregation in isolated PostgreSQL; production remains disabled and no provider has been charged | Rail proved, unobserved commercially |
 | Bounded 3/5/2/1 revenue milestone | 3 verified providers, 5 accepted handoffs, 2 activations, 1 genuine renewal, and available settlement receipts | Provider activation is owner-gated and has not been authorized | Owner-gated, unmet |
 | Strongest mechanism selection | Closed mature three-arm cohort; every arm independently meets provider, offer-return, charged-event, paid-settlement, reversal, time-to-cash, margin, retained-value, economic-lead, and simultaneous-confidence gates | Selector contract v5 consumes actual available processor fee/net plus privacy-safe dispersion aggregates and leaves overlapping intervals empty; no real cohort exists | Correctly empty |
 
@@ -58,12 +60,27 @@ opportunities, explicitly not unique agents.
 No provider was contacted, invited, enrolled, activated, or charged while
 producing this matrix. Production provider exchange remains disabled.
 
+## Sealed post-selection checkpoint
+
+The current comparison baseline is
+`NHS_POST_SMOKE_CHECKPOINT_2026-08-11_a025939.json`, checked at
+`2026-08-11T10:34:34.792956Z` with report SHA-256
+`3d73461b8fde0829e9349412b6eefcfdd733026622db325358f7ec2cbd4f1a0d`.
+It contains 20 boundary-spanning unavailable attempts and zero eligible
+experiment searches, selections, interests, provider activations, handoffs,
+outcomes, payments, or settlements. The two-attempt increase from the prior
+checkpoint is consistent with the two known disabled-mode smoke rejection
+probes; it is aggregate consistency, not row-level attribution. These attempts
+are excluded from demand.
+
 ## Current agent-only readiness
 
-The production aggregate at `2026-08-11T08:30:56Z` contains 538 meaningful
+The last authenticated Stage 1 aggregate at `2026-08-11T08:30:56Z` contains 538 meaningful
 MCP/REST search receipts, 20 selections, 7 search receipts with a selection, 32
 `developer-tools` receipts, and zero action-interest receipts. The observation
 span is six days. Stage 1 remains false because the 14-day window, 20 distinct
 selected-search receipts, and 10 genuine action-interest-backed search receipts
-are unmet. Nine diagnostic attempts are explicitly non-demand: one invalid MCP
-request and eight disabled-mode REST refusals.
+are unmet. The newer sealed post-selection checkpoint above is the authoritative
+baseline for incremental action-interest measurement. A live refresh is pending
+restoration of the registered Fly credential bridge; this does not weaken or
+reclassify the sealed receipt.

@@ -5325,6 +5325,112 @@ func exerciseProviderCommercialProofPostgres(
 		t.Fatalf("verified-terms effective-time rewrite error = %v, want ErrProviderIdempotency", err)
 	}
 
+	// Drive each candidate mechanism through the same database-backed path:
+	// returned offer, consent-bound handoff, authentic provider outcomes, exact
+	// settlement order, and an available processor-net receipt. This is a rail
+	// regression only; three single observations are deliberately insufficient
+	// to select a commercial winner.
+	beforeMechanismPayments, err := models.GetProviderExchangeProof(
+		db, postgresProviderPilotEpochID, signer,
+	)
+	if err != nil {
+		t.Fatalf("read proof before cross-mechanism payments: %v", err)
+	}
+	mechanismProviders := []*postgresCommercialProvider{
+		legacyMutationProvider,
+		hashProvider,
+		reversalProvider,
+	}
+	mechanismEvents := []string{"accepted", "activated", "converted"}
+	for index, chargeEvent := range mechanismEvents {
+		suffix := "proof-mechanism-" + chargeEvent
+		offer := createPostgresCommercialOfferForChargeEvent(
+			t, db, mechanismProviders[index], suffix, "terms", chargeEvent, bounty,
+		)
+		recordPostgresVerifiedTerms(
+			t, db, mechanismProviders[index].key, offer.ID,
+			suffix+"-terms", "", "",
+		)
+		if _, err := activatePostgresProviderOffer(
+			t, db, offer.ID, "operator:"+suffix, "evidence:"+suffix,
+		); err != nil {
+			t.Fatalf("activate %s mechanism offer: %v", chargeEvent, err)
+		}
+		ticket := createPostgresActionTicket(
+			t, db, signer, mechanismProviders[index].site, offer.ID, suffix+"-ticket",
+		)
+		chargedOutcome := recordPostgresOutcome(
+			t, db, signer, mechanismProviders[index].key, ticket.ID,
+			"accepted", suffix+"-accepted",
+		)
+		if chargeEvent == "activated" || chargeEvent == "converted" {
+			chargedOutcome = recordPostgresOutcome(
+				t, db, signer, mechanismProviders[index].key, ticket.ID,
+				"activated", suffix+"-activated",
+			)
+		}
+		if chargeEvent == "converted" {
+			chargedOutcome = recordPostgresOutcome(
+				t, db, signer, mechanismProviders[index].key, ticket.ID,
+				"converted", suffix+"-converted",
+			)
+		}
+		order, created, err := models.PrepareProviderSettlement(db, chargedOutcome.ID)
+		if err != nil || !created {
+			t.Fatalf("prepare %s mechanism settlement = order:%#v created:%t err:%v", chargeEvent, order, created, err)
+		}
+		checkoutID := fmt.Sprintf("cs_pgmechanism%02d", index+1)
+		if created, err := models.RecordProviderSettlementCheckoutSession(db, order.ID, checkoutID); err != nil || !created {
+			t.Fatalf("record %s mechanism checkout = created:%t err:%v", chargeEvent, created, err)
+		}
+		observedAt := postgresDatabaseClock(t, db)
+		fee := int64(59)
+		receipt, created, err := models.RecordProviderSettlementPayment(db, models.ProviderSettlementPaymentInput{
+			OrderID:                    order.ID,
+			StripeCheckoutSessionID:    checkoutID,
+			StripePaymentIntentID:      fmt.Sprintf("pi_pgmechanism%02d", index+1),
+			StripeEventID:              fmt.Sprintf("evt_pgmechanism%02d", index+1),
+			StripeChargeID:             fmt.Sprintf("ch_pgmechanism%02d", index+1),
+			StripeBalanceTransactionID: fmt.Sprintf("txn_pgmechanism%02d", index+1),
+			AmountCents:                order.AmountCents,
+			ProcessorFeeCents:          fee,
+			ProcessorNetCents:          order.AmountCents - fee,
+			Currency:                   order.Currency,
+			ProcessorStatus:            "available",
+			ProcessorAvailableOn:       observedAt,
+			ProcessorObservedAt:        observedAt,
+			PaidAt:                     observedAt,
+		})
+		if err != nil || !created {
+			t.Fatalf("record %s mechanism payment = receipt:%#v created:%t err:%v", chargeEvent, receipt, created, err)
+		}
+	}
+	afterMechanismPayments, err := models.GetProviderExchangeProof(
+		db, postgresProviderPilotEpochID, signer,
+	)
+	if err != nil {
+		t.Fatalf("read proof after cross-mechanism payments: %v", err)
+	}
+	if !afterMechanismPayments.SettlementReceiptIntegrityValid ||
+		!afterMechanismPayments.ProcessorNetReceiptIntegrityValid ||
+		afterMechanismPayments.VerifiedProviderPaidSettlements != beforeMechanismPayments.VerifiedProviderPaidSettlements+3 ||
+		afterMechanismPayments.VerifiedProviderAvailableSettlements != beforeMechanismPayments.VerifiedProviderAvailableSettlements+3 {
+		t.Fatalf("cross-mechanism settlement proof = before:%#v after:%#v", beforeMechanismPayments, afterMechanismPayments)
+	}
+	for _, chargeEvent := range mechanismEvents {
+		before := beforeMechanismPayments.VerifiedMechanisms[chargeEvent]
+		after := afterMechanismPayments.VerifiedMechanisms[chargeEvent]
+		if after.OfferReturns != before.OfferReturns+1 ||
+			after.ObservedHandoffs != before.ObservedHandoffs+1 ||
+			after.PaidSettlements != before.PaidSettlements+1 ||
+			after.AvailableSettlements != before.AvailableSettlements+1 ||
+			after.ProcessorNetCents <= before.ProcessorNetCents ||
+			after.ProcessorNetSumSquares <= before.ProcessorNetSumSquares {
+			t.Fatalf("%s mechanism rail proof = before:%#v after:%#v", chargeEvent, before, after)
+		}
+	}
+	afterMechanismSnapshot := postgresVerifiedProof(afterMechanismPayments)
+
 	// A direct database writer can satisfy relational shape checks but cannot
 	// forge the NHS outcome MAC. Exact-pilot proof must expose the contaminated
 	// row, preserve the authentic counters, and fail the commercial threshold.
@@ -5413,12 +5519,12 @@ func exerciseProviderCommercialProofPostgres(
 	contaminatedProof := readPostgresVerifiedProof(t, db, signer)
 	if contaminatedProof.integrityValid || contaminatedProof.rejectedOutcomes != 1 ||
 		contaminatedProof.rejectedLedger != 0 ||
-		contaminatedProof.acceptedHandoffs != afterTermsRenewal.acceptedHandoffs ||
-		contaminatedProof.activations != afterTermsRenewal.activations ||
+		contaminatedProof.acceptedHandoffs != afterMechanismSnapshot.acceptedHandoffs ||
+		contaminatedProof.activations != afterMechanismSnapshot.activations ||
 		contaminatedProof.pilotMet {
 		t.Fatalf(
 			"forged outcome contaminated exact proof = before:%#v after:%#v",
-			afterTermsRenewal, contaminatedProof,
+			afterMechanismSnapshot, contaminatedProof,
 		)
 	}
 
@@ -6014,13 +6120,26 @@ func createPostgresCommercialOffer(
 	bounty int64,
 ) *models.ProviderOffer {
 	t.Helper()
+	return createPostgresCommercialOfferForChargeEvent(
+		t, db, provider, suffix, billingMode, "accepted", bounty,
+	)
+}
+
+func createPostgresCommercialOfferForChargeEvent(
+	t *testing.T,
+	db *sql.DB,
+	provider *postgresCommercialProvider,
+	suffix, billingMode, chargeEvent string,
+	bounty int64,
+) *models.ProviderOffer {
+	t.Helper()
 	zero := int64(0)
 	input := models.ProviderOfferInput{
 		OfferName:           "Commercial proof " + suffix,
 		OfferSummary:        "Exercises provider-authenticated and owner-verified commercial proof.",
 		ActionType:          "lead",
 		ActionURL:           provider.site.URL + "/commercial/" + suffix,
-		ChargeEvent:         "accepted",
+		ChargeEvent:         chargeEvent,
 		BountyCents:         bounty,
 		Currency:            "usd",
 		PrincipalPriceMode:  "free",
