@@ -110,6 +110,7 @@ migrations/032_stage1_agent_surface_cohort.sql
 templates/privacy.html
 templates/providers.html
 tools/assemble-provider-exchange-candidate.sh
+tools/action-interest-agent-eval.py
 tools/adopt-provider-exchange-candidate.sh
 tools/build-exact-provider-image.sh
 tools/disabled-recovery-smoke.py
@@ -122,6 +123,7 @@ tools/provider-pilot-operate.py
 tools/provider-pilot-status.py
 tools/smoke-test.sh
 tools/test-provider-company-verify.py
+tools/test-action-interest-agent-eval.py
 tools/test-adopt-provider-exchange-candidate.py
 tools/test-build-exact-provider-image.py
 tools/test-provider-cutover-verify.py

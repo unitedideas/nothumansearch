@@ -283,6 +283,44 @@ any live commercial threshold has been met.
       rejection, signed outcome-receipt replay and tamper detection, and zero
       commercial-proof delta before destroying the fixture.
 
+### No-write agent tool-choice evaluation
+
+Before interpreting zero action-interest receipts as absent demand, validate
+that a representative agent can distinguish explicit current principal intent
+from research, ranking, selection, provider availability, future possibility,
+and an explicit refusal. This is an instrumentation check, not demand evidence
+and not permission to synthesize receipts.
+
+`tools/action-interest-agent-eval.py` reads the exact public MCP
+`record_action_interest` schema and runs six synthetic tool-choice scenarios
+through the OpenAI Responses API. It never executes the returned function
+call, never uses a live search receipt, retains neither response IDs nor raw
+model text, and requires no provider or commercial mode. The grader requires
+exact strict-schema arguments for two authorized scenarios, zero calls for four
+non-authorized scenarios, and zero contact or identity leakage.
+
+Validate the live MCP schema without an API charge or production write:
+
+```sh
+/usr/bin/python3 tools/action-interest-agent-eval.py --dry-run
+```
+
+Run the bounded behavioral evaluation only through the named secret bridge:
+
+```sh
+/Users/shane/.local/bin/codex-secret run \
+  --env OPENAI_API_KEY=OPENAI_API_KEY \
+  -- /usr/bin/python3 tools/action-interest-agent-eval.py \
+  --model gpt-5.6-luna
+```
+
+The pass/fail receipt proves only that this model understood the consent rail
+under controlled synthetic prompts. It is not a user, agent, demand, provider,
+handoff, activation, revenue, or mechanism-selection receipt. Do not store the
+API key in the repository, command arguments, report, or shell history, and do
+not substitute an unregistered or stale credential when the named reference is
+unavailable.
+
 ### Mandatory one-way cutover order
 
 The order below controls over the surrounding evidence checklist. Do not start
