@@ -74,7 +74,7 @@ is required before:
 
 1. creating and storing the dedicated production signing secret and key ID, or
    the separate owner-only company-deduplication HMAC key;
-2. deploying migrations 019 through 029 and the provider exchange revision;
+2. deploying migrations 019 through 030 and the provider exchange revision;
 3. sending provider outreach or invitations;
 4. accepting a contract, affiliate term, CPA term, funding representation, or
    provider Merchant-of-Record acknowledgement;
@@ -113,7 +113,7 @@ any live commercial threshold has been met.
       so a normal working-tree context fails closed. Its
       `nhs-exact-release-verification-v2` receipt binds the exact source archive,
       candidate commit/tree/parent, changed-path count, and the raw SHA-256 of
-      every protected migration from 019 through 029.
+      every protected migration from 019 through 030.
 - [ ] Full Go tests, race tests, vet, build, formatting, OpenAPI parse, and
       changed-path secret scan pass on the exact candidate revision. The
       preparer must observe explicit pass events—not a package-level `PASS`
@@ -134,7 +134,7 @@ any live commercial threshold has been met.
       the exact-release manifest plus its SHA-256 beside the Git bundle. It
       emits no build or deployment command; an unadopted temporary-clone commit
       is not a release identity.
-- [ ] Migrations 001 through 029 and immediate replay pass on disposable real
+- [ ] Migrations 001 through 030 and immediate replay pass on disposable real
       PostgreSQL from an empty database.
 - [ ] The target database has neither an unreceipted
       migration-019-through-029 footprint nor a newer protected receipt.
@@ -410,7 +410,7 @@ artifact may be substituted for those external receipts.
       `application_name`, is blocking. The receipt is point-in-time evidence,
       not a lock: all old machines must remain cordoned with autostart disabled
       until the candidate owns the migration lock and becomes healthy.
-- [ ] After the held candidate has applied migrations 019 through 029, verify
+- [ ] After the held candidate has applied migrations 019 through 030, verify
       their immutable ledger rows against the same exact 40-character revision.
       Inject the target URL from its canonical secret reference; never place it
       in argv. The verifier sets PostgreSQL read-only mode and emits bounded JSON

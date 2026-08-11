@@ -148,11 +148,34 @@ func TestProviderSettlementRejectsUnpaidCheckoutBeforeDatabase(t *testing.T) {
 
 func TestProviderSettlementRecordsOnlyExactPaidCheckout(t *testing.T) {
 	called := false
+	availableOn := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
 	h := &ProviderSettlementHandler{
+		retrievePaymentIntent: func(id string, _ *gostripe.PaymentIntentParams) (*gostripe.PaymentIntent, error) {
+			return &gostripe.PaymentIntent{
+				ID: id, Status: gostripe.PaymentIntentStatusSucceeded, AmountReceived: 4750,
+				Currency: gostripe.CurrencyUSD,
+				LatestCharge: &gostripe.Charge{
+					ID: "ch_12345678", Paid: true, Captured: true,
+					AmountCaptured:     4750,
+					BalanceTransaction: &gostripe.BalanceTransaction{ID: "txn_12345678"},
+				},
+			}, nil
+		},
+		retrieveBalanceTransaction: func(id string, _ *gostripe.BalanceTransactionParams) (*gostripe.BalanceTransaction, error) {
+			return &gostripe.BalanceTransaction{
+				ID: id, Amount: 4750, Fee: 168, Net: 4582,
+				Currency: gostripe.CurrencyUSD, Status: gostripe.BalanceTransactionStatusPending,
+				AvailableOn: availableOn.Unix(),
+			}, nil
+		},
+		now: func() time.Time { return time.Date(2026, 8, 3, 12, 1, 0, 0, time.UTC) },
 		recordPayment: func(_ modelsProviderSettlementDB, input models.ProviderSettlementPaymentInput) (*models.ProviderSettlementPaymentReceipt, bool, error) {
 			called = true
 			if input.OrderID != "11111111-1111-4111-8111-111111111111" || input.AmountCents != 4750 || input.Currency != "usd" ||
-				input.StripeCheckoutSessionID != "cs_12345678" || input.StripePaymentIntentID != "pi_12345678" || input.StripeEventID != "evt_12345678" {
+				input.StripeCheckoutSessionID != "cs_12345678" || input.StripePaymentIntentID != "pi_12345678" || input.StripeEventID != "evt_12345678" ||
+				input.StripeChargeID != "ch_12345678" || input.StripeBalanceTransactionID != "txn_12345678" ||
+				input.ProcessorFeeCents != 168 || input.ProcessorNetCents != 4582 || input.ProcessorStatus != "pending" ||
+				!input.ProcessorAvailableOn.Equal(availableOn) {
 				t.Fatalf("payment input=%+v", input)
 			}
 			return &models.ProviderSettlementPaymentReceipt{ID: "33333333-3333-4333-8333-333333333333", OrderID: input.OrderID, AmountCents: input.AmountCents, Currency: input.Currency}, true, nil
@@ -169,5 +192,56 @@ func TestProviderSettlementRecordsOnlyExactPaidCheckout(t *testing.T) {
 	}, "evt_12345678", time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC))
 	if err != nil || !created || !called || receipt == nil {
 		t.Fatalf("receipt=%+v created=%t called=%t err=%v", receipt, created, called, err)
+	}
+}
+
+func TestProviderSettlementAvailabilityUsesExactPrivateBalanceReference(t *testing.T) {
+	t.Setenv("ADMIN_API_KEY", "provider-settlement-test-admin")
+	priorStripeKey := gostripe.Key
+	gostripe.Key = "sk_test_provider_settlement"
+	t.Cleanup(func() { gostripe.Key = priorStripeKey })
+	availableOn := time.Date(2026, 8, 5, 0, 0, 0, 0, time.UTC)
+	verifiedAt := time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC)
+	recorded := false
+	h := &ProviderSettlementHandler{
+		getProcessorReference: func(_ modelsProviderSettlementDB, orderID string) (*models.ProviderSettlementProcessorReference, error) {
+			if orderID != "11111111-1111-4111-8111-111111111111" {
+				t.Fatalf("order id=%q", orderID)
+			}
+			return &models.ProviderSettlementProcessorReference{
+				StripeBalanceTransactionID: "txn_12345678", GrossAmountCents: 4750,
+				FeeCents: 168, NetCents: 4582, Currency: "usd", AvailableOn: availableOn,
+			}, nil
+		},
+		retrieveBalanceTransaction: func(id string, _ *gostripe.BalanceTransactionParams) (*gostripe.BalanceTransaction, error) {
+			if id != "txn_12345678" {
+				t.Fatalf("balance transaction id=%q", id)
+			}
+			return &gostripe.BalanceTransaction{
+				ID: id, Amount: 4750, Fee: 168, Net: 4582, Currency: gostripe.CurrencyUSD,
+				Status: gostripe.BalanceTransactionStatusAvailable, AvailableOn: availableOn.Unix(),
+			}, nil
+		},
+		recordAvailability: func(_ modelsProviderSettlementDB, input models.ProviderSettlementAvailabilityInput) (string, bool, error) {
+			if input.StripeBalanceTransactionID != "txn_12345678" || input.GrossAmountCents != 4750 ||
+				input.FeeCents != 168 || input.NetCents != 4582 || input.Currency != "usd" ||
+				!input.AvailableOn.Equal(availableOn) || !input.ProcessorVerifiedAt.Equal(verifiedAt) {
+				t.Fatalf("availability input=%+v", input)
+			}
+			recorded = true
+			return "44444444-4444-4444-8444-444444444444", true, nil
+		},
+		now: func() time.Time { return verifiedAt },
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/provider-settlements/availability", bytes.NewBufferString(`{"order_id":"11111111-1111-4111-8111-111111111111"}`))
+	req.Header.Set("Authorization", "Bearer provider-settlement-test-admin")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.AdminRecordAvailability(rr, req)
+	if rr.Code != http.StatusCreated || !recorded {
+		t.Fatalf("status=%d recorded=%t body=%s", rr.Code, recorded, rr.Body.String())
+	}
+	if bytes.Contains(rr.Body.Bytes(), []byte("txn_")) {
+		t.Fatalf("private Stripe identifier leaked: %s", rr.Body.String())
 	}
 }

@@ -8,27 +8,36 @@ import (
 	"time"
 
 	gostripe "github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/balancetransaction"
 	"github.com/stripe/stripe-go/v82/checkout/session"
+	"github.com/stripe/stripe-go/v82/paymentintent"
 	"github.com/unitedideas/nothumansearch/internal/models"
 )
 
 const providerSettlementStripeProduct = "nhs_provider_outcome_settlement"
 
 type providerSettlementCheckoutCreator func(*gostripe.CheckoutSessionParams) (*gostripe.CheckoutSession, error)
+type providerSettlementPaymentIntentRetriever func(string, *gostripe.PaymentIntentParams) (*gostripe.PaymentIntent, error)
+type providerSettlementBalanceTransactionRetriever func(string, *gostripe.BalanceTransactionParams) (*gostripe.BalanceTransaction, error)
 
 // ProviderSettlementHandler is an owner-only collection boundary. It does not
 // participate in ranking, search, MCP discovery, agent checkout, or provider
 // callbacks. A Stripe session is created only from a charged exact outcome
 // already verified by the provider exchange.
 type ProviderSettlementHandler struct {
-	DB                  modelsProviderSettlementDB
-	BaseURL             string
-	WebhookSecret       string
-	prepareSettlement   func(modelsProviderSettlementDB, string) (*models.ProviderSettlementOrder, bool, error)
-	recordCheckout      func(modelsProviderSettlementDB, string, string) (bool, error)
-	recordPayment       func(modelsProviderSettlementDB, models.ProviderSettlementPaymentInput) (*models.ProviderSettlementPaymentReceipt, bool, error)
-	getSettlementStatus func(modelsProviderSettlementDB, string) (*models.ProviderSettlementStatus, error)
-	createCheckout      providerSettlementCheckoutCreator
+	DB                         modelsProviderSettlementDB
+	BaseURL                    string
+	WebhookSecret              string
+	prepareSettlement          func(modelsProviderSettlementDB, string) (*models.ProviderSettlementOrder, bool, error)
+	recordCheckout             func(modelsProviderSettlementDB, string, string) (bool, error)
+	recordPayment              func(modelsProviderSettlementDB, models.ProviderSettlementPaymentInput) (*models.ProviderSettlementPaymentReceipt, bool, error)
+	recordAvailability         func(modelsProviderSettlementDB, models.ProviderSettlementAvailabilityInput) (string, bool, error)
+	getSettlementStatus        func(modelsProviderSettlementDB, string) (*models.ProviderSettlementStatus, error)
+	getProcessorReference      func(modelsProviderSettlementDB, string) (*models.ProviderSettlementProcessorReference, error)
+	createCheckout             providerSettlementCheckoutCreator
+	retrievePaymentIntent      providerSettlementPaymentIntentRetriever
+	retrieveBalanceTransaction providerSettlementBalanceTransactionRetriever
+	now                        func() time.Time
 }
 
 // modelsProviderSettlementDB intentionally stays a concrete database pointer
@@ -38,14 +47,19 @@ type modelsProviderSettlementDB = *sql.DB
 
 func NewProviderSettlementHandler(db *sql.DB, baseURL, webhookSecret string) *ProviderSettlementHandler {
 	return &ProviderSettlementHandler{
-		DB:                  db,
-		BaseURL:             strings.TrimSuffix(strings.TrimSpace(baseURL), "/"),
-		WebhookSecret:       strings.TrimSpace(webhookSecret),
-		prepareSettlement:   models.PrepareProviderSettlement,
-		recordCheckout:      models.RecordProviderSettlementCheckoutSession,
-		recordPayment:       models.RecordProviderSettlementPayment,
-		getSettlementStatus: models.GetProviderSettlementStatus,
-		createCheckout:      session.New,
+		DB:                         db,
+		BaseURL:                    strings.TrimSuffix(strings.TrimSpace(baseURL), "/"),
+		WebhookSecret:              strings.TrimSpace(webhookSecret),
+		prepareSettlement:          models.PrepareProviderSettlement,
+		recordCheckout:             models.RecordProviderSettlementCheckoutSession,
+		recordPayment:              models.RecordProviderSettlementPayment,
+		recordAvailability:         models.RecordProviderSettlementAvailability,
+		getSettlementStatus:        models.GetProviderSettlementStatus,
+		getProcessorReference:      models.GetProviderSettlementProcessorReference,
+		createCheckout:             session.New,
+		retrievePaymentIntent:      paymentintent.Get,
+		retrieveBalanceTransaction: balancetransaction.Get,
+		now:                        time.Now,
 	}
 }
 
@@ -170,9 +184,88 @@ func (h *ProviderSettlementHandler) AdminStatus(w http.ResponseWriter, r *http.R
 		return
 	}
 	providerWriteJSON(w, http.StatusOK, map[string]any{
-		"settlement":             status,
-		"completed_paid_receipt": status.Paid,
-		"evidence_scope":         "Only payment_receipt_id with paid_at proves collection; a checkout-created order is not revenue.",
+		"settlement":              status,
+		"completed_paid_receipt":  status.Paid,
+		"processor_net_available": status.ProcessorNetAvailable,
+		"evidence_scope":          "A paid receipt proves gross collection. Retained processor net counts only after an exact Stripe balance transaction is separately observed as available.",
+	})
+}
+
+type providerSettlementAvailabilityRequest struct {
+	OrderID string `json:"order_id"`
+}
+
+// AdminRecordAvailability refreshes one private Stripe balance transaction and
+// appends an immutable receipt only after Stripe reports its net as available.
+func (h *ProviderSettlementHandler) AdminRecordAvailability(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		providerWriteJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "POST required"})
+		return
+	}
+	if !requireAdminAPIKey(w, r) {
+		return
+	}
+	if strings.TrimSpace(gostripe.Key) == "" {
+		providerWriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "stripe_not_configured"})
+		return
+	}
+	var request providerSettlementAvailabilityRequest
+	if err := decodeProviderJSON(w, r, &request); err != nil {
+		providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid settlement availability request"})
+		return
+	}
+	getReference := h.getProcessorReference
+	if getReference == nil {
+		getReference = models.GetProviderSettlementProcessorReference
+	}
+	reference, err := getReference(h.DB, request.OrderID)
+	if err != nil {
+		h.writeSettlementError(w, err)
+		return
+	}
+	retrieve := h.retrieveBalanceTransaction
+	if retrieve == nil {
+		retrieve = balancetransaction.Get
+	}
+	balance, err := retrieve(reference.StripeBalanceTransactionID, nil)
+	if err != nil || balance == nil || string(balance.Status) != "available" {
+		providerWriteJSON(w, http.StatusConflict, map[string]string{"error": "processor net is not yet verified as available"})
+		return
+	}
+	availableOn := time.Unix(balance.AvailableOn, 0).UTC()
+	if balance.ID != reference.StripeBalanceTransactionID || balance.Amount != reference.GrossAmountCents ||
+		balance.Fee != reference.FeeCents || balance.Net != reference.NetCents ||
+		strings.ToLower(string(balance.Currency)) != reference.Currency || !availableOn.Equal(reference.AvailableOn) {
+		providerWriteJSON(w, http.StatusConflict, map[string]string{"error": "processor balance transaction conflicts with immutable receipt"})
+		return
+	}
+	now := time.Now
+	if h.now != nil {
+		now = h.now
+	}
+	record := h.recordAvailability
+	if record == nil {
+		record = models.RecordProviderSettlementAvailability
+	}
+	_, created, err := record(h.DB, models.ProviderSettlementAvailabilityInput{
+		OrderID: request.OrderID, StripeBalanceTransactionID: balance.ID,
+		GrossAmountCents: balance.Amount, FeeCents: balance.Fee, NetCents: balance.Net,
+		Currency: string(balance.Currency), AvailableOn: availableOn,
+		ProcessorVerifiedAt: now().UTC(),
+	})
+	if err != nil {
+		h.writeSettlementError(w, err)
+		return
+	}
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	providerWriteJSON(w, status, map[string]any{
+		"order_id": request.OrderID, "processor_net_available": true,
+		"created":        created,
+		"evidence_scope": "Stripe reports the exact immutable processor net as available; private Stripe identifiers are omitted.",
 	})
 }
 
@@ -191,18 +284,59 @@ func (h *ProviderSettlementHandler) RecordPaidCheckout(stripeSession *gostripe.C
 		eventCreatedAt.IsZero() {
 		return nil, false, models.ErrInvalidProviderExchange
 	}
+	retrieveIntent := h.retrievePaymentIntent
+	if retrieveIntent == nil {
+		retrieveIntent = paymentintent.Get
+	}
+	params := &gostripe.PaymentIntentParams{}
+	params.AddExpand("latest_charge.balance_transaction")
+	intent, err := retrieveIntent(stripeSession.PaymentIntent.ID, params)
+	if err != nil || intent == nil || intent.ID != stripeSession.PaymentIntent.ID ||
+		intent.Status != gostripe.PaymentIntentStatusSucceeded ||
+		intent.AmountReceived != stripeSession.AmountTotal ||
+		strings.ToLower(string(intent.Currency)) != "usd" || intent.LatestCharge == nil {
+		return nil, false, models.ErrInvalidProviderExchange
+	}
+	charge := intent.LatestCharge
+	if strings.TrimSpace(charge.ID) == "" || !charge.Paid || !charge.Captured || charge.Disputed ||
+		charge.Refunded || charge.AmountRefunded != 0 || charge.AmountCaptured != stripeSession.AmountTotal ||
+		charge.BalanceTransaction == nil || strings.TrimSpace(charge.BalanceTransaction.ID) == "" {
+		return nil, false, models.ErrInvalidProviderExchange
+	}
+	retrieveBalance := h.retrieveBalanceTransaction
+	if retrieveBalance == nil {
+		retrieveBalance = balancetransaction.Get
+	}
+	balance, err := retrieveBalance(charge.BalanceTransaction.ID, nil)
+	if err != nil || balance == nil || balance.ID != charge.BalanceTransaction.ID ||
+		balance.Amount != stripeSession.AmountTotal || balance.Fee < 0 || balance.Net < 1 ||
+		balance.Amount-balance.Fee != balance.Net || strings.ToLower(string(balance.Currency)) != "usd" ||
+		(string(balance.Status) != "pending" && string(balance.Status) != "available") || balance.AvailableOn < 1 {
+		return nil, false, models.ErrInvalidProviderExchange
+	}
+	now := time.Now
+	if h.now != nil {
+		now = h.now
+	}
 	recordPayment := h.recordPayment
 	if recordPayment == nil {
 		recordPayment = models.RecordProviderSettlementPayment
 	}
 	return recordPayment(h.DB, models.ProviderSettlementPaymentInput{
-		OrderID:                 stripeSession.ClientReferenceID,
-		StripeCheckoutSessionID: stripeSession.ID,
-		StripePaymentIntentID:   stripeSession.PaymentIntent.ID,
-		StripeEventID:           stripeEventID,
-		AmountCents:             stripeSession.AmountTotal,
-		Currency:                string(stripeSession.Currency),
-		PaidAt:                  eventCreatedAt.UTC(),
+		OrderID:                    stripeSession.ClientReferenceID,
+		StripeCheckoutSessionID:    stripeSession.ID,
+		StripePaymentIntentID:      stripeSession.PaymentIntent.ID,
+		StripeEventID:              stripeEventID,
+		StripeChargeID:             charge.ID,
+		StripeBalanceTransactionID: balance.ID,
+		AmountCents:                stripeSession.AmountTotal,
+		ProcessorFeeCents:          balance.Fee,
+		ProcessorNetCents:          balance.Net,
+		Currency:                   string(stripeSession.Currency),
+		ProcessorStatus:            string(balance.Status),
+		ProcessorAvailableOn:       time.Unix(balance.AvailableOn, 0).UTC(),
+		ProcessorObservedAt:        now().UTC(),
+		PaidAt:                     eventCreatedAt.UTC(),
 	})
 }
 

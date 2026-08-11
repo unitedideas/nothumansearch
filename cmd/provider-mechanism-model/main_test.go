@@ -9,6 +9,55 @@ const (
 	testMinProcessingNetPerThousand int64 = 1
 )
 
+func attachActualProcessorNetScenario(input scenario) scenario {
+	for name, evidence := range input.VerifiedMechanisms {
+		if evidence.PaidSettlements == 0 {
+			continue
+		}
+		fee, err := conservativeProcessingFeeAllowance(
+			evidence.PaidCents, evidence.PaidSettlements,
+			input.PaymentProcessingBasisPoints, input.PaymentProcessingFixedCents,
+		)
+		if err != nil {
+			panic(err)
+		}
+		evidence.AvailableSettlements = evidence.PaidSettlements
+		evidence.ProcessorFeeCents = fee
+		evidence.ProcessorNetCents = evidence.PaidCents - fee
+		input.VerifiedMechanisms[name] = evidence
+	}
+	return input
+}
+
+func attachActualProcessorNetProof(proof *verifiedProof) {
+	var fees, net int64
+	for name, evidence := range proof.VerifiedMechanisms {
+		if evidence.PaidSettlements == 0 {
+			continue
+		}
+		fee, err := conservativeProcessingFeeAllowance(
+			evidence.PaidCents, evidence.PaidSettlements,
+			testProcessingBasisPoints, testProcessingFixedCents,
+		)
+		if err != nil {
+			panic(err)
+		}
+		evidence.AvailableSettlements = evidence.PaidSettlements
+		evidence.ProcessorFeeCents = fee
+		evidence.ProcessorNetCents = evidence.PaidCents - fee
+		fees += fee
+		net += evidence.ProcessorNetCents
+		proof.VerifiedMechanisms[name] = evidence
+	}
+	truth := true
+	zero := int64(0)
+	proof.ProcessorNetIntegrity = &truth
+	proof.RejectedProcessorNet = &zero
+	proof.AvailableSettlements = proof.PaidSettlements
+	proof.ProcessorFeesByCurrency = map[string]int64{"usd": fees}
+	proof.ProcessorNetByCurrency = map[string]int64{"usd": net}
+}
+
 func TestEvaluateSelectsActivatedForPilotScenario(t *testing.T) {
 	report, err := evaluate(testScenario())
 	if err != nil {
@@ -135,6 +184,7 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 			},
 		},
 	}
+	attachActualProcessorNetProof(&proof)
 	decision := policy{
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 3,
@@ -153,7 +203,7 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 	}
 	if report.Synthetic || report.EvidenceKind != "verified_closed_pilot" || report.SelectedEvent != "activated" ||
 		!report.CollectedRevenueEvidence || report.VerifiedPaidSettlements != 3 ||
-		report.Results[0].ValueKind != "verified_paid" {
+		report.Results[0].ValueKind != "verified_processor_net_available" {
 		t.Fatalf("unexpected verified report: %+v", report)
 	}
 
@@ -196,6 +246,7 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 			"converted": {ChargedProviderCompanies: 1, OfferReturns: 2, ObservedHandoffs: 2, Accepted: 2, Activated: 1, Converted: 1},
 		},
 	}
+	attachActualProcessorNetProof(&proof)
 	decision := policy{
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 1,
@@ -238,7 +289,7 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 			},
 		},
 	}
-	report, err := evaluate(input)
+	report, err := evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +329,7 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 			},
 		},
 	}
-	report, err := evaluate(input)
+	report, err := evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +374,7 @@ func TestEvaluateVerifiedMechanismsRequiresEveryProviderInEveryArm(t *testing.T)
 			},
 		},
 	}
-	report, err := evaluate(input)
+	report, err := evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -370,7 +421,7 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 			},
 		},
 	}
-	report, err := evaluate(input)
+	report, err := evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +470,7 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 			},
 		},
 	}
-	report, err := evaluate(input)
+	report, err := evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -439,7 +490,7 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 	}
 
 	input.MinProcessingNetPerThousand = 280000
-	report, err = evaluate(input)
+	report, err = evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -533,6 +533,7 @@ func main() {
 		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeHandler.AdminProviderProofManifest)
 		mux.HandleFunc("/api/v1/admin/provider-settlements/checkout", providerSettlementHandler.AdminCreateCheckout)
 		mux.HandleFunc("/api/v1/admin/provider-settlements/status", providerSettlementHandler.AdminStatus)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/availability", providerSettlementHandler.AdminRecordAvailability)
 	} else {
 		mux.HandleFunc("/api/v1/admin/provider-pilot/action", providerExchangeDisabledHandler)
 		mux.HandleFunc("/api/v1/admin/provider-pilot/epoch", providerExchangeDisabledHandler)
@@ -543,6 +544,7 @@ func main() {
 		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeDisabledHandler)
 		mux.HandleFunc("/api/v1/admin/provider-settlements/checkout", providerExchangeDisabledHandler)
 		mux.HandleFunc("/api/v1/admin/provider-settlements/status", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/availability", providerExchangeDisabledHandler)
 	}
 	mux.HandleFunc("/api/v1/admin/provider-proof", providerExchangeHandler.AdminProof)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)

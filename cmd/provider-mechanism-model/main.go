@@ -49,7 +49,10 @@ type mechanismEvidence struct {
 	Converted                int64 `json:"converted"`
 	Reversed                 int64 `json:"reversed"`
 	PaidSettlements          int64 `json:"paid_settlements"`
+	AvailableSettlements     int64 `json:"available_settlements"`
 	PaidCents                int64 `json:"paid_cents"`
+	ProcessorFeeCents        int64 `json:"processor_fee_cents"`
+	ProcessorNetCents        int64 `json:"processor_net_cents"`
 	PaidMedianSeconds        int64 `json:"paid_median_handoff_to_settlement_seconds"`
 }
 
@@ -143,11 +146,16 @@ type verifiedProof struct {
 	AgentIdentitiesSold     *bool                        `json:"agent_identities_sold"`
 	PrincipalIdentitiesSold *bool                        `json:"principal_identities_sold"`
 	SettlementIntegrity     *bool                        `json:"settlement_receipt_integrity_valid"`
+	ProcessorNetIntegrity   *bool                        `json:"processor_net_receipt_integrity_valid"`
 	PaidSettlements         int64                        `json:"verified_provider_paid_settlements"`
+	AvailableSettlements    int64                        `json:"verified_provider_available_settlements"`
 	RejectedSettlements     *int64                       `json:"rejected_provider_settlement_receipts"`
+	RejectedProcessorNet    *int64                       `json:"rejected_provider_processor_net_receipts"`
 	PaidLatencySamples      int64                        `json:"verified_paid_latency_samples"`
 	PaidMedianSeconds       int64                        `json:"verified_paid_median_handoff_to_settlement_seconds"`
 	PaidByCurrency          map[string]int64             `json:"verified_terms_paid_by_currency"`
+	ProcessorFeesByCurrency map[string]int64             `json:"verified_processor_fees_by_currency"`
+	ProcessorNetByCurrency  map[string]int64             `json:"verified_processor_net_by_currency"`
 	VerifiedMechanisms      map[string]mechanismEvidence `json:"verified_mechanisms"`
 }
 
@@ -226,9 +234,14 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 	}
 	if proof.SettlementIntegrity == nil || !*proof.SettlementIntegrity ||
 		proof.RejectedSettlements == nil || *proof.RejectedSettlements != 0 ||
+		proof.ProcessorNetIntegrity == nil || !*proof.ProcessorNetIntegrity ||
+		proof.RejectedProcessorNet == nil || *proof.RejectedProcessorNet != 0 ||
 		proof.PaidSettlements < 1 || proof.PaidLatencySamples != proof.PaidSettlements ||
-		proof.PaidMedianSeconds < 0 || len(proof.PaidByCurrency) != 1 || proof.PaidByCurrency["usd"] < 1 {
-		return scenario{}, errors.New("proof must contain an integrity-valid paid terms settlement")
+		proof.AvailableSettlements != proof.PaidSettlements || proof.PaidMedianSeconds < 0 ||
+		len(proof.PaidByCurrency) != 1 || len(proof.ProcessorNetByCurrency) != 1 ||
+		proof.PaidByCurrency["usd"] < 1 || proof.ProcessorNetByCurrency["usd"] < 1 ||
+		proof.ProcessorFeesByCurrency["usd"]+proof.ProcessorNetByCurrency["usd"] != proof.PaidByCurrency["usd"] {
+		return scenario{}, errors.New("proof must contain integrity-valid paid terms settlements with actual available processor net")
 	}
 	if proof.ObservedHandoffs < proof.Accepted || proof.Accepted < proof.Activated || proof.Activated < proof.Converted {
 		return scenario{}, errors.New("verified proof contains an impossible funnel")
@@ -420,7 +433,10 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 			evidence.ChargedProviderCompanies < 1 || evidence.ChargedProviderCompanies > evidence.ObservedHandoffs ||
 			evidence.ObservedHandoffs < 1 || evidence.Activated < 1 ||
 			evidence.PaidSettlements < input.MinPaidSettlementsPerMechanism ||
-			evidence.PaidCents < evidence.PaidSettlements || evidence.PaidMedianSeconds <= 0 {
+			evidence.AvailableSettlements != evidence.PaidSettlements ||
+			evidence.PaidCents < evidence.PaidSettlements || evidence.ProcessorFeeCents < 0 ||
+			evidence.ProcessorNetCents < 1 || evidence.ProcessorFeeCents+evidence.ProcessorNetCents != evidence.PaidCents ||
+			evidence.PaidMedianSeconds <= 0 {
 			return report{}, fmt.Errorf("%s mechanism lacks mature real paid evidence", chargeEvent)
 		}
 		chargedEvents := map[string]int64{
@@ -442,14 +458,8 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		if evidence.Converted > 0 {
 			costPerConversion = float64(evidence.PaidCents) / float64(evidence.Converted)
 		}
-		processingFees, err := conservativeProcessingFeeAllowance(
-			evidence.PaidCents, evidence.PaidSettlements,
-			input.PaymentProcessingBasisPoints, input.PaymentProcessingFixedCents,
-		)
-		if err != nil {
-			return report{}, fmt.Errorf("%s mechanism processing allowance: %w", chargeEvent, err)
-		}
-		processingNet := evidence.PaidCents - processingFees
+		processingFees := evidence.ProcessorFeeCents
+		processingNet := evidence.ProcessorNetCents
 		item := result{
 			ChargeEvent:                 chargeEvent,
 			ChargedProviderCompanies:    evidence.ChargedProviderCompanies,
@@ -459,7 +469,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 			CostPerActivationCents:      costPerActivation,
 			CostPerConversionCents:      costPerConversion,
 			MedianDaysToCharge:          float64(evidence.PaidMedianSeconds) / 86400,
-			ValueKind:                   "verified_paid",
+			ValueKind:                   "verified_processor_net_available",
 			VerifiedPaidCents:           evidence.PaidCents,
 			VerifiedPaidSettlements:     evidence.PaidSettlements,
 			ProcessingFeeAllowanceCents: processingFees,
@@ -491,9 +501,6 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		case item.MedianDaysToCharge > input.MaxMedianDaysToCharge:
 			item.Viable = false
 			item.Failure = "exceeds time-to-paid-settlement ceiling"
-		case processingNet <= 0:
-			item.Viable = false
-			item.Failure = "processing-cost allowance exhausts paid revenue"
 		case item.ProcessingNetMarginRate < input.MinProcessingNetMarginRate:
 			item.Viable = false
 			item.Failure = "below processing-net margin floor"
@@ -525,7 +532,7 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	for _, candidate := range output.Results {
 		if candidate.Viable {
 			output.SelectedEvent = candidate.ChargeEvent
-			output.SelectionReason = "highest processing-net revenue per 1000 returned offers among mechanisms meeting offer-return sample, charged-provider coverage, charged-event sample, provider cost-per-activation, reversal-rate, paid-settlement latency, processing-net margin, and processing-net revenue-per-return constraints"
+			output.SelectionReason = "highest actual available processor-net revenue per 1000 returned offers among mechanisms meeting offer-return sample, charged-provider coverage, charged-event sample, provider cost-per-activation, reversal-rate, paid-settlement latency, processing-net margin, and processing-net revenue-per-return constraints"
 			return output, nil
 		}
 	}

@@ -121,6 +121,7 @@ var requiredProtectedMigrationNames = []string{
 	"027_provider_pilot_review_evidence.sql",
 	"028_provider_commercial_proof_manifest.sql",
 	"029_provider_settlement_receipts.sql",
+	"030_provider_processor_net_receipts.sql",
 }
 
 // Historical migration tests deliberately replay prefix releases one at a
@@ -578,6 +579,44 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		},
 	}
 
+	providerProcessorNetReceipts := protectedMigrationSpec{
+		// 030 binds actual processor gross/fee/net evidence to every paid
+		// settlement and requires a separate availability observation before
+		// retained value can enter mechanism proof.
+		relations: append(append([]migrationRelation(nil), providerSettlementReceipts.relations...),
+			migrationRelation{name: "provider_settlement_processor_balance_receipts", relkind: "r"},
+			migrationRelation{name: "idx_provider_settlement_processor_balance_created", relkind: "i", parent: "provider_settlement_processor_balance_receipts"},
+			migrationRelation{name: "provider_settlement_processor_availability_receipts", relkind: "r"},
+			migrationRelation{name: "idx_provider_settlement_processor_available_created", relkind: "i", parent: "provider_settlement_processor_availability_receipts"},
+		),
+		rules: append(append([]migrationRule(nil), providerSettlementReceipts.rules...),
+			migrationRule{relation: "provider_settlement_processor_balance_receipts", name: "provider_settlement_processor_balance_receipts_no_update"},
+			migrationRule{relation: "provider_settlement_processor_balance_receipts", name: "provider_settlement_processor_balance_receipts_no_delete"},
+			migrationRule{relation: "provider_settlement_processor_availability_receipts", name: "provider_settlement_processor_availability_receipts_no_update"},
+			migrationRule{relation: "provider_settlement_processor_availability_receipts", name: "provider_settlement_processor_availability_receipts_no_delete"},
+		),
+		fingerprintTables:    append([]string(nil), providerSettlementReceipts.fingerprintTables...),
+		fingerprintFunctions: append([]string(nil), providerSettlementReceipts.fingerprintFunctions...),
+		footprintRelations: map[string]bool{
+			"provider_settlement_processor_balance_receipts":      true,
+			"idx_provider_settlement_processor_balance_created":   true,
+			"provider_settlement_processor_availability_receipts": true,
+			"idx_provider_settlement_processor_available_created": true,
+		},
+		footprintRules: map[string]bool{
+			"provider_settlement_processor_balance_receipts_no_update":      true,
+			"provider_settlement_processor_balance_receipts_no_delete":      true,
+			"provider_settlement_processor_availability_receipts_no_update": true,
+			"provider_settlement_processor_availability_receipts_no_delete": true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintTrigger, relation: "provider_settlement_processor_balance_receipts", name: "provider_settlement_processor_balance_receipt_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_settlement_processor_balance_receipt"},
+			{kind: migrationFootprintTrigger, relation: "provider_settlement_processor_availability_receipts", name: "provider_settlement_processor_availability_receipt_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_provider_settlement_processor_availability_receipt"},
+		},
+	}
+
 	return map[string]protectedMigrationSpec{
 		"019_provider_exchange.sql":                     providerExchange,
 		"020_action_interest_receipts.sql":              actionInterests,
@@ -590,6 +629,7 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		"027_provider_pilot_review_evidence.sql":        providerPilotReviewEvidence,
 		"028_provider_commercial_proof_manifest.sql":    providerCommercialProofManifest,
 		"029_provider_settlement_receipts.sql":          providerSettlementReceipts,
+		"030_provider_processor_net_receipts.sql":       providerProcessorNetReceipts,
 	}
 }
 

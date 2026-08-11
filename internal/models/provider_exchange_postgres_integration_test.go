@@ -5093,13 +5093,20 @@ func exerciseProviderCommercialProofPostgres(
 	}
 	paidAt := postgresDatabaseClock(t, db)
 	paidReceipt, paidCreated, err := models.RecordProviderSettlementPayment(db, models.ProviderSettlementPaymentInput{
-		OrderID:                 settlementOrder.ID,
-		StripeCheckoutSessionID: checkoutID,
-		StripePaymentIntentID:   "pi_pgproofterms0001",
-		StripeEventID:           "evt_pgproofterms0001",
-		AmountCents:             settlementOrder.AmountCents,
-		Currency:                settlementOrder.Currency,
-		PaidAt:                  paidAt,
+		OrderID:                    settlementOrder.ID,
+		StripeCheckoutSessionID:    checkoutID,
+		StripePaymentIntentID:      "pi_pgproofterms0001",
+		StripeEventID:              "evt_pgproofterms0001",
+		StripeChargeID:             "ch_pgproofterms0001",
+		StripeBalanceTransactionID: "txn_pgproofterms0001",
+		AmountCents:                settlementOrder.AmountCents,
+		ProcessorFeeCents:          59,
+		ProcessorNetCents:          settlementOrder.AmountCents - 59,
+		Currency:                   settlementOrder.Currency,
+		ProcessorStatus:            "available",
+		ProcessorAvailableOn:       paidAt,
+		ProcessorObservedAt:        paidAt,
+		PaidAt:                     paidAt,
 	})
 	if err != nil || !paidCreated {
 		t.Fatalf("record exact terms payment = receipt:%#v created:%t err:%v", paidReceipt, paidCreated, err)
@@ -5109,8 +5116,12 @@ func exerciseProviderCommercialProofPostgres(
 		t.Fatalf("read paid terms proof: %v", err)
 	}
 	if !paidProof.SettlementReceiptIntegrityValid || paidProof.VerifiedProviderPaidSettlements != 1 ||
+		!paidProof.ProcessorNetReceiptIntegrityValid || paidProof.VerifiedProviderAvailableSettlements != 1 ||
 		paidProof.RejectedProviderSettlementReceipts != 0 || paidProof.VerifiedPaidLatencySamples != 1 ||
+		paidProof.RejectedProviderProcessorNetReceipts != 0 ||
 		paidProof.VerifiedTermsPaidByCurrency["usd"] != settlementOrder.AmountCents ||
+		paidProof.VerifiedProcessorFeesByCurrency["usd"] != 59 ||
+		paidProof.VerifiedProcessorNetByCurrency["usd"] != settlementOrder.AmountCents-59 ||
 		paidProof.VerifiedPaidMedianSeconds < 0 {
 		t.Fatalf("exact paid terms proof aggregate = %#v", paidProof)
 	}
@@ -5291,16 +5302,24 @@ func exerciseProviderCommercialProofPostgres(
 	if created, err := models.RecordProviderSettlementCheckoutSession(db, futureOrder.ID, futureCheckoutID); err != nil || !created {
 		t.Fatalf("record future-dated checkout = created:%t err:%v", created, err)
 	}
+	futurePaidAt := postgresDatabaseClock(t, db).Add(time.Hour)
 	if receipt, created, err := models.RecordProviderSettlementPayment(db, models.ProviderSettlementPaymentInput{
-		OrderID:                 futureOrder.ID,
-		StripeCheckoutSessionID: futureCheckoutID,
-		StripePaymentIntentID:   "pi_pgprooffuture0001",
-		StripeEventID:           "evt_pgprooffuture0001",
-		AmountCents:             futureOrder.AmountCents,
-		Currency:                futureOrder.Currency,
-		PaidAt:                  postgresDatabaseClock(t, db).Add(time.Hour),
-	}); err != nil || !created {
-		t.Fatalf("record future-dated payment fixture = receipt:%#v created:%t err:%v", receipt, created, err)
+		OrderID:                    futureOrder.ID,
+		StripeCheckoutSessionID:    futureCheckoutID,
+		StripePaymentIntentID:      "pi_pgprooffuture0001",
+		StripeEventID:              "evt_pgprooffuture0001",
+		StripeChargeID:             "ch_pgprooffuture0001",
+		StripeBalanceTransactionID: "txn_pgprooffuture0001",
+		AmountCents:                futureOrder.AmountCents,
+		ProcessorFeeCents:          59,
+		ProcessorNetCents:          futureOrder.AmountCents - 59,
+		Currency:                   futureOrder.Currency,
+		ProcessorStatus:            "available",
+		ProcessorAvailableOn:       futurePaidAt,
+		ProcessorObservedAt:        futurePaidAt,
+		PaidAt:                     futurePaidAt,
+	}); err == nil || created || receipt != nil {
+		t.Fatalf("future-dated processor observation was accepted = receipt:%#v created:%t err:%v", receipt, created, err)
 	}
 	afterFuturePayment, err := models.GetProviderExchangeProof(
 		db, postgresProviderPilotEpochID, signer,
@@ -5308,11 +5327,11 @@ func exerciseProviderCommercialProofPostgres(
 	if err != nil {
 		t.Fatalf("read proof after future-dated payment: %v", err)
 	}
-	if afterFuturePayment.SettlementReceiptIntegrityValid ||
-		afterFuturePayment.RejectedProviderSettlementReceipts != beforeFuturePayment.RejectedProviderSettlementReceipts+1 ||
+	if !afterFuturePayment.SettlementReceiptIntegrityValid || !afterFuturePayment.ProcessorNetReceiptIntegrityValid ||
+		afterFuturePayment.RejectedProviderSettlementReceipts != beforeFuturePayment.RejectedProviderSettlementReceipts ||
 		afterFuturePayment.VerifiedProviderPaidSettlements != beforeFuturePayment.VerifiedProviderPaidSettlements ||
-		afterFuturePayment.PilotThresholdsMet {
-		t.Fatalf("future-dated payment escaped settlement proof: before=%#v after=%#v", beforeFuturePayment, afterFuturePayment)
+		afterFuturePayment.VerifiedProviderAvailableSettlements != beforeFuturePayment.VerifiedProviderAvailableSettlements {
+		t.Fatalf("rejected future-dated payment changed proof: before=%#v after=%#v", beforeFuturePayment, afterFuturePayment)
 	}
 }
 

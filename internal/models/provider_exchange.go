@@ -578,11 +578,16 @@ type ProviderExchangeProof struct {
 	VerifiedActivatedMedianSeconds       int64                             `json:"verified_activated_median_handoff_to_outcome_seconds"`
 	VerifiedConvertedMedianSeconds       int64                             `json:"verified_converted_median_handoff_to_outcome_seconds"`
 	SettlementReceiptIntegrityValid      bool                              `json:"settlement_receipt_integrity_valid"`
+	ProcessorNetReceiptIntegrityValid    bool                              `json:"processor_net_receipt_integrity_valid"`
 	VerifiedProviderPaidSettlements      int                               `json:"verified_provider_paid_settlements"`
+	VerifiedProviderAvailableSettlements int                               `json:"verified_provider_available_settlements"`
 	RejectedProviderSettlementReceipts   int                               `json:"rejected_provider_settlement_receipts"`
+	RejectedProviderProcessorNetReceipts int                               `json:"rejected_provider_processor_net_receipts"`
 	VerifiedPaidLatencySamples           int                               `json:"verified_paid_latency_samples"`
 	VerifiedPaidMedianSeconds            int64                             `json:"verified_paid_median_handoff_to_settlement_seconds"`
 	VerifiedTermsPaidByCurrency          map[string]int64                  `json:"verified_terms_paid_by_currency"`
+	VerifiedProcessorFeesByCurrency      map[string]int64                  `json:"verified_processor_fees_by_currency"`
+	VerifiedProcessorNetByCurrency       map[string]int64                  `json:"verified_processor_net_by_currency"`
 	VerifiedMechanisms                   map[string]ProviderMechanismProof `json:"verified_mechanisms"`
 	VerifiedPrepaidSettledByCurrency     map[string]int64                  `json:"verified_prepaid_settled_by_currency"`
 	VerifiedPrepaidNetDebitedByCurrency  map[string]int64                  `json:"verified_prepaid_net_debited_by_currency"`
@@ -611,7 +616,10 @@ type ProviderMechanismProof struct {
 	Converted                int   `json:"converted"`
 	Reversed                 int   `json:"reversed"`
 	PaidSettlements          int   `json:"paid_settlements"`
+	AvailableSettlements     int   `json:"available_settlements"`
 	PaidCents                int64 `json:"paid_cents"`
+	ProcessorFeeCents        int64 `json:"processor_fee_cents"`
+	ProcessorNetCents        int64 `json:"processor_net_cents"`
 	PaidMedianSeconds        int64 `json:"paid_median_handoff_to_settlement_seconds"`
 }
 
@@ -5947,7 +5955,10 @@ func getProviderExchangeProof(
 	proof.PilotThresholdsMet = false
 	proof.OutcomeReceiptIntegrityValid = true
 	proof.SettlementReceiptIntegrityValid = true
+	proof.ProcessorNetReceiptIntegrityValid = true
 	proof.VerifiedTermsPaidByCurrency = map[string]int64{}
+	proof.VerifiedProcessorFeesByCurrency = map[string]int64{}
+	proof.VerifiedProcessorNetByCurrency = map[string]int64{}
 	proof.VerifiedMechanisms = map[string]ProviderMechanismProof{
 		"accepted":  {},
 		"activated": {},
@@ -6316,7 +6327,14 @@ func getProviderExchangeProof(
 		       settlement.amount_cents, settlement.currency,
 		       payment.amount_cents, payment.currency, payment.paid_at,
 		       payment.created_at, receipt.created_at,
-		       ticket.handoff_observed_at
+		       ticket.handoff_observed_at,
+		       balance.id IS NOT NULL, balance.gross_amount_cents,
+		       balance.fee_cents, balance.net_cents, balance.currency,
+		       balance.available_on, balance.processor_observed_at,
+		       availability.id IS NOT NULL, availability.gross_amount_cents,
+		       availability.fee_cents, availability.net_cents,
+		       availability.currency, availability.available_on,
+		       availability.processor_verified_at
 		FROM provider_settlement_payment_receipts payment
 		JOIN provider_settlement_orders settlement
 		  ON settlement.id=payment.provider_settlement_order_id
@@ -6327,6 +6345,10 @@ func getProviderExchangeProof(
 		  ON ticket.id=settlement.action_ticket_id
 		 AND ticket.provider_offer_id=settlement.provider_offer_id
 		 AND ticket.provider_claim_id=settlement.provider_claim_id
+		LEFT JOIN provider_settlement_processor_balance_receipts balance
+		  ON balance.provider_settlement_payment_receipt_id=payment.id
+		LEFT JOIN provider_settlement_processor_availability_receipts availability
+		  ON availability.processor_balance_receipt_id=balance.id
 		ORDER BY payment.paid_at, payment.id`,
 		int64(ProviderClaimVerificationFreshness/time.Second),
 		ProviderCommercialTermsContractV1,
@@ -6344,11 +6366,23 @@ func getProviderExchangeProof(
 		var orderCurrency, paidCurrency string
 		var orderAmount, paidAmount int64
 		var paidAt, paymentCreatedAt, outcomeCreatedAt, handoffObservedAt time.Time
+		var balancePresent, availabilityPresent bool
+		var balanceGross, balanceFee, balanceNet sql.NullInt64
+		var balanceCurrency sql.NullString
+		var balanceAvailableOn, balanceObservedAt sql.NullTime
+		var availabilityGross, availabilityFee, availabilityNet sql.NullInt64
+		var availabilityCurrency sql.NullString
+		var availabilityAvailableOn, availabilityVerifiedAt sql.NullTime
 		if err := settlementRows.Scan(
 			&ticketID, &outcomeReceiptID, &settlementOutcome, &chargeEvent,
 			&orderAmount, &orderCurrency,
 			&paidAmount, &paidCurrency, &paidAt, &paymentCreatedAt,
 			&outcomeCreatedAt, &handoffObservedAt,
+			&balancePresent, &balanceGross, &balanceFee, &balanceNet,
+			&balanceCurrency, &balanceAvailableOn, &balanceObservedAt,
+			&availabilityPresent, &availabilityGross, &availabilityFee,
+			&availabilityNet, &availabilityCurrency, &availabilityAvailableOn,
+			&availabilityVerifiedAt,
 		); err != nil {
 			settlementRows.Close()
 			return nil, err
@@ -6376,6 +6410,29 @@ func getProviderExchangeProof(
 		evidence := proof.VerifiedMechanisms[chargeEvent]
 		evidence.PaidSettlements++
 		evidence.PaidCents += paidAmount
+		processorValid := balancePresent && availabilityPresent &&
+			balanceGross.Valid && balanceFee.Valid && balanceNet.Valid && balanceCurrency.Valid &&
+			balanceAvailableOn.Valid && balanceObservedAt.Valid &&
+			availabilityGross.Valid && availabilityFee.Valid && availabilityNet.Valid &&
+			availabilityCurrency.Valid && availabilityAvailableOn.Valid && availabilityVerifiedAt.Valid &&
+			balanceGross.Int64 == paidAmount && balanceFee.Int64 >= 0 && balanceNet.Int64 > 0 &&
+			balanceGross.Int64-balanceFee.Int64 == balanceNet.Int64 && balanceCurrency.String == paidCurrency &&
+			availabilityGross.Int64 == balanceGross.Int64 && availabilityFee.Int64 == balanceFee.Int64 &&
+			availabilityNet.Int64 == balanceNet.Int64 && availabilityCurrency.String == balanceCurrency.String &&
+			availabilityAvailableOn.Time.Equal(balanceAvailableOn.Time) &&
+			!balanceObservedAt.Time.Before(paidAt) &&
+			!availabilityVerifiedAt.Time.Before(balanceAvailableOn.Time)
+		if processorValid {
+			proof.VerifiedProviderAvailableSettlements++
+			proof.VerifiedProcessorFeesByCurrency[paidCurrency] += balanceFee.Int64
+			proof.VerifiedProcessorNetByCurrency[paidCurrency] += balanceNet.Int64
+			evidence.AvailableSettlements++
+			evidence.ProcessorFeeCents += balanceFee.Int64
+			evidence.ProcessorNetCents += balanceNet.Int64
+		} else {
+			proof.ProcessorNetReceiptIntegrityValid = false
+			proof.RejectedProviderProcessorNetReceipts++
+		}
 		proof.VerifiedMechanisms[chargeEvent] = evidence
 	}
 	if err := settlementRows.Err(); err != nil {
@@ -6399,6 +6456,16 @@ func getProviderExchangeProof(
 	for currency, amount := range proof.VerifiedTermsNetReceivableByCurrency {
 		if amount == 0 {
 			delete(proof.VerifiedTermsNetReceivableByCurrency, currency)
+		}
+	}
+	for currency, amount := range proof.VerifiedProcessorFeesByCurrency {
+		if amount == 0 {
+			delete(proof.VerifiedProcessorFeesByCurrency, currency)
+		}
+	}
+	for currency, amount := range proof.VerifiedProcessorNetByCurrency {
+		if amount == 0 {
+			delete(proof.VerifiedProcessorNetByCurrency, currency)
 		}
 	}
 
@@ -6460,6 +6527,8 @@ func getProviderExchangeProof(
 
 	proof.PilotThresholdsMet = proof.OutcomeReceiptIntegrityValid &&
 		proof.SettlementReceiptIntegrityValid &&
+		proof.ProcessorNetReceiptIntegrityValid &&
+		proof.VerifiedProviderAvailableSettlements == proof.VerifiedProviderPaidSettlements &&
 		proof.VerifiedProviderCompanies >= 3 &&
 		proof.VerifiedProviderAcceptedHandoffs >= 5 &&
 		proof.VerifiedProviderConfirmedActivations >= 2 &&

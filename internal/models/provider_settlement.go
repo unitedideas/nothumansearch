@@ -36,36 +36,78 @@ type ProviderSettlementOrder struct {
 // currency/amount facts received through a signature-verified webhook. It
 // intentionally accepts neither a caller-selected price nor free-form notes.
 type ProviderSettlementPaymentInput struct {
-	OrderID                 string
-	StripeCheckoutSessionID string
-	StripePaymentIntentID   string
-	StripeEventID           string
-	AmountCents             int64
-	Currency                string
-	PaidAt                  time.Time
+	OrderID                    string
+	StripeCheckoutSessionID    string
+	StripePaymentIntentID      string
+	StripeEventID              string
+	StripeChargeID             string
+	StripeBalanceTransactionID string
+	AmountCents                int64
+	ProcessorFeeCents          int64
+	ProcessorNetCents          int64
+	Currency                   string
+	ProcessorStatus            string
+	ProcessorAvailableOn       time.Time
+	ProcessorObservedAt        time.Time
+	PaidAt                     time.Time
 }
 
 type ProviderSettlementPaymentReceipt struct {
-	ID          string    `json:"id"`
-	OrderID     string    `json:"order_id"`
-	AmountCents int64     `json:"amount_cents"`
-	Currency    string    `json:"currency"`
-	PaidAt      time.Time `json:"paid_at"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID                    string    `json:"id"`
+	OrderID               string    `json:"order_id"`
+	AmountCents           int64     `json:"amount_cents"`
+	ProcessorFeeCents     int64     `json:"processor_fee_cents"`
+	ProcessorNetCents     int64     `json:"processor_net_cents"`
+	Currency              string    `json:"currency"`
+	ProcessorAvailableOn  time.Time `json:"processor_available_on"`
+	ProcessorNetAvailable bool      `json:"processor_net_available"`
+	PaidAt                time.Time `json:"paid_at"`
+	CreatedAt             time.Time `json:"created_at"`
+}
+
+// ProviderSettlementAvailabilityInput carries one authenticated Stripe
+// balance-transaction refresh. The balance transaction identifier is a private
+// binding coordinate and is never projected by owner status or pilot proof.
+type ProviderSettlementAvailabilityInput struct {
+	OrderID                    string
+	StripeBalanceTransactionID string
+	GrossAmountCents           int64
+	FeeCents                   int64
+	NetCents                   int64
+	Currency                   string
+	AvailableOn                time.Time
+	ProcessorVerifiedAt        time.Time
+}
+
+// ProviderSettlementProcessorReference is an owner-only lookup coordinate used
+// to refresh one already-recorded Stripe balance transaction. The identifier
+// must never be serialized into an API response or proof artifact.
+type ProviderSettlementProcessorReference struct {
+	StripeBalanceTransactionID string    `json:"-"`
+	GrossAmountCents           int64     `json:"gross_amount_cents"`
+	FeeCents                   int64     `json:"fee_cents"`
+	NetCents                   int64     `json:"net_cents"`
+	Currency                   string    `json:"currency"`
+	AvailableOn                time.Time `json:"available_on"`
 }
 
 // ProviderSettlementStatus is an owner-only, privacy-bounded view. It does
 // not expose the Stripe session, payment-intent, event identifier, provider
 // email, agent identity, or original search context.
 type ProviderSettlementStatus struct {
-	OrderID          string     `json:"order_id"`
-	OutcomeReceiptID string     `json:"outcome_receipt_id"`
-	AmountCents      int64      `json:"amount_cents"`
-	Currency         string     `json:"currency"`
-	CheckoutCreated  bool       `json:"checkout_created"`
-	Paid             bool       `json:"paid"`
-	PaymentReceiptID string     `json:"payment_receipt_id,omitempty"`
-	PaidAt           *time.Time `json:"paid_at,omitempty"`
+	OrderID               string     `json:"order_id"`
+	OutcomeReceiptID      string     `json:"outcome_receipt_id"`
+	AmountCents           int64      `json:"amount_cents"`
+	Currency              string     `json:"currency"`
+	CheckoutCreated       bool       `json:"checkout_created"`
+	Paid                  bool       `json:"paid"`
+	PaymentReceiptID      string     `json:"payment_receipt_id,omitempty"`
+	ProcessorNetRecorded  bool       `json:"processor_net_recorded"`
+	ProcessorNetAvailable bool       `json:"processor_net_available"`
+	ProcessorFeeCents     int64      `json:"processor_fee_cents,omitempty"`
+	ProcessorNetCents     int64      `json:"processor_net_cents,omitempty"`
+	ProcessorAvailableOn  *time.Time `json:"processor_available_on,omitempty"`
+	PaidAt                *time.Time `json:"paid_at,omitempty"`
 }
 
 const providerSettlementOrderColumns = `
@@ -253,14 +295,26 @@ func RecordProviderSettlementPayment(db *sql.DB, input ProviderSettlementPayment
 	input.StripeCheckoutSessionID = strings.TrimSpace(input.StripeCheckoutSessionID)
 	input.StripePaymentIntentID = strings.TrimSpace(input.StripePaymentIntentID)
 	input.StripeEventID = strings.TrimSpace(input.StripeEventID)
+	input.StripeChargeID = strings.TrimSpace(input.StripeChargeID)
+	input.StripeBalanceTransactionID = strings.TrimSpace(input.StripeBalanceTransactionID)
 	input.Currency = strings.ToLower(strings.TrimSpace(input.Currency))
+	input.ProcessorStatus = strings.ToLower(strings.TrimSpace(input.ProcessorStatus))
 	input.PaidAt = input.PaidAt.UTC()
+	input.ProcessorAvailableOn = input.ProcessorAvailableOn.UTC()
+	input.ProcessorObservedAt = input.ProcessorObservedAt.UTC()
 	if db == nil || !validProviderUUID(input.OrderID) ||
 		!validProviderStripeID(input.StripeCheckoutSessionID, "cs_") ||
 		!validProviderStripeID(input.StripePaymentIntentID, "pi_") ||
 		!validProviderStripeID(input.StripeEventID, "evt_") ||
+		!validProviderStripeID(input.StripeChargeID, "ch_") ||
+		!validProviderStripeID(input.StripeBalanceTransactionID, "txn_") ||
 		input.AmountCents < 1 || input.AmountCents > ProviderBountyMaximumCents ||
-		input.Currency != "usd" || input.PaidAt.IsZero() {
+		input.ProcessorFeeCents < 0 || input.ProcessorFeeCents >= input.AmountCents ||
+		input.ProcessorNetCents != input.AmountCents-input.ProcessorFeeCents ||
+		input.Currency != "usd" ||
+		(input.ProcessorStatus != "pending" && input.ProcessorStatus != "available") ||
+		input.PaidAt.IsZero() || input.ProcessorAvailableOn.IsZero() || input.ProcessorObservedAt.IsZero() ||
+		input.ProcessorObservedAt.Before(input.PaidAt) {
 		return nil, false, ErrInvalidProviderExchange
 	}
 	tx, err := db.Begin()
@@ -304,21 +358,47 @@ func RecordProviderSettlementPayment(db *sql.DB, input ProviderSettlementPayment
 
 	existing := &ProviderSettlementPaymentReceipt{}
 	var existingSession, existingIntent, existingEvent string
+	var existingCharge, existingBalanceTransaction string
 	err = tx.QueryRow(`
-		SELECT id::text, provider_settlement_order_id::text,
-		       stripe_checkout_session_id, stripe_payment_intent_id,
-		       stripe_event_id, amount_cents, currency, paid_at, created_at
-		FROM provider_settlement_payment_receipts
-		WHERE provider_settlement_order_id=$1::uuid
-		FOR KEY SHARE`, input.OrderID).Scan(
+		SELECT payment.id::text, payment.provider_settlement_order_id::text,
+		       payment.stripe_checkout_session_id, payment.stripe_payment_intent_id,
+		       payment.stripe_event_id, balance.stripe_charge_id,
+		       balance.stripe_balance_transaction_id,
+		       payment.amount_cents, balance.fee_cents, balance.net_cents,
+		       payment.currency, balance.available_on,
+		       availability.id IS NOT NULL, payment.paid_at, payment.created_at
+		FROM provider_settlement_payment_receipts payment
+		JOIN provider_settlement_processor_balance_receipts balance
+		  ON balance.provider_settlement_payment_receipt_id=payment.id
+		LEFT JOIN provider_settlement_processor_availability_receipts availability
+		  ON availability.processor_balance_receipt_id=balance.id
+		WHERE payment.provider_settlement_order_id=$1::uuid
+		FOR KEY SHARE OF payment, balance`, input.OrderID).Scan(
 		&existing.ID, &existing.OrderID, &existingSession, &existingIntent,
-		&existingEvent, &existing.AmountCents, &existing.Currency,
+		&existingEvent, &existingCharge, &existingBalanceTransaction,
+		&existing.AmountCents, &existing.ProcessorFeeCents, &existing.ProcessorNetCents,
+		&existing.Currency, &existing.ProcessorAvailableOn, &existing.ProcessorNetAvailable,
 		&existing.PaidAt, &existing.CreatedAt,
 	)
 	if err == nil {
 		if existingSession != input.StripeCheckoutSessionID || existingIntent != input.StripePaymentIntentID ||
-			existingEvent != input.StripeEventID || existing.AmountCents != input.AmountCents || existing.Currency != input.Currency {
+			existingEvent != input.StripeEventID || existingCharge != input.StripeChargeID ||
+			existingBalanceTransaction != input.StripeBalanceTransactionID ||
+			existing.AmountCents != input.AmountCents || existing.ProcessorFeeCents != input.ProcessorFeeCents ||
+			existing.ProcessorNetCents != input.ProcessorNetCents || existing.Currency != input.Currency ||
+			!existing.ProcessorAvailableOn.Equal(input.ProcessorAvailableOn) {
 			return nil, false, ErrProviderSettlementConflict
+		}
+		if input.ProcessorStatus == "available" && !existing.ProcessorNetAvailable {
+			if _, _, err := recordProviderSettlementAvailabilityTx(tx, ProviderSettlementAvailabilityInput{
+				OrderID: input.OrderID, StripeBalanceTransactionID: input.StripeBalanceTransactionID,
+				GrossAmountCents: input.AmountCents, FeeCents: input.ProcessorFeeCents,
+				NetCents: input.ProcessorNetCents, Currency: input.Currency,
+				AvailableOn: input.ProcessorAvailableOn, ProcessorVerifiedAt: input.ProcessorObservedAt,
+			}); err != nil {
+				return nil, false, err
+			}
+			existing.ProcessorNetAvailable = true
 		}
 		if err := tx.Commit(); err != nil {
 			return nil, false, err
@@ -347,10 +427,161 @@ func RecordProviderSettlementPayment(db *sql.DB, input ProviderSettlementPayment
 	if err != nil {
 		return nil, false, err
 	}
+	balanceReceiptID, err := newProviderUUID()
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO provider_settlement_processor_balance_receipts (
+			id, provider_settlement_payment_receipt_id, stripe_charge_id,
+			stripe_balance_transaction_id, gross_amount_cents, fee_cents,
+			net_cents, currency, initial_status, available_on, processor_observed_at
+		) VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+		balanceReceiptID, receipt.ID, input.StripeChargeID,
+		input.StripeBalanceTransactionID, input.AmountCents,
+		input.ProcessorFeeCents, input.ProcessorNetCents, input.Currency,
+		input.ProcessorStatus, input.ProcessorAvailableOn, input.ProcessorObservedAt,
+	); err != nil {
+		return nil, false, err
+	}
+	receipt.ProcessorFeeCents = input.ProcessorFeeCents
+	receipt.ProcessorNetCents = input.ProcessorNetCents
+	receipt.ProcessorAvailableOn = input.ProcessorAvailableOn
+	if input.ProcessorStatus == "available" {
+		if _, _, err := recordProviderSettlementAvailabilityTx(tx, ProviderSettlementAvailabilityInput{
+			OrderID: input.OrderID, StripeBalanceTransactionID: input.StripeBalanceTransactionID,
+			GrossAmountCents: input.AmountCents, FeeCents: input.ProcessorFeeCents,
+			NetCents: input.ProcessorNetCents, Currency: input.Currency,
+			AvailableOn: input.ProcessorAvailableOn, ProcessorVerifiedAt: input.ProcessorObservedAt,
+		}); err != nil {
+			return nil, false, err
+		}
+		receipt.ProcessorNetAvailable = true
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, false, err
 	}
 	return receipt, true, nil
+}
+
+func normalizeProviderSettlementAvailabilityInput(input ProviderSettlementAvailabilityInput) (ProviderSettlementAvailabilityInput, error) {
+	input.OrderID = strings.ToLower(strings.TrimSpace(input.OrderID))
+	input.StripeBalanceTransactionID = strings.TrimSpace(input.StripeBalanceTransactionID)
+	input.Currency = strings.ToLower(strings.TrimSpace(input.Currency))
+	input.AvailableOn = input.AvailableOn.UTC()
+	input.ProcessorVerifiedAt = input.ProcessorVerifiedAt.UTC()
+	if !validProviderUUID(input.OrderID) ||
+		!validProviderStripeID(input.StripeBalanceTransactionID, "txn_") ||
+		input.GrossAmountCents < 1 || input.GrossAmountCents > ProviderBountyMaximumCents ||
+		input.FeeCents < 0 || input.FeeCents >= input.GrossAmountCents ||
+		input.NetCents != input.GrossAmountCents-input.FeeCents || input.Currency != "usd" ||
+		input.AvailableOn.IsZero() || input.ProcessorVerifiedAt.IsZero() ||
+		input.ProcessorVerifiedAt.Before(input.AvailableOn) {
+		return input, ErrInvalidProviderExchange
+	}
+	return input, nil
+}
+
+func recordProviderSettlementAvailabilityTx(tx *sql.Tx, input ProviderSettlementAvailabilityInput) (string, bool, error) {
+	input, err := normalizeProviderSettlementAvailabilityInput(input)
+	if err != nil {
+		return "", false, err
+	}
+	var balanceReceiptID string
+	var gross, fee, net int64
+	var currency string
+	var availableOn time.Time
+	err = tx.QueryRow(`
+		SELECT balance.id::text, balance.gross_amount_cents, balance.fee_cents,
+		       balance.net_cents, balance.currency, balance.available_on
+		FROM provider_settlement_processor_balance_receipts balance
+		JOIN provider_settlement_payment_receipts payment
+		  ON payment.id=balance.provider_settlement_payment_receipt_id
+		WHERE payment.provider_settlement_order_id=$1::uuid
+		  AND balance.stripe_balance_transaction_id=$2
+		FOR KEY SHARE OF balance, payment`, input.OrderID, input.StripeBalanceTransactionID).Scan(
+		&balanceReceiptID, &gross, &fee, &net, &currency, &availableOn,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, ErrProviderSettlementNotEligible
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if gross != input.GrossAmountCents || fee != input.FeeCents || net != input.NetCents ||
+		currency != input.Currency || !availableOn.Equal(input.AvailableOn) {
+		return "", false, ErrProviderSettlementConflict
+	}
+	var existingID string
+	err = tx.QueryRow(`
+		SELECT id::text
+		FROM provider_settlement_processor_availability_receipts
+		WHERE processor_balance_receipt_id=$1::uuid
+		FOR KEY SHARE`, balanceReceiptID).Scan(&existingID)
+	if err == nil {
+		return existingID, false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return "", false, err
+	}
+	receiptID, err := newProviderUUID()
+	if err != nil {
+		return "", false, err
+	}
+	if err := tx.QueryRow(`
+		INSERT INTO provider_settlement_processor_availability_receipts (
+			id, processor_balance_receipt_id, gross_amount_cents, fee_cents,
+			net_cents, currency, available_on, processor_verified_at
+		) VALUES ($1::uuid,$2::uuid,$3,$4,$5,$6,$7,$8)
+		RETURNING id::text`, receiptID, balanceReceiptID, gross, fee, net,
+		currency, availableOn, input.ProcessorVerifiedAt).Scan(&receiptID); err != nil {
+		return "", false, err
+	}
+	return receiptID, true, nil
+}
+
+// RecordProviderSettlementAvailability appends the first authenticated Stripe
+// observation that the exact processor net is available. It is idempotent and
+// cannot alter the original gross, fee, net, currency, or availability date.
+func RecordProviderSettlementAvailability(db *sql.DB, input ProviderSettlementAvailabilityInput) (string, bool, error) {
+	if db == nil {
+		return "", false, ErrInvalidProviderExchange
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return "", false, err
+	}
+	defer tx.Rollback()
+	id, created, err := recordProviderSettlementAvailabilityTx(tx, input)
+	if err != nil {
+		return "", false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", false, err
+	}
+	return id, created, nil
+}
+
+func GetProviderSettlementProcessorReference(db *sql.DB, orderID string) (*ProviderSettlementProcessorReference, error) {
+	orderID = strings.ToLower(strings.TrimSpace(orderID))
+	if db == nil || !validProviderUUID(orderID) {
+		return nil, ErrInvalidProviderExchange
+	}
+	reference := &ProviderSettlementProcessorReference{}
+	err := db.QueryRow(`
+		SELECT balance.stripe_balance_transaction_id, balance.gross_amount_cents,
+		       balance.fee_cents, balance.net_cents, balance.currency, balance.available_on
+		FROM provider_settlement_processor_balance_receipts balance
+		JOIN provider_settlement_payment_receipts payment
+		  ON payment.id=balance.provider_settlement_payment_receipt_id
+		WHERE payment.provider_settlement_order_id=$1::uuid`, orderID).Scan(
+		&reference.StripeBalanceTransactionID, &reference.GrossAmountCents,
+		&reference.FeeCents, &reference.NetCents, &reference.Currency, &reference.AvailableOn,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return reference, nil
 }
 
 func GetProviderSettlementStatus(db *sql.DB, orderID string) (*ProviderSettlementStatus, error) {
@@ -359,19 +590,28 @@ func GetProviderSettlementStatus(db *sql.DB, orderID string) (*ProviderSettlemen
 		return nil, ErrInvalidProviderExchange
 	}
 	status := &ProviderSettlementStatus{}
-	var paidAt sql.NullTime
+	var paidAt, processorAvailableOn sql.NullTime
+	var processorFeeCents, processorNetCents sql.NullInt64
 	err := db.QueryRow(`
 		SELECT settlement.id::text, settlement.outcome_receipt_id::text,
 		       settlement.amount_cents, settlement.currency,
-		       checkout.id IS NOT NULL, COALESCE(payment.id::text,''), payment.paid_at
+		       checkout.id IS NOT NULL, COALESCE(payment.id::text,''), payment.paid_at,
+		       balance.id IS NOT NULL, availability.id IS NOT NULL,
+		       balance.fee_cents, balance.net_cents, balance.available_on
 		FROM provider_settlement_orders settlement
 		LEFT JOIN provider_settlement_checkout_sessions checkout
 		  ON checkout.provider_settlement_order_id=settlement.id
 		LEFT JOIN provider_settlement_payment_receipts payment
 		  ON payment.provider_settlement_order_id=settlement.id
+		LEFT JOIN provider_settlement_processor_balance_receipts balance
+		  ON balance.provider_settlement_payment_receipt_id=payment.id
+		LEFT JOIN provider_settlement_processor_availability_receipts availability
+		  ON availability.processor_balance_receipt_id=balance.id
 		WHERE settlement.id=$1::uuid`, orderID).Scan(
 		&status.OrderID, &status.OutcomeReceiptID, &status.AmountCents,
 		&status.Currency, &status.CheckoutCreated, &status.PaymentReceiptID, &paidAt,
+		&status.ProcessorNetRecorded, &status.ProcessorNetAvailable,
+		&processorFeeCents, &processorNetCents, &processorAvailableOn,
 	)
 	if err != nil {
 		return nil, err
@@ -380,6 +620,16 @@ func GetProviderSettlementStatus(db *sql.DB, orderID string) (*ProviderSettlemen
 	if paidAt.Valid {
 		value := paidAt.Time
 		status.PaidAt = &value
+	}
+	if processorFeeCents.Valid {
+		status.ProcessorFeeCents = processorFeeCents.Int64
+	}
+	if processorNetCents.Valid {
+		status.ProcessorNetCents = processorNetCents.Int64
+	}
+	if processorAvailableOn.Valid {
+		value := processorAvailableOn.Time
+		status.ProcessorAvailableOn = &value
 	}
 	return status, nil
 }

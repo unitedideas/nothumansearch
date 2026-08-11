@@ -255,6 +255,7 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		"migration_027_sha256=$MIGRATION_027_SHA",
 		"migration_028_sha256=$MIGRATION_028_SHA",
 		"migration_029_sha256=$MIGRATION_029_SHA",
+		"migration_030_sha256=$MIGRATION_030_SHA",
 		"TestProviderExchangePostgresReleaseRegressions",
 		"TestProtectedMigrationLedgerPostgres",
 		"preflight_binary_revision_bound=true",

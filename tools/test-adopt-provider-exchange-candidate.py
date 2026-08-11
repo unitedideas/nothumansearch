@@ -47,6 +47,7 @@ class CandidateAdoptionTest(unittest.TestCase):
                 "027_provider_pilot_review_evidence.sql",
                 "028_provider_commercial_proof_manifest.sql",
                 "029_provider_settlement_receipts.sql",
+                "030_provider_processor_net_receipts.sql",
             )
             for migration_name in migration_names:
                 (migrations / migration_name).write_text(
@@ -160,7 +161,7 @@ class CandidateAdoptionTest(unittest.TestCase):
             tampered_manifest = root / "tampered-release.manifest"
             tampered_manifest.write_text(
                 release_manifest.read_text(encoding="utf-8").replace(
-                    migration_receipts[-1], f"migration_029_sha256={'0' * 64}",
+                    migration_receipts[-1], f"migration_030_sha256={'0' * 64}",
                 ),
                 encoding="utf-8",
             )

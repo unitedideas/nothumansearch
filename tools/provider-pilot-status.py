@@ -791,13 +791,18 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         raw, "verified_converted_median_handoff_to_outcome_seconds", 0, MAX_MONEY_CENTS
     )
     settlement_integrity = _boolean(raw, "settlement_receipt_integrity_valid")
+    processor_net_integrity = _boolean(raw, "processor_net_receipt_integrity_valid")
     verified_paid_settlements = _integer(raw, "verified_provider_paid_settlements")
+    verified_available_settlements = _integer(raw, "verified_provider_available_settlements")
     rejected_settlements = _integer(raw, "rejected_provider_settlement_receipts")
+    rejected_processor_net = _integer(raw, "rejected_provider_processor_net_receipts")
     paid_latency_samples = _integer(raw, "verified_paid_latency_samples")
     paid_median_seconds = _integer(
         raw, "verified_paid_median_handoff_to_settlement_seconds", 0, MAX_MONEY_CENTS
     )
     verified_terms_paid = _money_map(raw.get("verified_terms_paid_by_currency"))
+    verified_processor_fees = _money_map(raw.get("verified_processor_fees_by_currency"))
+    verified_processor_net = _money_map(raw.get("verified_processor_net_by_currency"))
 
     mechanism_raw = raw.get("verified_mechanisms")
     if not isinstance(mechanism_raw, dict) or set(mechanism_raw) != set(CHARGE_EVENTS):
@@ -808,6 +813,7 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         if not isinstance(item, dict) or set(item) != {
             "charged_provider_companies", "offer_returns", "observed_handoffs", "accepted", "activated", "converted", "reversed",
             "paid_settlements", "paid_cents",
+            "available_settlements", "processor_fee_cents", "processor_net_cents",
             "paid_median_handoff_to_settlement_seconds",
         }:
             raise StatusError("invalid_response")
@@ -821,6 +827,9 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
             "reversed": _integer(item, "reversed"),
             "paid_settlements": _integer(item, "paid_settlements"),
             "paid_cents": _integer(item, "paid_cents", 0, MAX_MONEY_CENTS),
+            "available_settlements": _integer(item, "available_settlements"),
+            "processor_fee_cents": _integer(item, "processor_fee_cents", 0, MAX_MONEY_CENTS),
+            "processor_net_cents": _integer(item, "processor_net_cents", 0, MAX_MONEY_CENTS),
             "paid_median_handoff_to_settlement_seconds": _integer(
                 item, "paid_median_handoff_to_settlement_seconds", 0, MAX_MONEY_CENTS
             ),
@@ -836,6 +845,9 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
             or (projected["paid_settlements"] == 0) != (projected["paid_cents"] == 0)
             or (projected["paid_settlements"] == 0)
             != (projected["paid_median_handoff_to_settlement_seconds"] == 0)
+            or projected["available_settlements"] > projected["paid_settlements"]
+            or projected["processor_fee_cents"] + projected["processor_net_cents"]
+            != (projected["paid_cents"] if projected["available_settlements"] == projected["paid_settlements"] else 0)
         ):
             raise StatusError("invalid_response")
         verified_mechanisms[charge_event] = projected
@@ -848,6 +860,8 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         raise StatusError("invalid_response")
     if settlement_integrity != (rejected_settlements == 0):
         raise StatusError("invalid_response")
+    if processor_net_integrity != (rejected_processor_net == 0):
+        raise StatusError("invalid_response")
     if (
         verified_handoffs > verified_observed_handoffs
         or verified_activations > verified_handoffs
@@ -859,6 +873,7 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         or (verified_activations == 0 and activated_median_seconds != 0)
         or (verified_conversions == 0 and converted_median_seconds != 0)
         or paid_latency_samples != verified_paid_settlements
+        or verified_available_settlements > verified_paid_settlements
         or (verified_paid_settlements == 0) != (len(verified_terms_paid) == 0)
         or (verified_paid_settlements == 0 and paid_median_seconds != 0)
         or sum(item["observed_handoffs"] for item in verified_mechanisms.values())
@@ -872,11 +887,19 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         != verified_paid_settlements
         or sum(item["paid_cents"] for item in verified_mechanisms.values())
         != verified_terms_paid.get("usd", 0)
+        or sum(item["available_settlements"] for item in verified_mechanisms.values())
+        != verified_available_settlements
+        or sum(item["processor_fee_cents"] for item in verified_mechanisms.values())
+        != verified_processor_fees.get("usd", 0)
+        or sum(item["processor_net_cents"] for item in verified_mechanisms.values())
+        != verified_processor_net.get("usd", 0)
     ):
         raise StatusError("invalid_response")
     expected_met = (
         outcome_integrity
         and settlement_integrity
+        and processor_net_integrity
+        and verified_available_settlements == verified_paid_settlements
         and verified_companies >= PROOF_TARGETS["verified_provider_companies"]
         and verified_handoffs >= PROOF_TARGETS["verified_provider_accepted_handoffs"]
         and verified_activations >= PROOF_TARGETS["verified_provider_confirmed_activations"]
@@ -918,11 +941,16 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         "verified_activated_median_handoff_to_outcome_seconds": activated_median_seconds,
         "verified_converted_median_handoff_to_outcome_seconds": converted_median_seconds,
         "settlement_receipt_integrity_valid": settlement_integrity,
+        "processor_net_receipt_integrity_valid": processor_net_integrity,
         "verified_provider_paid_settlements": verified_paid_settlements,
+        "verified_provider_available_settlements": verified_available_settlements,
         "rejected_provider_settlement_receipts": rejected_settlements,
+        "rejected_provider_processor_net_receipts": rejected_processor_net,
         "verified_paid_latency_samples": paid_latency_samples,
         "verified_paid_median_handoff_to_settlement_seconds": paid_median_seconds,
         "verified_terms_paid_by_currency": verified_terms_paid,
+        "verified_processor_fees_by_currency": verified_processor_fees,
+        "verified_processor_net_by_currency": verified_processor_net,
         "verified_mechanisms": verified_mechanisms,
         "verified_prepaid_settled_by_currency": _money_map(raw.get("verified_prepaid_settled_by_currency")),
         "verified_prepaid_net_debited_by_currency": _money_map(raw.get("verified_prepaid_net_debited_by_currency")),

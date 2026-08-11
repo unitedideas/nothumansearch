@@ -1087,7 +1087,42 @@ func TestProtectedMigrationRequiresExactReleaseRevision(t *testing.T) {
 	}
 }
 
-func TestRequiredProtectedMigrationSetIsExactThrough029(t *testing.T) {
+func TestProviderProcessorNetProtectedContractCarries029(t *testing.T) {
+	prior := protectedMigrationSpecs["029_provider_settlement_receipts.sql"]
+	current, ok := protectedMigrationSpecs["030_provider_processor_net_receipts.sql"]
+	if !ok {
+		t.Fatal("provider processor-net migration has no protected schema contract")
+	}
+	if len(current.relations) != len(prior.relations)+4 || len(current.rules) != len(prior.rules)+4 ||
+		len(current.footprintRelations) != 4 || len(current.footprintRules) != 4 || len(current.footprintProbes) != 4 {
+		t.Fatalf("030 cumulative contract shape relations=%d/%d+4 rules=%d/%d+4 relation_delta=%d rule_delta=%d probes=%d",
+			len(current.relations), len(prior.relations), len(current.rules), len(prior.rules),
+			len(current.footprintRelations), len(current.footprintRules), len(current.footprintProbes))
+	}
+	if !reflect.DeepEqual(current.relations[:len(prior.relations)], prior.relations) ||
+		!reflect.DeepEqual(current.rules[:len(prior.rules)], prior.rules) {
+		t.Fatal("030 did not carry forward the exact 029 schema contract")
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "030_provider_processor_net_receipts.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"CREATE TABLE IF NOT EXISTS provider_settlement_processor_balance_receipts",
+		"CREATE TABLE IF NOT EXISTS provider_settlement_processor_availability_receipts",
+		"enforce_provider_settlement_processor_balance_receipt",
+		"enforce_provider_settlement_processor_availability_receipt",
+		"provider_settlement_processor_balance_receipts_no_update",
+		"provider_settlement_processor_availability_receipts_no_delete",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("030 processor-net contract is missing %q", required)
+		}
+	}
+}
+
+func TestRequiredProtectedMigrationSetIsExactThrough030(t *testing.T) {
 	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
 	if err != nil {
 		t.Fatal(err)
@@ -1097,17 +1132,17 @@ func TestRequiredProtectedMigrationSetIsExactThrough029(t *testing.T) {
 	}
 	withoutTerminal := make([]migrationFile, 0, len(migrations)-1)
 	for _, migration := range migrations {
-		if migration.name != "029_provider_settlement_receipts.sql" {
+		if migration.name != "030_provider_processor_net_receipts.sql" {
 			withoutTerminal = append(withoutTerminal, migration)
 		}
 	}
 	if err := validateRequiredProtectedMigrationSet(withoutTerminal); err == nil ||
-		!strings.Contains(err.Error(), "required protected migration is missing: 029_provider_settlement_receipts.sql") {
+		!strings.Contains(err.Error(), "required protected migration is missing: 030_provider_processor_net_receipts.sql") {
 		t.Fatalf("missing terminal protected migration error=%v", err)
 	}
-	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "030_unreviewed.sql"})
+	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "031_unreviewed.sql"})
 	if err := validateRequiredProtectedMigrationSet(withUnknown); err == nil ||
-		!strings.Contains(err.Error(), "protected migration set is not exact through 029_provider_settlement_receipts.sql") {
+		!strings.Contains(err.Error(), "protected migration set is not exact through 030_provider_processor_net_receipts.sql") {
 		t.Fatalf("extra protected migration error=%v", err)
 	}
 }
