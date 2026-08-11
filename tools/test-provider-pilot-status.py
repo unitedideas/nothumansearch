@@ -133,6 +133,9 @@ def proof_document():
             "verified_outcome_ledger_entries": 8,
             "rejected_outcome_ledger_entries": 0,
             "verified_provider_companies": 3,
+            "mechanism_assignment_contract": "nhs-provider-mechanism-arm-v1",
+            "mechanism_observation_unit": "returned_offer_opportunity_not_unique_agent",
+            "mechanism_counts_are_unique_agents": False,
             "verified_provider_offer_returns": 7,
             "verified_observed_handoffs": 7,
             "verified_provider_accepted_handoffs": 5,
@@ -158,21 +161,24 @@ def proof_document():
             "verified_processor_net_by_currency": {"usd": 456},
             "verified_mechanisms": {
                 "accepted": {
-                    "charged_provider_companies": 0, "offer_returns": 3, "observed_handoffs": 3, "accepted": 2, "activated": 0,
+                    "charged_provider_companies": 0, "offer_returns": 3, "max_bounty_cents": 500, "observed_handoffs": 3, "accepted": 2, "activated": 0,
                     "converted": 0, "reversed": 0, "paid_settlements": 0, "paid_cents": 0,
                     "available_settlements": 0, "processor_fee_cents": 0, "processor_net_cents": 0,
+                    "processor_net_sum_squares_cents2": 0, "max_processor_net_cents": 0,
                     "paid_median_handoff_to_settlement_seconds": 0,
                 },
                 "activated": {
-                    "charged_provider_companies": 1, "offer_returns": 2, "observed_handoffs": 2, "accepted": 2, "activated": 1,
+                    "charged_provider_companies": 1, "offer_returns": 2, "max_bounty_cents": 500, "observed_handoffs": 2, "accepted": 2, "activated": 1,
                     "converted": 0, "reversed": 0, "paid_settlements": 1, "paid_cents": 500,
                     "available_settlements": 1, "processor_fee_cents": 44, "processor_net_cents": 456,
+                    "processor_net_sum_squares_cents2": 207936, "max_processor_net_cents": 456,
                     "paid_median_handoff_to_settlement_seconds": 691200,
                 },
                 "converted": {
-                    "charged_provider_companies": 0, "offer_returns": 2, "observed_handoffs": 2, "accepted": 1, "activated": 1,
+                    "charged_provider_companies": 0, "offer_returns": 2, "max_bounty_cents": 500, "observed_handoffs": 2, "accepted": 1, "activated": 1,
                     "converted": 1, "reversed": 0, "paid_settlements": 0, "paid_cents": 0,
                     "available_settlements": 0, "processor_fee_cents": 0, "processor_net_cents": 0,
+                    "processor_net_sum_squares_cents2": 0, "max_processor_net_cents": 0,
                     "paid_median_handoff_to_settlement_seconds": 0,
                 },
             },
@@ -416,6 +422,22 @@ class ReadContractTest(unittest.TestCase):
             status_tool.project_proof(document, TEST_PILOT_ID)
         self.assertEqual(caught.exception.code, "invalid_response")
 
+    def test_proof_rejects_inconsistent_processor_net_moments(self):
+        document = proof_document()
+        document["proof"]["verified_mechanisms"]["activated"][
+            "processor_net_sum_squares_cents2"
+        ] += 1
+        with self.assertRaises(status_tool.StatusError) as caught:
+            status_tool.project_proof(document, TEST_PILOT_ID)
+        self.assertEqual(caught.exception.code, "invalid_response")
+
+    def test_proof_rejects_processor_net_above_returned_bounty(self):
+        document = proof_document()
+        document["proof"]["verified_mechanisms"]["activated"]["max_bounty_cents"] = 455
+        with self.assertRaises(status_tool.StatusError) as caught:
+            status_tool.project_proof(document, TEST_PILOT_ID)
+        self.assertEqual(caught.exception.code, "invalid_response")
+
     def test_proof_rejects_missing_mechanism_arm(self):
         document = proof_document()
         del document["proof"]["verified_mechanisms"]["converted"]
@@ -428,6 +450,13 @@ class ReadContractTest(unittest.TestCase):
         document["proof"]["verified_mechanisms"]["activated"][
             "charged_provider_companies"
         ] = 4
+        with self.assertRaises(status_tool.StatusError) as caught:
+            status_tool.project_proof(document, TEST_PILOT_ID)
+        self.assertEqual(caught.exception.code, "invalid_response")
+
+    def test_proof_rejects_unique_agent_confidence_claim(self):
+        document = proof_document()
+        document["proof"]["mechanism_counts_are_unique_agents"] = True
         with self.assertRaises(status_tool.StatusError) as caught:
             status_tool.project_proof(document, TEST_PILOT_ID)
         self.assertEqual(caught.exception.code, "invalid_response")

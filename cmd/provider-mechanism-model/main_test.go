@@ -9,7 +9,28 @@ const (
 	testMinProcessingNetPerThousand     int64 = 1
 	testMinProcessingNetLeadPerThousand int64 = 1
 	testMinProcessingNetLeadRate              = 0.001
+	testSelectionConfidenceLevel              = 0.95
+	testMaxProcessorNetPerOfferCents    int64 = 1_000_000
 )
+
+func attachFixtureMoments(evidence mechanismEvidence) mechanismEvidence {
+	if evidence.PaidSettlements == 0 {
+		return evidence
+	}
+	grossQuotient, grossRemainder := evidence.PaidCents/evidence.PaidSettlements, evidence.PaidCents%evidence.PaidSettlements
+	evidence.MaxBountyCents = grossQuotient
+	if grossRemainder > 0 {
+		evidence.MaxBountyCents++
+	}
+	netQuotient, netRemainder := evidence.ProcessorNetCents/evidence.PaidSettlements, evidence.ProcessorNetCents%evidence.PaidSettlements
+	evidence.MaxProcessorNetCents = netQuotient
+	if netRemainder > 0 {
+		evidence.MaxProcessorNetCents++
+	}
+	evidence.ProcessorNetSumSquares = netRemainder*(netQuotient+1)*(netQuotient+1) +
+		(evidence.PaidSettlements-netRemainder)*netQuotient*netQuotient
+	return evidence
+}
 
 func attachActualProcessorNetScenario(input scenario) scenario {
 	for name, evidence := range input.VerifiedMechanisms {
@@ -20,6 +41,7 @@ func attachActualProcessorNetScenario(input scenario) scenario {
 		evidence.AvailableSettlements = evidence.PaidSettlements
 		evidence.ProcessorFeeCents = fee
 		evidence.ProcessorNetCents = evidence.PaidCents - fee
+		evidence = attachFixtureMoments(evidence)
 		input.VerifiedMechanisms[name] = evidence
 	}
 	return input
@@ -35,6 +57,7 @@ func attachActualProcessorNetProof(proof *verifiedProof) {
 		evidence.AvailableSettlements = evidence.PaidSettlements
 		evidence.ProcessorFeeCents = fee
 		evidence.ProcessorNetCents = evidence.PaidCents - fee
+		evidence = attachFixtureMoments(evidence)
 		fees += fee
 		net += evidence.ProcessorNetCents
 		proof.VerifiedMechanisms[name] = evidence
@@ -159,7 +182,9 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 	zero := int64(0)
 	proof := verifiedProof{
 		PilotID: "11111111-1111-4111-8111-111111111111", DemandTopic: "developer-tools", Status: "closed",
-		OutcomeIntegrity: &truth, RejectedOutcomes: &zero, RejectedLedger: &zero,
+		MechanismAssignmentContract: "nhs-provider-mechanism-arm-v1", MechanismObservationUnit: "returned_offer_opportunity_not_unique_agent",
+		MechanismCountsAreUniqueAgents: &falsity,
+		OutcomeIntegrity:               &truth, RejectedOutcomes: &zero, RejectedLedger: &zero,
 		ObservedHandoffs: 50, Accepted: 30, Activated: 12, Converted: 3,
 		AcceptedLatencySamples: 30, ActivatedLatencySamples: 12, ConvertedLatencySamples: 3,
 		AcceptedMedianSeconds: 86400, ActivatedMedianSeconds: 604800, ConvertedMedianSeconds: 2592000,
@@ -189,6 +214,7 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel: testSelectionConfidenceLevel, MaxProcessorNetPerOfferCents: testMaxProcessorNetPerOfferCents,
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -198,12 +224,13 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Contract != "nhs-provider-mechanism-model-v4" || report.Synthetic ||
-		report.EvidenceKind != "verified_closed_pilot" || report.SelectedEvent != "activated" ||
+	if report.Contract != "nhs-provider-mechanism-model-v5" || report.Synthetic ||
+		report.EvidenceKind != "verified_closed_pilot" || report.SelectedEvent != "" ||
 		!report.CollectedRevenueEvidence || report.VerifiedPaidSettlements != 3 ||
-		report.Results[0].ValueKind != "verified_processor_net_available" ||
+		report.Results[0].ChargeEvent != "activated" || report.Results[0].ValueKind != "verified_processor_net_available" ||
 		report.RequiredNetLeadPerThousand != testMinProcessingNetLeadPerThousand ||
-		report.RequiredNetLeadRate != testMinProcessingNetLeadRate {
+		report.RequiredNetLeadRate != testMinProcessingNetLeadRate || report.ConfidenceSeparated ||
+		report.SelectionReason != "top mechanism is not separated from the runner-up at the declared simultaneous processing-net confidence level" {
 		t.Fatalf("unexpected verified report: %+v", report)
 	}
 
@@ -221,6 +248,11 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		t.Fatal("expected missing privacy-boundary field to fail closed")
 	}
 	proof.RawQueriesSold = &falsity
+	proof.MechanismCountsAreUniqueAgents = &truth
+	if _, err := scenarioFromVerifiedProof(proof, decision); err == nil {
+		t.Fatal("expected unique-agent confidence claim to fail closed")
+	}
+	proof.MechanismCountsAreUniqueAgents = &falsity
 	proof.ProcessorFeesByCurrency["eur"] = 1
 	if _, err := scenarioFromVerifiedProof(proof, decision); err == nil {
 		t.Fatal("expected non-USD processor fee aggregate to fail closed")
@@ -237,7 +269,9 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 	zero := int64(0)
 	proof := verifiedProof{
 		PilotID: "11111111-1111-4111-8111-111111111111", DemandTopic: "developer-tools", Status: "closed",
-		OutcomeIntegrity: &truth, RejectedOutcomes: &zero, RejectedLedger: &zero,
+		MechanismAssignmentContract: "nhs-provider-mechanism-arm-v1", MechanismObservationUnit: "returned_offer_opportunity_not_unique_agent",
+		MechanismCountsAreUniqueAgents: &falsity,
+		OutcomeIntegrity:               &truth, RejectedOutcomes: &zero, RejectedLedger: &zero,
 		ObservedHandoffs: 6, Accepted: 6, Activated: 3, Converted: 1,
 		AcceptedLatencySamples: 6, ActivatedLatencySamples: 3, ConvertedLatencySamples: 1,
 		AcceptedMedianSeconds: 3600, ActivatedMedianSeconds: 86400, ConvertedMedianSeconds: 604800,
@@ -258,6 +292,7 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel: testSelectionConfidenceLevel, MaxProcessorNetPerOfferCents: testMaxProcessorNetPerOfferCents,
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -277,6 +312,7 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel: testSelectionConfidenceLevel, MaxProcessorNetPerOfferCents: testMaxProcessorNetPerOfferCents,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -317,6 +353,7 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel: testSelectionConfidenceLevel, MaxProcessorNetPerOfferCents: testMaxProcessorNetPerOfferCents,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -362,6 +399,7 @@ func TestEvaluateVerifiedMechanismsRequiresEveryProviderInEveryArm(t *testing.T)
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel: testSelectionConfidenceLevel, MaxProcessorNetPerOfferCents: testMaxProcessorNetPerOfferCents,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -405,6 +443,7 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel: testSelectionConfidenceLevel, MaxProcessorNetPerOfferCents: testMaxProcessorNetPerOfferCents,
 		MaxReversalRate: 0.2, PaidSettlements: 3,
 		PaidByCurrency: map[string]int64{"usd": 8000},
 		VerifiedMechanisms: map[string]mechanismEvidence{
@@ -429,8 +468,9 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.SelectedEvent != "accepted" {
-		t.Fatalf("selected event = %q, want accepted by revenue per returned offer", report.SelectedEvent)
+	if report.SelectedEvent != "" || report.Results[0].ChargeEvent != "accepted" ||
+		report.SelectionReason != "top mechanism is not separated from the runner-up at the declared simultaneous processing-net confidence level" {
+		t.Fatalf("small-sample report did not retain accepted as the unselected point-estimate leader: %+v", report)
 	}
 	if report.Results[0].RevenuePerOfferReturnCents != 300 ||
 		report.Results[0].RevenuePerHandoffCents != 300 {
@@ -456,6 +496,8 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 		MinProcessingNetPerThousand:     testMinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand,
 		MinProcessingNetLeadRate:        testMinProcessingNetLeadRate,
+		SelectionConfidenceLevel:        testSelectionConfidenceLevel,
+		MaxProcessorNetPerOfferCents:    testMaxProcessorNetPerOfferCents,
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
 				ChargedProviderCompanies: 3, OfferReturns: 10, ObservedHandoffs: 10,
@@ -478,8 +520,9 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.SelectedEvent != "activated" {
-		t.Fatalf("selected event = %q, want activated by processing-net value", report.SelectedEvent)
+	if report.SelectedEvent != "" || report.Results[0].ChargeEvent != "activated" ||
+		report.SelectionReason != "top mechanism is not separated from the runner-up at the declared simultaneous processing-net confidence level" {
+		t.Fatalf("small-sample report did not retain activated as the unselected processing-net leader: %+v", report)
 	}
 	if report.Results[0].RevenuePerOfferReturnCents != 290 ||
 		report.Results[0].ActualProcessorFeeCents != 116 ||
@@ -530,5 +573,52 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 		if candidate.Viable || candidate.Failure != "below processing-net revenue-per-return floor" {
 			t.Fatalf("processing-net floor not applied to %s: %+v", candidate.ChargeEvent, candidate)
 		}
+	}
+}
+
+func TestEvaluateVerifiedMechanismsRequiresAndAcceptsConfidenceSeparation(t *testing.T) {
+	evidence := func(paidSettlements int64) mechanismEvidence {
+		const netPerSettlement = int64(100)
+		return mechanismEvidence{
+			ChargedProviderCompanies: 3,
+			OfferReturns:             10000,
+			MaxBountyCents:           netPerSettlement,
+			ObservedHandoffs:         8000,
+			Accepted:                 7000,
+			Activated:                5000,
+			Converted:                3000,
+			PaidSettlements:          paidSettlements,
+			AvailableSettlements:     paidSettlements,
+			PaidCents:                paidSettlements * netPerSettlement,
+			ProcessorNetCents:        paidSettlements * netPerSettlement,
+			ProcessorNetSumSquares:   paidSettlements * netPerSettlement * netPerSettlement,
+			MaxProcessorNetCents:     netPerSettlement,
+			PaidMedianSeconds:        86400,
+		}
+	}
+	input := scenario{
+		Name: "confidence-separated", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
+		Handoffs: 24000, Accepted: 21000, Activated: 15000, Converted: 9000,
+		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
+		MinChargedEvents: 5, MinChargedProviderCompanies: 3,
+		MinOfferReturnsPerMechanism: 20, MinPaidSettlementsPerMechanism: 1,
+		MaxReversalRate: 0.2, MinProcessingNetMarginRate: 0.5,
+		MinProcessingNetPerThousand: 1000, MinProcessingNetLeadPerThousand: 1157,
+		MinProcessingNetLeadRate: 0.2, SelectionConfidenceLevel: 0.95,
+		MaxProcessorNetPerOfferCents: 100,
+		PaidSettlements:              15000, PaidByCurrency: map[string]int64{"usd": 1500000},
+		VerifiedMechanisms: map[string]mechanismEvidence{
+			"accepted":  evidence(7000),
+			"activated": evidence(5000),
+			"converted": evidence(3000),
+		},
+	}
+	report, err := evaluate(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.SelectedEvent != "accepted" || !report.ConfidenceSeparated ||
+		report.Results[0].ProcessingNetLowerPerThousand <= report.Results[1].ProcessingNetUpperPerThousand {
+		t.Fatalf("separated evidence did not select accepted: %+v", report)
 	}
 }

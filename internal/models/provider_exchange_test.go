@@ -56,17 +56,20 @@ func TestProviderMechanismArmAssignmentReturnsOneArmPerReceipt(t *testing.T) {
 		mechanismArmFixture("activated", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
 		mechanismArmFixture("converted", "cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
 	}
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	for i := 0; i < 1000; i++ {
 		selected := selectProviderMechanismArms("nhs_sr_"+strconv.Itoa(i), offers)
 		if len(selected) != 1 {
 			t.Fatalf("search %d selected %d arms, want exactly one", i, len(selected))
 		}
-		seen[selected[0].ChargeEvent] = true
+		seen[selected[0].ChargeEvent]++
 	}
 	for _, chargeEvent := range []string{"accepted", "activated", "converted"} {
-		if !seen[chargeEvent] {
+		if seen[chargeEvent] == 0 {
 			t.Fatalf("deterministic assignment never selected %s", chargeEvent)
+		}
+		if seen[chargeEvent] < 250 || seen[chargeEvent] > 420 {
+			t.Fatalf("assignment count for %s = %d, outside regression balance bound", chargeEvent, seen[chargeEvent])
 		}
 	}
 }

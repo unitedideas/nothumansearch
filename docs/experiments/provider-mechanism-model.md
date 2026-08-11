@@ -37,7 +37,7 @@ privacy-safe projection produced by `provider-pilot-status.py`:
 ```sh
 go run ./cmd/provider-mechanism-model \
   -proof-status /path/to/redacted-closed-pilot-proof.json \
-  -policy docs/experiments/provider-mechanism-policy-v2.json
+  -policy docs/experiments/provider-mechanism-policy-v3.json
 ```
 
 Proof ingestion fails closed unless the evidence identifies the closed
@@ -69,17 +69,28 @@ select a winner whose transaction pattern retains less value.
 Point estimates can be real and still be too close to support a decision. The
 verified policy therefore requires the top viable arm to exceed the runner-up
 by both an absolute processor-net value per 1,000 returns and a relative lead.
-Policy v2 sets those floors to 1,157 cents, the current 31-day NHS
+Policy v3 sets those floors to 1,157 cents, the current 31-day NHS
 infrastructure baseline, and 20%. Both must pass. The report exposes the
 required and observed leads; a near tie leaves selection empty.
 
-This is an economic-decisiveness rule, not a statistical-confidence claim. A
-distribution-free or empirical-Bernstein comparison would require a
-predeclared per-offer bound and more per-offer dispersion evidence than the
-current privacy-safe aggregate contains. Applying one to aggregate totals would
-manufacture certainty. The research basis for that boundary is Maurer and
-Pontil, “Empirical Bernstein Bounds and Sample Variance Penalization,” Theorem
-4: https://arxiv.org/abs/0907.3740.
+Policy v3 also preregisters a 95% confidence level and a 20,000-cent maximum
+processor net per returned offer. The private proof exposes only each arm's
+maximum offered bounty, exact available-net sum, net sum of squares, and maximum
+net settlement. Unsettled returned offers are zero observations. Those
+aggregates are sufficient to apply Maurer and Pontil's empirical-Bernstein
+bound without exporting ticket, provider, query, prompt, or identity data.
+
+The selector applies a union bound across both sides of all three mechanism
+intervals. A point-estimate leader remains unselected unless its lower
+processor-net confidence bound exceeds the runner-up's upper bound. The
+predeclared maximum must cover every returned offer's immutable bounty, so an
+observed maximum cannot quietly become a data-dependent support assumption.
+The proof also binds `nhs-provider-mechanism-arm-v1` and labels the observation
+unit `returned_offer_opportunity_not_unique_agent`. The interval therefore
+describes randomized returned-offer opportunities; it is never reported as a
+count of unique agents or people.
+The research basis is Maurer and Pontil, “Empirical Bernstein Bounds and Sample
+Variance Penalization,” Theorem 4: https://arxiv.org/abs/0907.3740.
 
 The initial 3/5/2/1 milestone proves the revenue rails but cannot by itself name
 a strongest mechanism. Aggregate payment from one charge event cannot qualify

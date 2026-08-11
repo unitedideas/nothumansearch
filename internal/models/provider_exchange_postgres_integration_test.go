@@ -5217,6 +5217,13 @@ func exerciseProviderCommercialProofPostgres(
 		paidProof.VerifiedPaidMedianSeconds < 0 {
 		t.Fatalf("exact paid terms proof aggregate = %#v", paidProof)
 	}
+	paidMechanism, ok := paidProof.VerifiedMechanisms[termsOffer.ChargeEvent]
+	expectedProcessorNet := settlementOrder.AmountCents - 59
+	if !ok || paidMechanism.MaxBountyCents < settlementOrder.AmountCents ||
+		paidMechanism.MaxProcessorNetCents != expectedProcessorNet ||
+		paidMechanism.ProcessorNetSumSquares != expectedProcessorNet*expectedProcessorNet {
+		t.Fatalf("exact paid terms dispersion aggregate = %#v", paidMechanism)
+	}
 	afterTermsCharge := readPostgresVerifiedProof(t, db, signer)
 	if afterTermsCharge.renewals != positiveProof.renewals {
 		t.Fatalf("pre-charge terms extension counted after later charge: before=%#v after=%#v", positiveProof, afterTermsCharge)

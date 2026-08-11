@@ -118,8 +118,13 @@ agents in that arm. The policy declares the minimum processor-net margin and
 minimum processor-net cents per 1,000 returns, but never supplies a modeled fee
 for winner selection. It also declares absolute and relative processor-net lead
 floors; a near tie leaves selection empty. These are economic-decisiveness
-constraints, not a statistical-significance claim, and the result must not be
-called full profit.
+constraints. The proof also carries per-arm maximum offered bounty, exact
+available-net sum of squares, and maximum net settlement. The selector requires
+the leader's 95% simultaneous lower confidence bound to exceed the runner-up's
+upper bound under the policy's predeclared per-offer maximum. The result must
+bind the randomized arm-assignment contract and label its unit as returned
+offer opportunities, not unique agents. It must not be called full profit or a
+unique-agent confidence interval.
 The initial 3-provider, 5-accepted-handoff, 2-activation, 1-renewal milestone
 proves that the consent, attribution, outcome, billing, renewal, and settlement
 rails can produce real revenue. It does not by itself select a strongest

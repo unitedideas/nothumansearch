@@ -41,6 +41,8 @@ const (
 	ProviderActionTicketPreparationV2           = "nhs-action-ticket-preparation-v2"
 	ProviderActionHandoffContractV1             = "nhs-action-handoff-v1"
 	ProviderActionHandoffConsentV1              = "nhs-provider-handoff-consent-v1"
+	ProviderMechanismAssignmentContractV1       = "nhs-provider-mechanism-arm-v1"
+	ProviderMechanismObservationUnitV1          = "returned_offer_opportunity_not_unique_agent"
 	ProviderControlledIntentDisclosureConsentV1 = "nhs-provider-controlled-intent-disclosure-consent-v1"
 	ProviderControlledIntentResolverV1          = "nhs-provider-controlled-intent-resolver-v1"
 	// The bounded launch pilot uses exact capped CPA terms only. Prepaid
@@ -565,6 +567,9 @@ type ProviderExchangeProof struct {
 	VerifiedOutcomeLedgerEntries         int                               `json:"verified_outcome_ledger_entries"`
 	RejectedOutcomeLedgerEntries         int                               `json:"rejected_outcome_ledger_entries"`
 	VerifiedProviderCompanies            int                               `json:"verified_provider_companies"`
+	MechanismAssignmentContract          string                            `json:"mechanism_assignment_contract"`
+	MechanismObservationUnit             string                            `json:"mechanism_observation_unit"`
+	MechanismCountsAreUniqueAgents       bool                              `json:"mechanism_counts_are_unique_agents"`
 	VerifiedProviderOfferReturns         int                               `json:"verified_provider_offer_returns"`
 	VerifiedObservedHandoffs             int                               `json:"verified_observed_handoffs"`
 	VerifiedProviderAcceptedHandoffs     int                               `json:"verified_provider_accepted_handoffs"`
@@ -610,6 +615,7 @@ type ProviderExchangeProof struct {
 type ProviderMechanismProof struct {
 	ChargedProviderCompanies int   `json:"charged_provider_companies"`
 	OfferReturns             int   `json:"offer_returns"`
+	MaxBountyCents           int64 `json:"max_bounty_cents"`
 	ObservedHandoffs         int   `json:"observed_handoffs"`
 	Accepted                 int   `json:"accepted"`
 	Activated                int   `json:"activated"`
@@ -620,6 +626,8 @@ type ProviderMechanismProof struct {
 	PaidCents                int64 `json:"paid_cents"`
 	ProcessorFeeCents        int64 `json:"processor_fee_cents"`
 	ProcessorNetCents        int64 `json:"processor_net_cents"`
+	ProcessorNetSumSquares   int64 `json:"processor_net_sum_squares_cents2"`
+	MaxProcessorNetCents     int64 `json:"max_processor_net_cents"`
 	PaidMedianSeconds        int64 `json:"paid_median_handoff_to_settlement_seconds"`
 }
 
@@ -3788,7 +3796,7 @@ func selectProviderMechanismArms(searchPublicID string, offers []PublicProviderO
 			continue
 		}
 		sum := sha256.Sum256([]byte(strings.Join([]string{
-			"nhs-provider-mechanism-arm-v1", searchPublicID,
+			ProviderMechanismAssignmentContractV1, searchPublicID,
 			key.claimID, key.pilotID, key.actionType,
 		}, "\x00")))
 		armNames := [...]string{"accepted", "activated", "converted"}
@@ -5956,6 +5964,9 @@ func getProviderExchangeProof(
 	proof.OutcomeReceiptIntegrityValid = true
 	proof.SettlementReceiptIntegrityValid = true
 	proof.ProcessorNetReceiptIntegrityValid = true
+	proof.MechanismAssignmentContract = ProviderMechanismAssignmentContractV1
+	proof.MechanismObservationUnit = ProviderMechanismObservationUnitV1
+	proof.MechanismCountsAreUniqueAgents = false
 	proof.VerifiedTermsPaidByCurrency = map[string]int64{}
 	proof.VerifiedProcessorFeesByCurrency = map[string]int64{}
 	proof.VerifiedProcessorNetByCurrency = map[string]int64{}
@@ -6026,7 +6037,8 @@ func getProviderExchangeProof(
 	mechanismHandoffRows.Close()
 
 	mechanismOfferRows, err := tx.Query(providerVerifiedCommercialCTEs+`
-		SELECT returned.charge_event_snapshot, COUNT(*)::int
+		SELECT returned.charge_event_snapshot, COUNT(*)::int,
+		       COALESCE(MAX(returned.bounty_cents_snapshot),0)::bigint
 		FROM provider_offers_returned returned
 		JOIN search_receipts receipt
 		  ON receipt.id=returned.search_receipt_id
@@ -6058,16 +6070,18 @@ func getProviderExchangeProof(
 	for mechanismOfferRows.Next() {
 		var chargeEvent string
 		var count int
-		if err := mechanismOfferRows.Scan(&chargeEvent, &count); err != nil {
+		var maxBountyCents int64
+		if err := mechanismOfferRows.Scan(&chargeEvent, &count, &maxBountyCents); err != nil {
 			mechanismOfferRows.Close()
 			return nil, err
 		}
 		evidence, ok := proof.VerifiedMechanisms[chargeEvent]
-		if !ok || count < 0 {
+		if !ok || count < 0 || maxBountyCents < 1 || maxBountyCents > ProviderBountyMaximumCents {
 			mechanismOfferRows.Close()
 			return nil, ErrInvalidProviderExchange
 		}
 		evidence.OfferReturns = count
+		evidence.MaxBountyCents = maxBountyCents
 		proof.VerifiedMechanisms[chargeEvent] = evidence
 		proof.VerifiedProviderOfferReturns += count
 	}
@@ -6429,6 +6443,15 @@ func getProviderExchangeProof(
 			evidence.AvailableSettlements++
 			evidence.ProcessorFeeCents += balanceFee.Int64
 			evidence.ProcessorNetCents += balanceNet.Int64
+			netSquare := balanceNet.Int64 * balanceNet.Int64
+			if evidence.ProcessorNetSumSquares > (1<<63-1)-netSquare {
+				settlementRows.Close()
+				return nil, ErrInvalidProviderExchange
+			}
+			evidence.ProcessorNetSumSquares += netSquare
+			if balanceNet.Int64 > evidence.MaxProcessorNetCents {
+				evidence.MaxProcessorNetCents = balanceNet.Int64
+			}
 		} else {
 			proof.ProcessorNetReceiptIntegrityValid = false
 			proof.RejectedProviderProcessorNetReceipts++

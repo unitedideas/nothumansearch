@@ -9,6 +9,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
+	"math/big"
 	"os"
 	"sort"
 )
@@ -32,6 +34,8 @@ type scenario struct {
 	MinProcessingNetPerThousand     int64                        `json:"min_processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
 	MinProcessingNetLeadPerThousand int64                        `json:"min_processing_net_lead_per_1000_offer_returns_cents,omitempty"`
 	MinProcessingNetLeadRate        float64                      `json:"min_processing_net_lead_rate,omitempty"`
+	SelectionConfidenceLevel        float64                      `json:"selection_confidence_level,omitempty"`
+	MaxProcessorNetPerOfferCents    int64                        `json:"max_processor_net_cents_per_offer,omitempty"`
 	BountyPointsCents               []int64                      `json:"bounty_points_cents"`
 	ChargeEvents                    []chargeEvent                `json:"charge_events"`
 	PaidSettlements                 int64                        `json:"paid_settlements,omitempty"`
@@ -43,6 +47,7 @@ type scenario struct {
 type mechanismEvidence struct {
 	ChargedProviderCompanies int64 `json:"charged_provider_companies"`
 	OfferReturns             int64 `json:"offer_returns"`
+	MaxBountyCents           int64 `json:"max_bounty_cents"`
 	ObservedHandoffs         int64 `json:"observed_handoffs"`
 	Accepted                 int64 `json:"accepted"`
 	Activated                int64 `json:"activated"`
@@ -53,6 +58,8 @@ type mechanismEvidence struct {
 	PaidCents                int64 `json:"paid_cents"`
 	ProcessorFeeCents        int64 `json:"processor_fee_cents"`
 	ProcessorNetCents        int64 `json:"processor_net_cents"`
+	ProcessorNetSumSquares   int64 `json:"processor_net_sum_squares_cents2"`
+	MaxProcessorNetCents     int64 `json:"max_processor_net_cents"`
 	PaidMedianSeconds        int64 `json:"paid_median_handoff_to_settlement_seconds"`
 }
 
@@ -62,26 +69,28 @@ type chargeEvent struct {
 }
 
 type result struct {
-	ChargeEvent                string  `json:"charge_event"`
-	ChargedProviderCompanies   int64   `json:"charged_provider_companies,omitempty"`
-	BountyCents                int64   `json:"bounty_cents"`
-	ChargedEvents              int64   `json:"charged_events"`
-	GrossBillableCents         int64   `json:"gross_billable_cents"`
-	RevenuePerHandoffCents     float64 `json:"revenue_per_handoff_cents"`
-	RevenuePerOfferReturnCents float64 `json:"revenue_per_offer_return_cents"`
-	CostPerActivationCents     float64 `json:"cost_per_activation_cents"`
-	CostPerConversionCents     float64 `json:"cost_per_conversion_cents"`
-	MedianDaysToCharge         float64 `json:"median_days_to_charge"`
-	ValueKind                  string  `json:"value_kind"`
-	VerifiedPaidCents          int64   `json:"verified_paid_cents,omitempty"`
-	VerifiedPaidSettlements    int64   `json:"verified_paid_settlements,omitempty"`
-	ActualProcessorFeeCents    int64   `json:"actual_processor_fee_cents,omitempty"`
-	ActualProcessorNetCents    int64   `json:"actual_processor_net_cents,omitempty"`
-	ProcessingNetPerThousand   float64 `json:"processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
-	ProcessingNetMarginRate    float64 `json:"processing_net_margin_rate,omitempty"`
-	ReversalRate               float64 `json:"reversal_rate"`
-	Viable                     bool    `json:"viable"`
-	Failure                    string  `json:"failure,omitempty"`
+	ChargeEvent                   string  `json:"charge_event"`
+	ChargedProviderCompanies      int64   `json:"charged_provider_companies,omitempty"`
+	BountyCents                   int64   `json:"bounty_cents"`
+	ChargedEvents                 int64   `json:"charged_events"`
+	GrossBillableCents            int64   `json:"gross_billable_cents"`
+	RevenuePerHandoffCents        float64 `json:"revenue_per_handoff_cents"`
+	RevenuePerOfferReturnCents    float64 `json:"revenue_per_offer_return_cents"`
+	CostPerActivationCents        float64 `json:"cost_per_activation_cents"`
+	CostPerConversionCents        float64 `json:"cost_per_conversion_cents"`
+	MedianDaysToCharge            float64 `json:"median_days_to_charge"`
+	ValueKind                     string  `json:"value_kind"`
+	VerifiedPaidCents             int64   `json:"verified_paid_cents,omitempty"`
+	VerifiedPaidSettlements       int64   `json:"verified_paid_settlements,omitempty"`
+	ActualProcessorFeeCents       int64   `json:"actual_processor_fee_cents,omitempty"`
+	ActualProcessorNetCents       int64   `json:"actual_processor_net_cents,omitempty"`
+	ProcessingNetPerThousand      float64 `json:"processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
+	ProcessingNetMarginRate       float64 `json:"processing_net_margin_rate,omitempty"`
+	ProcessingNetLowerPerThousand float64 `json:"processing_net_lower_confidence_per_1000_offer_returns_cents,omitempty"`
+	ProcessingNetUpperPerThousand float64 `json:"processing_net_upper_confidence_per_1000_offer_returns_cents,omitempty"`
+	ReversalRate                  float64 `json:"reversal_rate"`
+	Viable                        bool    `json:"viable"`
+	Failure                       string  `json:"failure,omitempty"`
 }
 
 type report struct {
@@ -102,6 +111,9 @@ type report struct {
 	RequiredNetLeadRate        float64          `json:"required_processing_net_lead_rate,omitempty"`
 	ObservedNetLeadPerThousand float64          `json:"observed_processing_net_lead_per_1000_offer_returns_cents,omitempty"`
 	ObservedNetLeadRate        float64          `json:"observed_processing_net_lead_rate,omitempty"`
+	SelectionConfidenceLevel   float64          `json:"selection_confidence_level,omitempty"`
+	ConfidenceSeparated        bool             `json:"processing_net_confidence_separated"`
+	ConfidenceScope            string           `json:"confidence_scope,omitempty"`
 	ProductionChanged          bool             `json:"production_changed"`
 }
 
@@ -119,6 +131,8 @@ type policy struct {
 	MinProcessingNetPerThousand     int64   `json:"min_processing_net_revenue_per_1000_offer_returns_cents"`
 	MinProcessingNetLeadPerThousand int64   `json:"min_processing_net_lead_per_1000_offer_returns_cents"`
 	MinProcessingNetLeadRate        float64 `json:"min_processing_net_lead_rate"`
+	SelectionConfidenceLevel        float64 `json:"selection_confidence_level"`
+	MaxProcessorNetPerOfferCents    int64   `json:"max_processor_net_cents_per_offer"`
 }
 
 type proofStatusDocument struct {
@@ -126,40 +140,43 @@ type proofStatusDocument struct {
 }
 
 type verifiedProof struct {
-	PilotID                 string                       `json:"provider_pilot_epoch_id"`
-	DemandTopic             string                       `json:"provider_pilot_demand_topic"`
-	Status                  string                       `json:"provider_pilot_status"`
-	OutcomeIntegrity        *bool                        `json:"outcome_receipt_integrity_valid"`
-	RejectedOutcomes        *int64                       `json:"rejected_outcome_receipts"`
-	RejectedLedger          *int64                       `json:"rejected_outcome_ledger_entries"`
-	ObservedHandoffs        int64                        `json:"verified_observed_handoffs"`
-	Accepted                int64                        `json:"verified_provider_accepted_handoffs"`
-	Activated               int64                        `json:"verified_provider_confirmed_activations"`
-	Converted               int64                        `json:"verified_provider_confirmed_conversions"`
-	AcceptedLatencySamples  int64                        `json:"verified_accepted_latency_samples"`
-	ActivatedLatencySamples int64                        `json:"verified_activated_latency_samples"`
-	ConvertedLatencySamples int64                        `json:"verified_converted_latency_samples"`
-	AcceptedMedianSeconds   int64                        `json:"verified_accepted_median_handoff_to_outcome_seconds"`
-	ActivatedMedianSeconds  int64                        `json:"verified_activated_median_handoff_to_outcome_seconds"`
-	ConvertedMedianSeconds  int64                        `json:"verified_converted_median_handoff_to_outcome_seconds"`
-	PilotThresholdsMet      *bool                        `json:"pilot_thresholds_met"`
-	OrganicRankSold         *bool                        `json:"organic_rank_sold"`
-	RawQueriesSold          *bool                        `json:"raw_queries_sold"`
-	RawPromptsSold          *bool                        `json:"raw_prompts_sold"`
-	AgentIdentitiesSold     *bool                        `json:"agent_identities_sold"`
-	PrincipalIdentitiesSold *bool                        `json:"principal_identities_sold"`
-	SettlementIntegrity     *bool                        `json:"settlement_receipt_integrity_valid"`
-	ProcessorNetIntegrity   *bool                        `json:"processor_net_receipt_integrity_valid"`
-	PaidSettlements         int64                        `json:"verified_provider_paid_settlements"`
-	AvailableSettlements    int64                        `json:"verified_provider_available_settlements"`
-	RejectedSettlements     *int64                       `json:"rejected_provider_settlement_receipts"`
-	RejectedProcessorNet    *int64                       `json:"rejected_provider_processor_net_receipts"`
-	PaidLatencySamples      int64                        `json:"verified_paid_latency_samples"`
-	PaidMedianSeconds       int64                        `json:"verified_paid_median_handoff_to_settlement_seconds"`
-	PaidByCurrency          map[string]int64             `json:"verified_terms_paid_by_currency"`
-	ProcessorFeesByCurrency map[string]int64             `json:"verified_processor_fees_by_currency"`
-	ProcessorNetByCurrency  map[string]int64             `json:"verified_processor_net_by_currency"`
-	VerifiedMechanisms      map[string]mechanismEvidence `json:"verified_mechanisms"`
+	PilotID                        string                       `json:"provider_pilot_epoch_id"`
+	DemandTopic                    string                       `json:"provider_pilot_demand_topic"`
+	Status                         string                       `json:"provider_pilot_status"`
+	MechanismAssignmentContract    string                       `json:"mechanism_assignment_contract"`
+	MechanismObservationUnit       string                       `json:"mechanism_observation_unit"`
+	MechanismCountsAreUniqueAgents *bool                        `json:"mechanism_counts_are_unique_agents"`
+	OutcomeIntegrity               *bool                        `json:"outcome_receipt_integrity_valid"`
+	RejectedOutcomes               *int64                       `json:"rejected_outcome_receipts"`
+	RejectedLedger                 *int64                       `json:"rejected_outcome_ledger_entries"`
+	ObservedHandoffs               int64                        `json:"verified_observed_handoffs"`
+	Accepted                       int64                        `json:"verified_provider_accepted_handoffs"`
+	Activated                      int64                        `json:"verified_provider_confirmed_activations"`
+	Converted                      int64                        `json:"verified_provider_confirmed_conversions"`
+	AcceptedLatencySamples         int64                        `json:"verified_accepted_latency_samples"`
+	ActivatedLatencySamples        int64                        `json:"verified_activated_latency_samples"`
+	ConvertedLatencySamples        int64                        `json:"verified_converted_latency_samples"`
+	AcceptedMedianSeconds          int64                        `json:"verified_accepted_median_handoff_to_outcome_seconds"`
+	ActivatedMedianSeconds         int64                        `json:"verified_activated_median_handoff_to_outcome_seconds"`
+	ConvertedMedianSeconds         int64                        `json:"verified_converted_median_handoff_to_outcome_seconds"`
+	PilotThresholdsMet             *bool                        `json:"pilot_thresholds_met"`
+	OrganicRankSold                *bool                        `json:"organic_rank_sold"`
+	RawQueriesSold                 *bool                        `json:"raw_queries_sold"`
+	RawPromptsSold                 *bool                        `json:"raw_prompts_sold"`
+	AgentIdentitiesSold            *bool                        `json:"agent_identities_sold"`
+	PrincipalIdentitiesSold        *bool                        `json:"principal_identities_sold"`
+	SettlementIntegrity            *bool                        `json:"settlement_receipt_integrity_valid"`
+	ProcessorNetIntegrity          *bool                        `json:"processor_net_receipt_integrity_valid"`
+	PaidSettlements                int64                        `json:"verified_provider_paid_settlements"`
+	AvailableSettlements           int64                        `json:"verified_provider_available_settlements"`
+	RejectedSettlements            *int64                       `json:"rejected_provider_settlement_receipts"`
+	RejectedProcessorNet           *int64                       `json:"rejected_provider_processor_net_receipts"`
+	PaidLatencySamples             int64                        `json:"verified_paid_latency_samples"`
+	PaidMedianSeconds              int64                        `json:"verified_paid_median_handoff_to_settlement_seconds"`
+	PaidByCurrency                 map[string]int64             `json:"verified_terms_paid_by_currency"`
+	ProcessorFeesByCurrency        map[string]int64             `json:"verified_processor_fees_by_currency"`
+	ProcessorNetByCurrency         map[string]int64             `json:"verified_processor_net_by_currency"`
+	VerifiedMechanisms             map[string]mechanismEvidence `json:"verified_mechanisms"`
 }
 
 func main() {
@@ -223,6 +240,11 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 	if proof.PilotID == "" || proof.Status != "closed" || proof.DemandTopic != policy.DemandTopic || policy.DemandTopic != "developer-tools" {
 		return scenario{}, errors.New("proof must identify the closed developer-tools pilot required by policy")
 	}
+	if proof.MechanismAssignmentContract != "nhs-provider-mechanism-arm-v1" ||
+		proof.MechanismObservationUnit != "returned_offer_opportunity_not_unique_agent" ||
+		proof.MechanismCountsAreUniqueAgents == nil || *proof.MechanismCountsAreUniqueAgents {
+		return scenario{}, errors.New("proof must bind the randomized returned-offer observation contract")
+	}
 	if proof.OutcomeIntegrity == nil || !*proof.OutcomeIntegrity ||
 		proof.RejectedOutcomes == nil || *proof.RejectedOutcomes != 0 ||
 		proof.RejectedLedger == nil || *proof.RejectedLedger != 0 ||
@@ -274,6 +296,8 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 		MinProcessingNetPerThousand:     policy.MinProcessingNetPerThousand,
 		MinProcessingNetLeadPerThousand: policy.MinProcessingNetLeadPerThousand,
 		MinProcessingNetLeadRate:        policy.MinProcessingNetLeadRate,
+		SelectionConfidenceLevel:        policy.SelectionConfidenceLevel,
+		MaxProcessorNetPerOfferCents:    policy.MaxProcessorNetPerOfferCents,
 		ChargeEvents: []chargeEvent{
 			{Name: "accepted", MedianDaysToCharge: float64(proof.AcceptedMedianSeconds) / 86400},
 			{Name: "activated", MedianDaysToCharge: float64(proof.ActivatedMedianSeconds) / 86400},
@@ -406,12 +430,16 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		input.MinProcessingNetLeadRate > 10 {
 		return report{}, errors.New("verified selection constraints must be positive")
 	}
+	if input.SelectionConfidenceLevel < 0.5 || input.SelectionConfidenceLevel >= 1 ||
+		input.MaxProcessorNetPerOfferCents < 1 || input.MaxProcessorNetPerOfferCents > 1_000_000 {
+		return report{}, errors.New("verified selection constraints must be positive")
+	}
 	expected := []string{"accepted", "activated", "converted"}
 	if len(input.VerifiedMechanisms) != len(expected) {
 		return report{}, errors.New("verified proof must contain accepted, activated, and converted mechanism evidence")
 	}
 	output := report{
-		Contract:                   "nhs-provider-mechanism-model-v4",
+		Contract:                   "nhs-provider-mechanism-model-v5",
 		Scenario:                   input.Name,
 		EvidenceKind:               input.EvidenceKind,
 		Synthetic:                  false,
@@ -422,6 +450,8 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		VerifiedPaidMedianDays:     input.PaidMedianDays,
 		RequiredNetLeadPerThousand: input.MinProcessingNetLeadPerThousand,
 		RequiredNetLeadRate:        input.MinProcessingNetLeadRate,
+		SelectionConfidenceLevel:   input.SelectionConfidenceLevel,
+		ConfidenceScope:            "randomized_returned_offer_opportunities_not_unique_agents",
 		ProductionChanged:          false,
 	}
 	var mechanismPaidTotal int64
@@ -434,13 +464,17 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		if !ok || evidence.ObservedHandoffs < evidence.Accepted ||
 			evidence.Accepted < evidence.Activated || evidence.Activated < evidence.Converted ||
 			evidence.Reversed < 0 || evidence.Reversed > evidence.ObservedHandoffs ||
-			evidence.OfferReturns < evidence.ObservedHandoffs ||
+			evidence.OfferReturns < evidence.ObservedHandoffs || evidence.MaxBountyCents < 1 ||
+			evidence.MaxBountyCents > input.MaxProcessorNetPerOfferCents ||
 			evidence.ChargedProviderCompanies < 1 || evidence.ChargedProviderCompanies > evidence.ObservedHandoffs ||
 			evidence.ObservedHandoffs < 1 || evidence.Activated < 1 ||
 			evidence.PaidSettlements < input.MinPaidSettlementsPerMechanism ||
 			evidence.AvailableSettlements != evidence.PaidSettlements ||
 			evidence.PaidCents < evidence.PaidSettlements || evidence.ProcessorFeeCents < 0 ||
 			evidence.ProcessorNetCents < 1 || evidence.ProcessorFeeCents+evidence.ProcessorNetCents != evidence.PaidCents ||
+			evidence.ProcessorNetSumSquares < 1 || evidence.MaxProcessorNetCents < 1 ||
+			evidence.MaxProcessorNetCents > evidence.MaxBountyCents ||
+			!validNetMomentEvidence(evidence) ||
 			evidence.PaidMedianSeconds <= 0 {
 			return report{}, fmt.Errorf("%s mechanism lacks mature real paid evidence", chargeEvent)
 		}
@@ -465,24 +499,33 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		}
 		processingFees := evidence.ProcessorFeeCents
 		processingNet := evidence.ProcessorNetCents
+		lowerPerThousand, upperPerThousand, err := empiricalBernsteinPerThousand(
+			evidence.OfferReturns, evidence.ProcessorNetCents, evidence.ProcessorNetSumSquares,
+			input.MaxProcessorNetPerOfferCents, input.SelectionConfidenceLevel, len(expected),
+		)
+		if err != nil {
+			return report{}, fmt.Errorf("%s mechanism confidence evidence is invalid: %w", chargeEvent, err)
+		}
 		item := result{
-			ChargeEvent:                chargeEvent,
-			ChargedProviderCompanies:   evidence.ChargedProviderCompanies,
-			ChargedEvents:              chargedEvents,
-			RevenuePerHandoffCents:     float64(evidence.PaidCents) / float64(evidence.ObservedHandoffs),
-			RevenuePerOfferReturnCents: float64(evidence.PaidCents) / float64(evidence.OfferReturns),
-			CostPerActivationCents:     costPerActivation,
-			CostPerConversionCents:     costPerConversion,
-			MedianDaysToCharge:         float64(evidence.PaidMedianSeconds) / 86400,
-			ValueKind:                  "verified_processor_net_available",
-			VerifiedPaidCents:          evidence.PaidCents,
-			VerifiedPaidSettlements:    evidence.PaidSettlements,
-			ActualProcessorFeeCents:    processingFees,
-			ActualProcessorNetCents:    processingNet,
-			ProcessingNetPerThousand:   float64(processingNet) * 1000 / float64(evidence.OfferReturns),
-			ProcessingNetMarginRate:    float64(processingNet) / float64(evidence.PaidCents),
-			ReversalRate:               float64(evidence.Reversed) / float64(evidence.ObservedHandoffs),
-			Viable:                     true,
+			ChargeEvent:                   chargeEvent,
+			ChargedProviderCompanies:      evidence.ChargedProviderCompanies,
+			ChargedEvents:                 chargedEvents,
+			RevenuePerHandoffCents:        float64(evidence.PaidCents) / float64(evidence.ObservedHandoffs),
+			RevenuePerOfferReturnCents:    float64(evidence.PaidCents) / float64(evidence.OfferReturns),
+			CostPerActivationCents:        costPerActivation,
+			CostPerConversionCents:        costPerConversion,
+			MedianDaysToCharge:            float64(evidence.PaidMedianSeconds) / 86400,
+			ValueKind:                     "verified_processor_net_available",
+			VerifiedPaidCents:             evidence.PaidCents,
+			VerifiedPaidSettlements:       evidence.PaidSettlements,
+			ActualProcessorFeeCents:       processingFees,
+			ActualProcessorNetCents:       processingNet,
+			ProcessingNetPerThousand:      float64(processingNet) * 1000 / float64(evidence.OfferReturns),
+			ProcessingNetMarginRate:       float64(processingNet) / float64(evidence.PaidCents),
+			ProcessingNetLowerPerThousand: lowerPerThousand,
+			ProcessingNetUpperPerThousand: upperPerThousand,
+			ReversalRate:                  float64(evidence.Reversed) / float64(evidence.ObservedHandoffs),
+			Viable:                        true,
 		}
 		switch {
 		case evidence.OfferReturns < input.MinOfferReturnsPerMechanism:
@@ -549,6 +592,11 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 			output.SelectionReason = "top mechanism lead is not economically decisive under the declared absolute and relative processing-net lead floors"
 			return output, nil
 		}
+		if viable[0].ProcessingNetLowerPerThousand <= viable[1].ProcessingNetUpperPerThousand {
+			output.SelectionReason = "top mechanism is not separated from the runner-up at the declared simultaneous processing-net confidence level"
+			return output, nil
+		}
+		output.ConfidenceSeparated = true
 	}
 	for _, candidate := range output.Results {
 		if candidate.Viable {
@@ -559,4 +607,52 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 	}
 	output.SelectionReason = "no mechanism meets the declared verified-paid selection constraints"
 	return output, nil
+}
+
+func validNetMomentEvidence(evidence mechanismEvidence) bool {
+	if evidence.AvailableSettlements < 1 || evidence.ProcessorNetCents < 1 ||
+		evidence.ProcessorNetSumSquares < 1 || evidence.MaxProcessorNetCents < 1 {
+		return false
+	}
+	maxNet := big.NewInt(evidence.MaxProcessorNetCents)
+	maxSquare := new(big.Int).Mul(maxNet, maxNet)
+	sumSquares := big.NewInt(evidence.ProcessorNetSumSquares)
+	if sumSquares.Cmp(maxSquare) < 0 {
+		return false
+	}
+	upperSquares := new(big.Int).Mul(maxSquare, big.NewInt(evidence.AvailableSettlements))
+	if sumSquares.Cmp(upperSquares) > 0 {
+		return false
+	}
+	net := big.NewInt(evidence.ProcessorNetCents)
+	netSquare := new(big.Int).Mul(net, net)
+	cauchyLeft := new(big.Int).Mul(sumSquares, big.NewInt(evidence.AvailableSettlements))
+	return cauchyLeft.Cmp(netSquare) >= 0
+}
+
+// empiricalBernsteinPerThousand applies Maurer-Pontil Theorem 4 to per-offer
+// processor-net value. Unsettled returned offers are zero observations; the
+// proof supplies the sum and sum of squares of exact available net settlements.
+// A union bound covers both sides of every mechanism interval simultaneously.
+func empiricalBernsteinPerThousand(n, sum, sumSquares, upperBound int64, confidence float64, arms int) (float64, float64, error) {
+	if n < 2 || sum < 0 || sumSquares < 0 || upperBound < 1 || arms < 2 || confidence < 0.5 || confidence >= 1 {
+		return 0, 0, errors.New("invalid empirical Bernstein inputs")
+	}
+	mean := float64(sum) / float64(n)
+	varianceNumerator := float64(sumSquares) - float64(sum)*float64(sum)/float64(n)
+	if varianceNumerator < -1e-9 {
+		return 0, 0, errors.New("sum of squares is inconsistent with net total")
+	}
+	if varianceNumerator < 0 {
+		varianceNumerator = 0
+	}
+	variance := varianceNumerator / float64(n-1)
+	alpha := 1 - confidence
+	delta := alpha / float64(2*arms)
+	logTerm := math.Log(2 / delta)
+	radius := math.Sqrt(2*variance*logTerm/float64(n)) +
+		7*float64(upperBound)*logTerm/(3*float64(n-1))
+	lower := math.Max(0, mean-radius) * 1000
+	upper := math.Min(float64(upperBound), mean+radius) * 1000
+	return lower, upper, nil
 }

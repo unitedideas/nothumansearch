@@ -29,6 +29,7 @@ MAX_RESPONSE_BYTES = 64 * 1024
 REQUEST_TIMEOUT_SECONDS = 10
 MAX_COUNT = 2**31 - 1
 MAX_MONEY_CENTS = 2**63 - 1
+MAX_PROVIDER_BOUNTY_CENTS = 1_000_000
 
 STAGE1_TARGETS = {
     "meaningful_search_receipts": 100,
@@ -845,6 +846,12 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         raise StatusError("invalid_response")
 
     verified_companies = _integer(raw, "verified_provider_companies")
+    if (
+        raw.get("mechanism_assignment_contract") != "nhs-provider-mechanism-arm-v1"
+        or raw.get("mechanism_observation_unit") != "returned_offer_opportunity_not_unique_agent"
+        or _boolean(raw, "mechanism_counts_are_unique_agents") is not False
+    ):
+        raise StatusError("invalid_response")
     verified_offer_returns = _integer(raw, "verified_provider_offer_returns")
     verified_observed_handoffs = _integer(raw, "verified_observed_handoffs")
     verified_handoffs = _integer(raw, "verified_provider_accepted_handoffs")
@@ -884,15 +891,17 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
     for charge_event in CHARGE_EVENTS:
         item = mechanism_raw.get(charge_event)
         if not isinstance(item, dict) or set(item) != {
-            "charged_provider_companies", "offer_returns", "observed_handoffs", "accepted", "activated", "converted", "reversed",
+            "charged_provider_companies", "offer_returns", "max_bounty_cents", "observed_handoffs", "accepted", "activated", "converted", "reversed",
             "paid_settlements", "paid_cents",
             "available_settlements", "processor_fee_cents", "processor_net_cents",
+            "processor_net_sum_squares_cents2", "max_processor_net_cents",
             "paid_median_handoff_to_settlement_seconds",
         }:
             raise StatusError("invalid_response")
         projected = {
             "charged_provider_companies": _integer(item, "charged_provider_companies"),
             "offer_returns": _integer(item, "offer_returns"),
+            "max_bounty_cents": _integer(item, "max_bounty_cents", 0, MAX_PROVIDER_BOUNTY_CENTS),
             "observed_handoffs": _integer(item, "observed_handoffs"),
             "accepted": _integer(item, "accepted"),
             "activated": _integer(item, "activated"),
@@ -903,12 +912,17 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
             "available_settlements": _integer(item, "available_settlements"),
             "processor_fee_cents": _integer(item, "processor_fee_cents", 0, MAX_MONEY_CENTS),
             "processor_net_cents": _integer(item, "processor_net_cents", 0, MAX_MONEY_CENTS),
+            "processor_net_sum_squares_cents2": _integer(
+                item, "processor_net_sum_squares_cents2", 0, MAX_MONEY_CENTS
+            ),
+            "max_processor_net_cents": _integer(item, "max_processor_net_cents", 0, MAX_PROVIDER_BOUNTY_CENTS),
             "paid_median_handoff_to_settlement_seconds": _integer(
                 item, "paid_median_handoff_to_settlement_seconds", 0, MAX_MONEY_CENTS
             ),
         }
         if (
             projected["observed_handoffs"] > projected["offer_returns"]
+            or (projected["offer_returns"] == 0) != (projected["max_bounty_cents"] == 0)
             or projected["charged_provider_companies"] > projected["observed_handoffs"]
             or projected["charged_provider_companies"] > verified_companies
             or projected["observed_handoffs"] < projected["accepted"]
@@ -921,6 +935,16 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
             or projected["available_settlements"] > projected["paid_settlements"]
             or projected["processor_fee_cents"] + projected["processor_net_cents"]
             != (projected["paid_cents"] if projected["available_settlements"] == projected["paid_settlements"] else 0)
+            or (projected["available_settlements"] == 0)
+            != (projected["processor_net_sum_squares_cents2"] == 0)
+            or (projected["available_settlements"] == 0) != (projected["max_processor_net_cents"] == 0)
+            or projected["max_processor_net_cents"] > projected["max_bounty_cents"]
+            or projected["processor_net_sum_squares_cents2"]
+            < projected["max_processor_net_cents"] * projected["max_processor_net_cents"]
+            or projected["processor_net_sum_squares_cents2"]
+            > projected["available_settlements"] * projected["max_processor_net_cents"] * projected["max_processor_net_cents"]
+            or projected["processor_net_sum_squares_cents2"] * projected["available_settlements"]
+            < projected["processor_net_cents"] * projected["processor_net_cents"]
         ):
             raise StatusError("invalid_response")
         verified_mechanisms[charge_event] = projected
@@ -1001,6 +1025,9 @@ def project_proof(document: Mapping[str, object], expected_pilot_id: str) -> dic
         "verified_outcome_ledger_entries": verified_outcome_ledger,
         "rejected_outcome_ledger_entries": rejected_outcome_ledger,
         "verified_provider_companies": verified_companies,
+        "mechanism_assignment_contract": "nhs-provider-mechanism-arm-v1",
+        "mechanism_observation_unit": "returned_offer_opportunity_not_unique_agent",
+        "mechanism_counts_are_unique_agents": False,
         "verified_provider_offer_returns": verified_offer_returns,
         "verified_observed_handoffs": verified_observed_handoffs,
         "verified_provider_accepted_handoffs": verified_handoffs,
