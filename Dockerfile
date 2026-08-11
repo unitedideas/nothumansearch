@@ -12,6 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-X main.releaseRevisio
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o crawler ./cmd/crawler/
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -o monitor-check ./cmd/monitor-check/
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-X main.releaseRevision=${RELEASE_REVISION}" -o provider-cutover-preflight ./cmd/provider-cutover-preflight/
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-X main.releaseRevision=${RELEASE_REVISION}" -o action-interest-experiment-read ./cmd/action-interest-experiment-read/
 
 FROM alpine:3.19
 ARG RELEASE_REVISION
@@ -24,6 +25,7 @@ COPY --from=builder /app/server .
 COPY --from=builder /app/crawler .
 COPY --from=builder /app/monitor-check .
 COPY --from=builder /app/provider-cutover-preflight .
+COPY --from=builder /app/action-interest-experiment-read .
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/static ./static
 COPY --from=builder /app/migrations ./migrations

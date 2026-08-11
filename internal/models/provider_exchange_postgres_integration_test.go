@@ -1,6 +1,7 @@
 package models_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -2689,6 +2690,58 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 			Surface: "rest", CallerAttestsPrincipalInterest: true,
 			ConfirmationVersion: models.ActionInterestConfirmationV1,
 		}
+	}
+
+	// Prove the owner-only experiment reader against an exact, temporary
+	// post-selection cohort. The reader must distinguish MCP from REST and must
+	// not relabel a selection without later explicit interest as conversion.
+	var experimentSince time.Time
+	if err := db.QueryRow(`SELECT clock_timestamp()`).Scan(&experimentSince); err != nil {
+		t.Fatalf("read post-selection experiment boundary: %v", err)
+	}
+	experimentIDs := make([]string, 0, 2)
+	for _, surface := range []string{"rest", "mcp"} {
+		searchID, err := models.GenerateDemandSearchID()
+		if err != nil {
+			t.Fatalf("generate %s experiment search: %v", surface, err)
+		}
+		if err := models.RecordDemandSearch(db, models.DemandSearchReceipt{
+			PublicID: searchID, Surface: surface, Category: "developer",
+			ResultCount: 1, Page: 1, PageSize: 10,
+		}, []models.Site{site}); err != nil {
+			t.Fatalf("record %s experiment search: %v", surface, err)
+		}
+		if matched, err := models.RecordDemandSelection(db, searchID, site.Domain, surface); err != nil || !matched {
+			t.Fatalf("record %s experiment selection matched=%t err=%v", surface, matched, err)
+		}
+		experimentIDs = append(experimentIDs, searchID)
+	}
+	restInterest := inputFor(experimentIDs[0], "quote")
+	if _, err := models.RecordActionInterest(db, restInterest); err != nil {
+		t.Fatalf("record REST post-selection experiment interest: %v", err)
+	}
+	experiment, err := models.ReadPostSelectionActionInterestExperiment(context.Background(), db, experimentSince)
+	if err != nil {
+		t.Fatalf("read post-selection experiment: %v", err)
+	}
+	if experiment.MeaningfulSearchReceipts != 2 ||
+		experiment.DeveloperToolsSearchReceipts != 2 ||
+		experiment.ResultSelections != 2 ||
+		experiment.SearchReceiptsWithSelection != 2 ||
+		experiment.ActiveActionInterestReceipts != 1 ||
+		experiment.SearchReceiptsWithActionInterest != 1 ||
+		experiment.PostSelectionInterestReceipts != 1 ||
+		experiment.PostSelectionSearchReceipts != 1 ||
+		experiment.MCPSearchReceipts != 1 || experiment.MCPResultSelections != 1 ||
+		experiment.MCPPostSelectionInterests != 0 ||
+		experiment.RESTSearchReceipts != 1 || experiment.RESTResultSelections != 1 ||
+		experiment.RESTPostSelectionInterests != 1 ||
+		experiment.PostSelectionConversionRate == nil || *experiment.PostSelectionConversionRate != 0.5 ||
+		!reflect.DeepEqual(experiment.EligibleSurfaces, []string{"mcp", "rest"}) {
+		t.Fatalf("post-selection experiment = %#v", experiment)
+	}
+	if _, err := db.Exec(`DELETE FROM search_receipts WHERE public_id = ANY($1)`, pq.Array(experimentIDs)); err != nil {
+		t.Fatalf("remove temporary post-selection experiment cohort: %v", err)
 	}
 
 	searchID := recordSearch(false, []models.Site{site})

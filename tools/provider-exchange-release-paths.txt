@@ -6,6 +6,8 @@ cmd/provider-mechanism-model/main.go
 cmd/provider-mechanism-model/main_test.go
 cmd/provider-cutover-preflight/main.go
 cmd/provider-cutover-preflight/main_test.go
+cmd/action-interest-experiment-read/main.go
+cmd/action-interest-experiment-read/main_test.go
 cmd/server/main.go
 cmd/server/main_test.go
 design/reviews/2026-08-01-provider-exchange-audit.json
@@ -83,6 +85,7 @@ internal/handlers/provider_exchange_tickets_test.go
 internal/handlers/seo.go
 internal/handlers/seo_test.go
 internal/models/action_interest.go
+internal/models/action_interest_experiment.go
 internal/models/action_interest_test.go
 internal/models/demand.go
 internal/models/demand_test.go
