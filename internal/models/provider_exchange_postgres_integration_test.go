@@ -2615,6 +2615,60 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 		t.Fatalf("action-interest catalog columns = %v, want %v", columns, wantColumns)
 	}
 
+	attemptColumnRows, err := db.Query(`
+		SELECT column_name
+		FROM information_schema.columns
+		WHERE table_schema='public' AND table_name='action_interest_attempt_daily'
+		ORDER BY ordinal_position`)
+	if err != nil {
+		t.Fatalf("read action-interest attempt catalog columns: %v", err)
+	}
+	columns = columns[:0]
+	for attemptColumnRows.Next() {
+		var column string
+		if err := attemptColumnRows.Scan(&column); err != nil {
+			_ = attemptColumnRows.Close()
+			t.Fatalf("scan action-interest attempt catalog column: %v", err)
+		}
+		columns = append(columns, column)
+	}
+	if err := attemptColumnRows.Err(); err != nil {
+		_ = attemptColumnRows.Close()
+		t.Fatalf("iterate action-interest attempt catalog columns: %v", err)
+	}
+	if err := attemptColumnRows.Close(); err != nil {
+		t.Fatalf("close action-interest attempt catalog columns: %v", err)
+	}
+	wantAttemptColumns := []string{
+		"attempt_day", "surface", "outcome", "attempt_count",
+		"first_observed_at", "last_observed_at",
+	}
+	if !reflect.DeepEqual(columns, wantAttemptColumns) {
+		t.Fatalf("action-interest attempt columns = %v, want privacy-safe %v", columns, wantAttemptColumns)
+	}
+	if err := models.RecordActionInterestAttempt(db, "rest", "created"); err != nil {
+		t.Fatalf("record REST action-interest attempt: %v", err)
+	}
+	if err := models.RecordActionInterestAttempt(db, "rest", "created"); err != nil {
+		t.Fatalf("increment REST action-interest attempt: %v", err)
+	}
+	if err := models.RecordActionInterestAttempt(db, "mcp", "invalid_request"); err != nil {
+		t.Fatalf("record MCP action-interest attempt: %v", err)
+	}
+	for _, invalid := range [][2]string{{"web", "created"}, {"rest", "accepted"}} {
+		if err := models.RecordActionInterestAttempt(db, invalid[0], invalid[1]); !errors.Is(err, models.ErrInvalidActionInterest) {
+			t.Fatalf("invalid attempt coordinate %v error=%v", invalid, err)
+		}
+	}
+	funnel, err := models.GetActionInterestAttemptFunnel(db, 30)
+	if err != nil {
+		t.Fatalf("read action-interest attempt funnel: %v", err)
+	}
+	if funnel.TotalAttempts != 3 || funnel.ContainsRequestCoordinates || funnel.CommercialProof ||
+		!funnel.CountsAreAttemptsNotUniqueAgents || len(funnel.Outcomes) != 2 {
+		t.Fatalf("action-interest attempt funnel = %#v", funnel)
+	}
+
 	recordSearch := func(synthetic bool, returned []models.Site) string {
 		t.Helper()
 		searchID, err := models.GenerateDemandSearchID()

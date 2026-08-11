@@ -826,6 +826,7 @@ func (h *MCPHandler) beginRecordActionInterest(w http.ResponseWriter, id json.Ra
 	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(retryAfter).Unix(), 10))
 	if gateErr != nil {
+		h.ActionInterests.recordAttempt("mcp", actionInterestAttemptOutcome(gateErr))
 		status, message := actionInterestStatus(gateErr)
 		if status == http.StatusForbidden {
 			w.Header().Del("Access-Control-Allow-Origin")
@@ -845,6 +846,7 @@ func (h *MCPHandler) toolRecordActionInterestRaw(w http.ResponseWriter, id json.
 	}
 	var args map[string]any
 	if len(raw) == 0 || json.Unmarshal(raw, &args) != nil || args == nil {
+		h.ActionInterests.recordAttempt("mcp", "invalid_request")
 		h.writeToolError(w, id, "action-interest arguments must be an object")
 		return
 	}
@@ -860,6 +862,7 @@ func (h *MCPHandler) toolRecordActionInterest(w http.ResponseWriter, id json.Raw
 
 func (h *MCPHandler) recordActionInterestAfterGate(w http.ResponseWriter, id json.RawMessage, args map[string]any, r *http.Request) {
 	if err := validateRecordActionInterestArguments(args); err != nil {
+		h.ActionInterests.recordAttempt("mcp", "invalid_request")
 		h.writeToolError(w, id, err.Error())
 		return
 	}
@@ -871,6 +874,7 @@ func (h *MCPHandler) recordActionInterestAfterGate(w http.ResponseWriter, id jso
 		ConfirmationVersion:            asString(args["confirmation_version"]),
 	}, "mcp")
 	if err != nil {
+		h.ActionInterests.recordAttempt("mcp", actionInterestAttemptOutcome(err))
 		_, message := actionInterestStatus(err)
 		h.writeToolError(w, id, message)
 		return
@@ -878,6 +882,9 @@ func (h *MCPHandler) recordActionInterestAfterGate(w http.ResponseWriter, id jso
 	text := "Recorded caller-attested principal interest for aggregate Stage 1 demand. No provider was contacted; no ticket, charge, rank change, or commercial proof was created."
 	if receipt.Replayed {
 		text += " This was an exact idempotent replay of the existing receipt."
+		h.ActionInterests.recordAttempt("mcp", "replayed")
+	} else {
+		h.ActionInterests.recordAttempt("mcp", "created")
 	}
 	h.writeResult(w, id, map[string]any{
 		"content":           []map[string]any{{"type": "text", "text": text}},

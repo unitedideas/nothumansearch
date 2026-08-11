@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -109,6 +110,36 @@ func (h *ActionInterestHandler) recordAfterGate(r *http.Request, request actionI
 	return receipt, err
 }
 
+func (h *ActionInterestHandler) recordAttempt(surface, outcome string) {
+	if h == nil || h.DB == nil {
+		return
+	}
+	if err := models.RecordActionInterestAttempt(h.DB, surface, outcome); err != nil {
+		log.Printf("action-interest aggregate surface=%s outcome=%s: %v", surface, outcome, err)
+	}
+}
+
+func actionInterestAttemptOutcome(err error) string {
+	switch {
+	case err == nil:
+		return "created"
+	case errors.Is(err, errActionInterestRateLimited):
+		return "rate_limited"
+	case errors.Is(err, errActionInterestCrossOrigin):
+		return "cross_origin"
+	case errors.Is(err, models.ErrInvalidActionInterest):
+		return "invalid_request"
+	case errors.Is(err, models.ErrActionInterestUnavailable):
+		return "unavailable"
+	case errors.Is(err, models.ErrActionInterestConflict):
+		return "conflict"
+	case errors.Is(err, models.ErrActionInterestStoreUnavailable):
+		return "store_unavailable"
+	default:
+		return "internal_error"
+	}
+}
+
 var (
 	errActionInterestRateLimited = errors.New("action-interest safety limit exceeded")
 	errActionInterestCrossOrigin = errors.New("cross-origin action-interest mutation rejected")
@@ -168,6 +199,7 @@ func (h *ActionInterestHandler) Record(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(retryAfter).Unix(), 10))
 	if err != nil {
+		h.recordAttempt("rest", actionInterestAttemptOutcome(err))
 		status, message := actionInterestStatus(err)
 		if status == http.StatusForbidden {
 			w.Header().Del("Access-Control-Allow-Origin")
@@ -180,12 +212,14 @@ func (h *ActionInterestHandler) Record(w http.ResponseWriter, r *http.Request) {
 	}
 	var request actionInterestRequest
 	if err := decodeProviderJSON(w, r, &request); err != nil {
+		h.recordAttempt("rest", "invalid_request")
 		providerWriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid action-interest request"})
 		return
 	}
 
 	receipt, err := h.recordAfterGate(r, request, "rest")
 	if err != nil {
+		h.recordAttempt("rest", actionInterestAttemptOutcome(err))
 		status, message := actionInterestStatus(err)
 		providerWriteJSON(w, status, map[string]string{"error": message})
 		return
@@ -193,6 +227,9 @@ func (h *ActionInterestHandler) Record(w http.ResponseWriter, r *http.Request) {
 	status := http.StatusCreated
 	if receipt.Replayed {
 		status = http.StatusOK
+		h.recordAttempt("rest", "replayed")
+	} else {
+		h.recordAttempt("rest", "created")
 	}
 	providerWriteJSON(w, status, actionInterestResponse(receipt))
 }
@@ -220,8 +257,14 @@ func (h *ActionInterestHandler) Stage1DemandProof(w http.ResponseWriter, r *http
 		providerWriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "stage 1 demand query failed"})
 		return
 	}
+	funnel, err := models.GetActionInterestAttemptFunnel(h.DB, days)
+	if err != nil {
+		providerWriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "action-interest attempt funnel query failed"})
+		return
+	}
 	providerWriteJSON(w, http.StatusOK, map[string]any{
-		"stage1_demand":  proof,
-		"evidence_scope": "Demand receipts are not unique agents, principals, provider-accepted handoffs, activations, revenue, or commercial proof.",
+		"stage1_demand":                  proof,
+		"action_interest_attempt_funnel": funnel,
+		"evidence_scope":                 "Demand receipts are not unique agents, principals, provider-accepted handoffs, activations, revenue, or commercial proof. Attempt aggregates are operational diagnostics only and contain no request or entity coordinates.",
 	})
 }

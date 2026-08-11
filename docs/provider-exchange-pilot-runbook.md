@@ -74,7 +74,7 @@ is required before:
 
 1. creating and storing the dedicated production signing secret and key ID, or
    the separate owner-only company-deduplication HMAC key;
-2. deploying migrations 019 through 030 and the provider exchange revision;
+2. deploying migrations 019 through 031 and the provider exchange revision;
 3. sending provider outreach or invitations;
 4. accepting a contract, affiliate term, CPA term, funding representation, or
    provider Merchant-of-Record acknowledgement;
@@ -93,7 +93,7 @@ reused ID.
 
 This runbook describes the local release candidate and the evidence required
 for a future authorized pilot. It is not evidence that migrations 019 through
-030 are deployed, that the provider exchange is active in production, or that
+031 are deployed, that the provider exchange is active in production, or that
 any live commercial threshold has been met.
 
 ## Technical release checklist
@@ -113,7 +113,7 @@ any live commercial threshold has been met.
       so a normal working-tree context fails closed. Its
       `nhs-exact-release-verification-v2` receipt binds the exact source archive,
       candidate commit/tree/parent, changed-path count, and the raw SHA-256 of
-      every protected migration from 019 through 030.
+      every protected migration from 019 through 031.
 - [ ] Full Go tests, race tests, vet, build, formatting, OpenAPI parse, and
       changed-path secret scan pass on the exact candidate revision. The
       preparer must observe explicit pass events—not a package-level `PASS`
@@ -130,14 +130,14 @@ any live commercial threshold has been met.
       verified candidate into its durable namespaced canonical ref with
       `tools/adopt-provider-exchange-candidate.sh CANDIDATE_REPOSITORY COMMIT TREE PARENT EXACT_RELEASE_MANIFEST --confirm-owner-authorized`.
       The adoption command must independently reconstruct the exact source
-      archive, recompute every migration-019-through-030 digest, and preserve
+      archive, recompute every migration-019-through-031 digest, and preserve
       the exact-release manifest plus its SHA-256 beside the Git bundle. It
       emits no build or deployment command; an unadopted temporary-clone commit
       is not a release identity.
-- [ ] Migrations 001 through 030 and immediate replay pass on disposable real
+- [ ] Migrations 001 through 031 and immediate replay pass on disposable real
       PostgreSQL from an empty database.
 - [ ] The target database has neither an unreceipted
-      migration-019-through-030 footprint nor a newer protected receipt.
+      migration-019-through-031 footprint nor a newer protected receipt.
       Migration 019 must atomically create its
       schema and `nhs_schema_migrations` receipt with the raw-file SHA-256 and
       embedded release commit; migration 020 must do the same for the
@@ -312,12 +312,12 @@ reach migrations until steps 1 through 6 are complete:
    never imply zero-loss rollback from the earlier snapshot.
 6. Run the exact digest's revision-bound `provider-cutover-preflight` against the
    target database. It must report the same binary/candidate revision, the exact
-   protected set through migration 030, zero other sessions, zero live tickets,
+   protected set through migration 031, zero other sessions, zero live tickets,
    valid signer retention for pilot mode, and `ready_for_quiesced_cutover=true`.
 7. Start one machine from the exact digest with traffic held. This is the first
    step allowed to run the automatic protected migrations.
 8. Before traffic release, verify `/health.release_revision`, the OCI label, and
-   every migration-019-through-030 `applied_by_commit` value against the same
+   every migration-019-through-031 `applied_by_commit` value against the same
    authorized commit. Run the safe smoke in the chosen `disabled` or `pilot`
    mode. On failure, use the same digest in disabled containment or execute the
    tested database recovery plan; never roll the upgraded database back to the
@@ -410,7 +410,7 @@ artifact may be substituted for those external receipts.
       `application_name`, is blocking. The receipt is point-in-time evidence,
       not a lock: all old machines must remain cordoned with autostart disabled
       until the candidate owns the migration lock and becomes healthy.
-- [ ] After the held candidate has applied migrations 019 through 030, verify
+- [ ] After the held candidate has applied migrations 019 through 031, verify
       their immutable ledger rows against the same exact 40-character revision.
       Inject the target URL from its canonical secret reference; never place it
       in argv. The verifier sets PostgreSQL read-only mode and emits bounded JSON
@@ -424,7 +424,7 @@ artifact may be substituted for those external receipts.
         --confirm-read-only-database-check
       ```
 
-      Require `protected_migration_count=12` and the exact migration names and
+      Require `protected_migration_count=13` and the exact migration names and
       require every ledger SHA-256 to match the exact local migration bytes.
       This is post-migration evidence only; it does not replace the
       quiesced preflight, private smoke, restore receipt, or traffic-release gate.

@@ -105,6 +105,7 @@ migrations/027_provider_pilot_review_evidence.sql
 migrations/028_provider_commercial_proof_manifest.sql
 migrations/029_provider_settlement_receipts.sql
 migrations/030_provider_processor_net_receipts.sql
+migrations/031_action_interest_attempt_funnel.sql
 templates/privacy.html
 templates/providers.html
 tools/assemble-provider-exchange-candidate.sh

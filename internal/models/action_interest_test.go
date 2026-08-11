@@ -79,6 +79,54 @@ func TestInvalidActionInterestFailsBeforeStoreAccess(t *testing.T) {
 	}
 }
 
+func TestActionInterestAttemptCoordinatesAreStrictAndStoreBound(t *testing.T) {
+	for _, valid := range [][2]string{
+		{"rest", "created"}, {"mcp", "replayed"}, {"mcp", "invalid_request"},
+		{"rest", "unavailable"}, {"mcp", "conflict"}, {"rest", "rate_limited"},
+		{"rest", "cross_origin"}, {"mcp", "store_unavailable"}, {"mcp", "internal_error"},
+	} {
+		if err := RecordActionInterestAttempt(nil, valid[0], valid[1]); !errors.Is(err, ErrActionInterestStoreUnavailable) {
+			t.Fatalf("valid attempt coordinate %v error=%v", valid, err)
+		}
+	}
+	for _, invalid := range [][2]string{
+		{"web", "created"}, {"rest", "accepted"}, {"", "created"}, {"mcp", ""},
+	} {
+		if err := RecordActionInterestAttempt(nil, invalid[0], invalid[1]); !errors.Is(err, ErrInvalidActionInterest) {
+			t.Fatalf("invalid attempt coordinate %v error=%v", invalid, err)
+		}
+	}
+}
+
+func TestActionInterestAttemptMigrationRetainsNoRequestCoordinates(t *testing.T) {
+	source, err := os.ReadFile("../../migrations/031_action_interest_attempt_funnel.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	start := strings.Index(text, "CREATE TABLE IF NOT EXISTS action_interest_attempt_daily")
+	end := strings.Index(text[start:], ");")
+	if start < 0 || end < 0 {
+		t.Fatal("could not isolate action-interest attempt table")
+	}
+	table := strings.ToLower(text[start : start+end])
+	for _, required := range []string{
+		"attempt_day", "surface", "outcome", "attempt_count", "first_observed_at", "last_observed_at",
+	} {
+		if !strings.Contains(table, required) {
+			t.Fatalf("action-interest attempt table missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"search_id", "domain", "action_type", "query", "prompt", "contact", "network",
+		"user_agent", "ip_hash", "identity", "provider", "offer", "ticket",
+	} {
+		if strings.Contains(table, forbidden) {
+			t.Fatalf("action-interest attempt table retained forbidden coordinate %q", forbidden)
+		}
+	}
+}
+
 func TestActionInterestMigrationPrivacyAndBindingContract(t *testing.T) {
 	source, err := os.ReadFile("../../migrations/020_action_interest_receipts.sql")
 	if err != nil {

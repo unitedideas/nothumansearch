@@ -101,6 +101,20 @@ def stage1_document():
             "targets_met": {key: True for key in status_tool.STAGE1_TARGETS},
             "server_private_row": "must-not-emit",
         },
+        "action_interest_attempt_funnel": {
+            "days": 30,
+            "as_of": "2026-08-02T12:00:01Z",
+            "counts_are_attempts_not_unique_agents": True,
+            "contains_request_coordinates": False,
+            "commercial_proof": False,
+            "total_attempts": 27,
+            "outcomes": [
+                {"surface": "mcp", "outcome": "created", "attempt_count": 22},
+                {"surface": "mcp", "outcome": "invalid_request", "attempt_count": 5},
+            ],
+            "evidence_scope": "aggregate attempts only",
+            "server_private_row": "must-not-emit",
+        },
         "evidence_scope": "aggregate receipts only",
         "server_private": "must-not-emit",
     }
@@ -517,6 +531,22 @@ class ReadContractTest(unittest.TestCase):
             with self.subTest(case=case):
                 with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
                     status_tool.project_stage1(document, 30)
+
+    def test_action_interest_attempt_funnel_rejects_coordinates_and_false_totals(self):
+        wrong_total = stage1_document()
+        wrong_total["action_interest_attempt_funnel"]["total_attempts"] = 28
+        with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
+            status_tool.project_stage1(wrong_total, 30)
+
+        private_coordinate = stage1_document()
+        private_coordinate["action_interest_attempt_funnel"]["outcomes"][0]["domain"] = "private.example"
+        with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
+            status_tool.project_stage1(private_coordinate, 30)
+
+        false_privacy = stage1_document()
+        false_privacy["action_interest_attempt_funnel"]["contains_request_coordinates"] = True
+        with self.assertRaisesRegex(status_tool.StatusError, "invalid_response"):
+            status_tool.project_stage1(false_privacy, 30)
 
     def test_commercial_gate_uses_only_verified_counters(self):
         below = proof_document()

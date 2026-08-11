@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -69,6 +70,26 @@ func TestActionInterestRESTIsStrictPrivateAndTruthful(t *testing.T) {
 	} {
 		if value, ok := response[key].(bool); !ok || value {
 			t.Fatalf("truth field %s = %#v, want false", key, response[key])
+		}
+	}
+}
+
+func TestActionInterestAttemptOutcomesAreStableAndNonCommercial(t *testing.T) {
+	for _, test := range []struct {
+		err  error
+		want string
+	}{
+		{nil, "created"},
+		{errActionInterestRateLimited, "rate_limited"},
+		{errActionInterestCrossOrigin, "cross_origin"},
+		{models.ErrInvalidActionInterest, "invalid_request"},
+		{models.ErrActionInterestUnavailable, "unavailable"},
+		{models.ErrActionInterestConflict, "conflict"},
+		{models.ErrActionInterestStoreUnavailable, "store_unavailable"},
+		{errors.New("database unavailable"), "internal_error"},
+	} {
+		if got := actionInterestAttemptOutcome(test.err); got != test.want {
+			t.Fatalf("attempt outcome for %v = %q, want %q", test.err, got, test.want)
 		}
 	}
 }

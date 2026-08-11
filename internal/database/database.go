@@ -122,6 +122,7 @@ var requiredProtectedMigrationNames = []string{
 	"028_provider_commercial_proof_manifest.sql",
 	"029_provider_settlement_receipts.sql",
 	"030_provider_processor_net_receipts.sql",
+	"031_action_interest_attempt_funnel.sql",
 }
 
 // Historical migration tests deliberately replay prefix releases one at a
@@ -617,6 +618,27 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		},
 	}
 
+	actionInterestAttemptFunnel := protectedMigrationSpec{
+		// 031 adds only privacy-safe UTC-day/surface/outcome counters. It is
+		// cumulative with the settlement proof schema but remains operational
+		// diagnostics rather than demand or commercial evidence.
+		relations: append(append([]migrationRelation(nil), providerProcessorNetReceipts.relations...),
+			migrationRelation{name: "action_interest_attempt_daily", relkind: "r"},
+			migrationRelation{name: "idx_action_interest_attempt_daily_recent", relkind: "i", parent: "action_interest_attempt_daily"},
+		),
+		rules:                append([]migrationRule(nil), providerProcessorNetReceipts.rules...),
+		fingerprintTables:    append(append([]string(nil), providerProcessorNetReceipts.fingerprintTables...), "action_interest_attempt_daily"),
+		fingerprintFunctions: append([]string(nil), providerProcessorNetReceipts.fingerprintFunctions...),
+		footprintRelations: map[string]bool{
+			"action_interest_attempt_daily":            true,
+			"idx_action_interest_attempt_daily_recent": true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintTrigger, relation: "action_interest_attempt_daily", name: "action_interest_attempt_aggregate_owned"},
+			{kind: migrationFootprintFunction, name: "own_action_interest_attempt_aggregate"},
+		},
+	}
+
 	return map[string]protectedMigrationSpec{
 		"019_provider_exchange.sql":                     providerExchange,
 		"020_action_interest_receipts.sql":              actionInterests,
@@ -630,6 +652,7 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		"028_provider_commercial_proof_manifest.sql":    providerCommercialProofManifest,
 		"029_provider_settlement_receipts.sql":          providerSettlementReceipts,
 		"030_provider_processor_net_receipts.sql":       providerProcessorNetReceipts,
+		"031_action_interest_attempt_funnel.sql":        actionInterestAttemptFunnel,
 	}
 }
 

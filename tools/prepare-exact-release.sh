@@ -77,6 +77,7 @@ MIGRATION_027_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/027_provider_pil
 MIGRATION_028_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/028_provider_commercial_proof_manifest.sql" | /usr/bin/awk '{print $1}')
 MIGRATION_029_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/029_provider_settlement_receipts.sql" | /usr/bin/awk '{print $1}')
 MIGRATION_030_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/030_provider_processor_net_receipts.sql" | /usr/bin/awk '{print $1}')
+MIGRATION_031_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/031_action_interest_attempt_funnel.sql" | /usr/bin/awk '{print $1}')
 
 GO_BINARY="${NHS_GO_BINARY:-/Users/shane/.local/bin/go}"
 if [ ! -x "$GO_BINARY" ]; then
@@ -354,6 +355,7 @@ PY
     echo "migration_028_sha256=$MIGRATION_028_SHA"
     echo "migration_029_sha256=$MIGRATION_029_SHA"
     echo "migration_030_sha256=$MIGRATION_030_SHA"
+    echo "migration_031_sha256=$MIGRATION_031_SHA"
     echo "source_archive_sha256=$ARCHIVE_SHA"
     echo "build_arg=RELEASE_REVISION=$COMMIT"
 	echo "exact_archive_tests_passed=true"
@@ -371,7 +373,7 @@ PY
 echo "Exact NHS release context verified. No deployment was performed."
 echo "Manifest: $MANIFEST"
 echo "Candidate commit: $COMMIT"
-echo "No deploy command was emitted. Migrations 019-030 require an owner-authorized"
+echo "No deploy command was emitted. Migrations 019-031 require an owner-authorized"
 echo "single-machine cutover with old writers quiesced, a target-database"
 echo "preflight, staged signer references, and a verified forward rollback or"
 echo "database recovery plan. Use the pilot runbook for that separate gate."

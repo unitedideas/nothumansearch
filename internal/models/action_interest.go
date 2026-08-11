@@ -69,6 +69,23 @@ type Stage1DemandBucket struct {
 	ReceiptCount int    `json:"receipt_count"`
 }
 
+type ActionInterestAttemptBucket struct {
+	Surface      string `json:"surface"`
+	Outcome      string `json:"outcome"`
+	AttemptCount int64  `json:"attempt_count"`
+}
+
+type ActionInterestAttemptFunnel struct {
+	Days                             int                           `json:"days"`
+	AsOf                             time.Time                     `json:"as_of"`
+	CountsAreAttemptsNotUniqueAgents bool                          `json:"counts_are_attempts_not_unique_agents"`
+	ContainsRequestCoordinates       bool                          `json:"contains_request_coordinates"`
+	CommercialProof                  bool                          `json:"commercial_proof"`
+	TotalAttempts                    int64                         `json:"total_attempts"`
+	Outcomes                         []ActionInterestAttemptBucket `json:"outcomes"`
+	EvidenceScope                    string                        `json:"evidence_scope"`
+}
+
 type Stage1DemandProof struct {
 	Days                             int                  `json:"days"`
 	RetentionDays                    int                  `json:"retention_days"`
@@ -119,6 +136,97 @@ func ValidActionInterestType(value string) bool {
 
 func ActionInterestTypes() []string {
 	return append([]string(nil), actionInterestTypes...)
+}
+
+var actionInterestAttemptOutcomes = map[string]struct{}{
+	"created": {}, "replayed": {}, "invalid_request": {}, "unavailable": {},
+	"conflict": {}, "rate_limited": {}, "cross_origin": {},
+	"store_unavailable": {}, "internal_error": {},
+}
+
+// RecordActionInterestAttempt increments one UTC-day operational bucket. It
+// accepts no request or entity coordinate; the database trigger owns the day,
+// count, and observation timestamps. These counters diagnose the consent rail
+// and never qualify as Stage 1 demand or commercial proof.
+func RecordActionInterestAttempt(db *sql.DB, surface, outcome string) error {
+	surface = normalizeDemandSurface(surface)
+	outcome = strings.ToLower(strings.TrimSpace(outcome))
+	_, outcomeAllowed := actionInterestAttemptOutcomes[outcome]
+	if (surface != "rest" && surface != "mcp") || !outcomeAllowed {
+		return ErrInvalidActionInterest
+	}
+	if db == nil {
+		return ErrActionInterestStoreUnavailable
+	}
+	_, err := db.Exec(`
+		INSERT INTO action_interest_attempt_daily (
+			attempt_day, surface, outcome, attempt_count,
+			first_observed_at, last_observed_at
+		) VALUES (CURRENT_DATE, $1, $2, 1, clock_timestamp(), clock_timestamp())
+		ON CONFLICT (attempt_day, surface, outcome) DO UPDATE
+		SET attempt_count=action_interest_attempt_daily.attempt_count + 1`, surface, outcome)
+	return err
+}
+
+// GetActionInterestAttemptFunnel returns only owner-facing aggregate outcomes.
+// It deliberately cannot identify a caller, principal, search, result, domain,
+// action type, provider, network address, user agent, query, or prompt.
+func GetActionInterestAttemptFunnel(db *sql.DB, days int) (*ActionInterestAttemptFunnel, error) {
+	if db == nil {
+		return nil, ErrActionInterestStoreUnavailable
+	}
+	if days < Stage1ReportMinimumDays || days > ActionInterestRetentionDays {
+		days = ActionInterestRetentionDays
+	}
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{
+		Isolation: sql.LevelRepeatableRead,
+		ReadOnly:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	funnel := &ActionInterestAttemptFunnel{
+		Days:                             days,
+		CountsAreAttemptsNotUniqueAgents: true,
+		ContainsRequestCoordinates:       false,
+		CommercialProof:                  false,
+		Outcomes:                         []ActionInterestAttemptBucket{},
+		EvidenceScope:                    "Operational action-interest attempts grouped only by UTC day, surface, and stable outcome; not unique agents, principals, demand receipts, provider outcomes, revenue, or commercial proof.",
+	}
+	if err := tx.QueryRow(`SELECT clock_timestamp()`).Scan(&funnel.AsOf); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(`
+		SELECT surface, outcome, SUM(attempt_count)::bigint
+		FROM action_interest_attempt_daily
+		WHERE attempt_day >= (($2::timestamptz AT TIME ZONE 'UTC')::date - ($1::int - 1))
+		  AND attempt_day <= ($2::timestamptz AT TIME ZONE 'UTC')::date
+		GROUP BY surface, outcome
+		ORDER BY surface, outcome`, days, funnel.AsOf)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var bucket ActionInterestAttemptBucket
+		if err := rows.Scan(&bucket.Surface, &bucket.Outcome, &bucket.AttemptCount); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		funnel.TotalAttempts += bucket.AttemptCount
+		funnel.Outcomes = append(funnel.Outcomes, bucket)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return funnel, nil
 }
 
 // NormalizeActionInterestDomain accepts only a bare public-style DNS name.

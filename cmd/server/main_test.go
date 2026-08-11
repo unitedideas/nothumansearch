@@ -256,6 +256,7 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		"migration_028_sha256=$MIGRATION_028_SHA",
 		"migration_029_sha256=$MIGRATION_029_SHA",
 		"migration_030_sha256=$MIGRATION_030_SHA",
+		"migration_031_sha256=$MIGRATION_031_SHA",
 		"TestProviderExchangePostgresReleaseRegressions",
 		"TestProtectedMigrationLedgerPostgres",
 		"preflight_binary_revision_bound=true",
@@ -273,7 +274,7 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		"deployment_command_emitted=false",
 		"No deploy command was emitted",
 		"No deployment was performed",
-		"Migrations 019-030 require an owner-authorized",
+		"Migrations 019-031 require an owner-authorized",
 	} {
 		if !strings.Contains(preparer, required) {
 			t.Fatalf("exact release preparer is missing %q", required)

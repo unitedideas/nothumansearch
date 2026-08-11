@@ -69,6 +69,13 @@ ALLOWED_TOPICS = frozenset(
 ALLOWED_ACTION_TYPES = frozenset(
     {"quote", "trial", "demo", "booking", "application", "signup", "purchase"}
 )
+ALLOWED_ATTEMPT_SURFACES = frozenset({"rest", "mcp"})
+ALLOWED_ATTEMPT_OUTCOMES = frozenset(
+    {
+        "created", "replayed", "invalid_request", "unavailable", "conflict",
+        "rate_limited", "cross_origin", "store_unavailable", "internal_error",
+    }
+)
 CHARGE_EVENTS = ("accepted", "activated", "converted")
 _CURRENCY_PATTERN = re.compile(r"^[a-z]{3}$")
 _HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -327,6 +334,8 @@ def project_stage1(document: Mapping[str, object], requested_days: int) -> dict[
     if targets_met != expected_met or ready != all(expected_met.values()):
         raise StatusError("invalid_response")
 
+    attempt_funnel = project_action_interest_attempt_funnel(document, requested_days)
+
     return {
         "days": days,
         "as_of": as_of,
@@ -353,6 +362,66 @@ def project_stage1(document: Mapping[str, object], requested_days: int) -> dict[
         "counts_are_receipts_not_unique_agents": True,
         "commercial_proof": False,
         "readiness_does_not_authorize_stage2": True,
+        "action_interest_attempt_funnel": attempt_funnel,
+    }
+
+
+def project_action_interest_attempt_funnel(
+    document: Mapping[str, object], requested_days: int
+) -> dict[str, object]:
+    raw = document.get("action_interest_attempt_funnel")
+    if not isinstance(raw, dict):
+        raise StatusError("invalid_response")
+    if _integer(raw, "days", 1, 30) != requested_days:
+        raise StatusError("invalid_response")
+    as_of = _timestamp(raw, "as_of")
+    if (
+        _boolean(raw, "counts_are_attempts_not_unique_agents") is not True
+        or _boolean(raw, "contains_request_coordinates") is not False
+        or _boolean(raw, "commercial_proof") is not False
+    ):
+        raise StatusError("invalid_response")
+    total = _integer(raw, "total_attempts", 0, MAX_COUNT)
+    outcomes = raw.get("outcomes")
+    if not isinstance(outcomes, list) or len(outcomes) > (
+        len(ALLOWED_ATTEMPT_SURFACES) * len(ALLOWED_ATTEMPT_OUTCOMES)
+    ):
+        raise StatusError("invalid_response")
+    projected: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    computed_total = 0
+    for item in outcomes:
+        if not isinstance(item, dict) or set(item) != {"surface", "outcome", "attempt_count"}:
+            raise StatusError("invalid_response")
+        surface = item.get("surface")
+        outcome = item.get("outcome")
+        count = item.get("attempt_count")
+        coordinate = (surface, outcome)
+        if (
+            not isinstance(surface, str)
+            or surface not in ALLOWED_ATTEMPT_SURFACES
+            or not isinstance(outcome, str)
+            or outcome not in ALLOWED_ATTEMPT_OUTCOMES
+            or coordinate in seen
+            or isinstance(count, bool)
+            or not isinstance(count, int)
+            or not 1 <= count <= MAX_COUNT
+        ):
+            raise StatusError("invalid_response")
+        seen.add(coordinate)
+        computed_total += count
+        projected.append({"surface": surface, "outcome": outcome, "attempt_count": count})
+    if computed_total != total:
+        raise StatusError("invalid_response")
+    return {
+        "days": requested_days,
+        "as_of": as_of,
+        "counts_are_attempts_not_unique_agents": True,
+        "contains_request_coordinates": False,
+        "commercial_proof": False,
+        "total_attempts": total,
+        "outcomes": projected,
+        "operational_diagnostic_only": True,
     }
 
 

@@ -58,6 +58,7 @@ PROTECTED_MIGRATIONS = (
     "028_provider_commercial_proof_manifest.sql",
     "029_provider_settlement_receipts.sql",
     "030_provider_processor_net_receipts.sql",
+    "031_action_interest_attempt_funnel.sql",
 )
 
 _REVISION_PATTERN = re.compile(r"^[0-9a-f]{40}$")
