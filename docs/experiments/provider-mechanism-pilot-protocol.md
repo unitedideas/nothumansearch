@@ -19,6 +19,11 @@ The provisional $75 activation package in the synthetic model is not an offer.
 Each provider must supply and accept its exact event definition, bounty, hard
 cap, cost constraint, duplicate/invalid rule, callback SLA, principal price,
 and Merchant-of-Record acknowledgement before any real inventory is activated.
+Before proposing those bounties, run the no-write price-floor model against the
+current NHS-only cost baseline. Its published-fee allowance establishes an
+infrastructure contribution floor, not profit or commercial proof. Final
+selection continues to use actual available processor-net settlement receipts,
+never the modeled allowance.
 
 ## Cohort controls
 

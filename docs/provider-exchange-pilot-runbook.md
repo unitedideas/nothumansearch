@@ -321,6 +321,26 @@ API key in the repository, command arguments, report, or shell history, and do
 not substitute an unregistered or stale credential when the named reference is
 unavailable.
 
+### Provider-funded price-floor hypothesis
+
+Do not assign one arbitrary bounty to accepted, activated, and converted. Their
+charge frequencies differ, so equal prices create different abilities to cover
+the same fixed NHS infrastructure. Refresh the NHS-only Cost Explorer baseline,
+preserve the source-period and non-invoice boundary, then run:
+
+```sh
+/usr/bin/python3 tools/provider-mechanism-price-floor.py
+```
+
+The standalone view answers what each event must gross if that mechanism, at
+the declared event count, had to cover the whole observed NHS fixed cost. The
+equal-arm view allocates the experimental fixed cost across all three arms.
+Both use a conservative published percentage-plus-fixed processing allowance.
+Neither is an offer, payment, revenue receipt, final invoice, full-cost model,
+profit claim, or mechanism-selection result. Owner labor, support, fraud, tax,
+and margin remain outside the baseline. Actual available processor-net
+settlement receipts control the eventual selection.
+
 ### Mandatory one-way cutover order
 
 The order below controls over the surrounding evidence checklist. Do not start

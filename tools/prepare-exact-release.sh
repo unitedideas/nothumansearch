@@ -112,6 +112,7 @@ fi
 (
     cd "$CONTEXT"
 	/usr/bin/python3 tools/test-action-interest-agent-eval.py
+	/usr/bin/python3 tools/test-provider-mechanism-price-floor.py
 	/usr/bin/python3 tools/test-provider-company-verify.py
 	/usr/bin/python3 tools/test-adopt-provider-exchange-candidate.py
 	/usr/bin/python3 tools/test-build-exact-provider-image.py
