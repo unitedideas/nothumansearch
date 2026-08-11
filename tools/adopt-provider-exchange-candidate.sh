@@ -65,6 +65,7 @@ VERIFICATION_MIGRATION_028=$(manifest_value migration_028_sha256) || exit 1
 VERIFICATION_MIGRATION_029=$(manifest_value migration_029_sha256) || exit 1
 VERIFICATION_MIGRATION_030=$(manifest_value migration_030_sha256) || exit 1
 VERIFICATION_MIGRATION_031=$(manifest_value migration_031_sha256) || exit 1
+VERIFICATION_MIGRATION_032=$(manifest_value migration_032_sha256) || exit 1
 VERIFICATION_ARCHIVE_TESTS=$(manifest_value exact_archive_tests_passed) || exit 1
 VERIFICATION_POSTGRES_TESTS=$(manifest_value postgres_release_tests_passed) || exit 1
 VERIFICATION_RECOVERY_SMOKE=$(manifest_value disabled_recovery_smoke_passed) || exit 1
@@ -194,6 +195,7 @@ verify_migration_digest migrations/028_provider_commercial_proof_manifest.sql "$
 verify_migration_digest migrations/029_provider_settlement_receipts.sql "$VERIFICATION_MIGRATION_029"
 verify_migration_digest migrations/030_provider_processor_net_receipts.sql "$VERIFICATION_MIGRATION_030"
 verify_migration_digest migrations/031_action_interest_attempt_funnel.sql "$VERIFICATION_MIGRATION_031"
+verify_migration_digest migrations/032_stage1_agent_surface_cohort.sql "$VERIFICATION_MIGRATION_032"
 
 REF="refs/nhs-provider-candidates/$EXPECTED_COMMIT"
 EXISTING_REF=$(git -C "$CANONICAL_REPOSITORY" rev-parse --verify "$REF" 2>/dev/null || true)

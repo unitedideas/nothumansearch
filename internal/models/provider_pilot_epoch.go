@@ -17,6 +17,7 @@ import (
 const (
 	ProviderPilotEpochContractV1        = "nhs-provider-pilot-v1"
 	providerPilotStage1SnapshotV1       = "nhs-provider-pilot-stage1-snapshot-v1"
+	providerPilotStage1SnapshotV2       = "nhs-provider-pilot-stage1-snapshot-v2"
 	providerPilotEventSnapshotV1        = "nhs-provider-pilot-event-snapshot-v1"
 	ProviderPilotMinimumCohort          = 3
 	ProviderPilotMaximumCohort          = 20
@@ -263,21 +264,39 @@ func appendProviderPilotCanonicalBucket(
 // No query, search receipt, domain, person, principal, agent, or network value
 // is accepted into the canonical snapshot.
 func ProviderPilotStage1SnapshotSHA256(proof *Stage1DemandProof) (string, error) {
+	legacyPrefixSnapshot := proof != nil && len(proof.EligibleSurfaces) == 0
 	if proof == nil || proof.AsOf.IsZero() || proof.Stage1StartedAt.IsZero() ||
 		proof.AsOf.Before(proof.Stage1StartedAt) ||
 		proof.BucketReceiptThreshold < ProviderDemandPrivacyThreshold ||
 		!proof.Stage1EpochEnforced || !proof.SyntheticExcluded ||
+		(!legacyPrefixSnapshot && (len(proof.EligibleSurfaces) != 2 ||
+			proof.EligibleSurfaces[0] != "mcp" || proof.EligibleSurfaces[1] != "rest")) ||
 		!proof.CountsAreReceiptsNotUniqueAgents || proof.CommercialProof {
 		return "", ErrInvalidProviderPilotSnapshot
 	}
+	snapshotVersion := providerPilotStage1SnapshotV2
+	if legacyPrefixSnapshot {
+		// Migration-ledger prefix tests must still be able to construct the exact
+		// v1 receipt enforced by migration 024 before migration 032 replaces the
+		// database gate. Current production proofs always name MCP and REST and
+		// therefore always use v2.
+		snapshotVersion = providerPilotStage1SnapshotV1
+	}
 	fields := []string{
-		providerPilotStage1SnapshotV1,
+		snapshotVersion,
 		"days", strconv.Itoa(proof.Days),
 		"retention_days", strconv.Itoa(proof.RetentionDays),
 		"as_of", strconv.FormatInt(proof.AsOf.UTC().UnixMicro(), 10),
 		"stage1_started_at", strconv.FormatInt(proof.Stage1StartedAt.UTC().UnixMicro(), 10),
 		"stage1_epoch_enforced", strconv.FormatBool(proof.Stage1EpochEnforced),
 		"synthetic_excluded", strconv.FormatBool(proof.SyntheticExcluded),
+	}
+	if !legacyPrefixSnapshot {
+		fields = append(fields,
+			"eligible_surface", proof.EligibleSurfaces[0],
+			"eligible_surface", proof.EligibleSurfaces[1])
+	}
+	fields = append(fields,
 		"counts_are_receipts_not_unique_agents", strconv.FormatBool(proof.CountsAreReceiptsNotUniqueAgents),
 		"commercial_proof", strconv.FormatBool(proof.CommercialProof),
 		"meaningful_search_receipts", strconv.Itoa(proof.MeaningfulSearchReceipts),
@@ -294,7 +313,7 @@ func ProviderPilotStage1SnapshotSHA256(proof *Stage1DemandProof) (string, error)
 		"observation_span_days", strconv.Itoa(proof.ObservationSpanDays),
 		"observation_window_met", strconv.FormatBool(proof.ObservationWindowMet),
 		"stage1_ready", strconv.FormatBool(proof.Stage1Ready),
-	}
+	)
 	var err error
 	if fields, err = appendProviderPilotCanonicalBucket(fields, "demand_topic", proof.DemandTopics, false, false); err != nil {
 		return "", err

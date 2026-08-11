@@ -74,6 +74,7 @@ func readyProviderPilotStage1Proof() *Stage1DemandProof {
 		Stage1StartedAt:                  startedAt,
 		Stage1EpochEnforced:              true,
 		SyntheticExcluded:                true,
+		EligibleSurfaces:                 []string{"mcp", "rest"},
 		CountsAreReceiptsNotUniqueAgents: true,
 		CommercialProof:                  false,
 		MeaningfulSearchReceipts:         120,
@@ -146,6 +147,11 @@ func TestProviderPilotStage1SnapshotIsDeterministicAndControlled(t *testing.T) {
 	unsafe.PilotCandidateTopics[0].Value = "other"
 	if _, err := ProviderPilotStage1SnapshotSHA256(unsafe); !errors.Is(err, ErrInvalidProviderPilotSnapshot) {
 		t.Fatalf("other candidate bucket error = %v", err)
+	}
+	unsafe = readyProviderPilotStage1Proof()
+	unsafe.EligibleSurfaces = []string{"web", "rest"}
+	if _, err := ProviderPilotStage1SnapshotSHA256(unsafe); !errors.Is(err, ErrInvalidProviderPilotSnapshot) {
+		t.Fatalf("non-agent Stage 1 surface error = %v", err)
 	}
 }
 

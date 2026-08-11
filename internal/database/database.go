@@ -123,6 +123,7 @@ var requiredProtectedMigrationNames = []string{
 	"029_provider_settlement_receipts.sql",
 	"030_provider_processor_net_receipts.sql",
 	"031_action_interest_attempt_funnel.sql",
+	"032_stage1_agent_surface_cohort.sql",
 }
 
 // Historical migration tests deliberately replay prefix releases one at a
@@ -639,6 +640,31 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		},
 	}
 
+	stage1AgentSurfaceCohort := protectedMigrationSpec{
+		// 032 changes no relation shape. It binds the Stage 1 pilot gate and
+		// action-interest source to the MCP/REST surfaces that expose the
+		// controlled consent affordance, and fingerprints both replaced/new
+		// database functions so a stale all-surface gate cannot be adopted.
+		relations: append([]migrationRelation(nil), actionInterestAttemptFunnel.relations...),
+		rules:     append([]migrationRule(nil), actionInterestAttemptFunnel.rules...),
+		fingerprintTables: append([]string(nil),
+			actionInterestAttemptFunnel.fingerprintTables...),
+		fingerprintFunctions: append(append([]string(nil),
+			actionInterestAttemptFunnel.fingerprintFunctions...),
+			"enforce_action_interest_agent_surface()",
+			"provider_pilot_stage1_surface_is_eligible(text)",
+		),
+		footprintFunctions: map[string]bool{
+			"enforce_action_interest_agent_surface()":         true,
+			"provider_pilot_stage1_surface_is_eligible(text)": true,
+		},
+		footprintProbes: []migrationFootprintProbe{
+			{kind: migrationFootprintTrigger, relation: "action_interest_receipts", name: "stage1_action_interest_agent_surface_enforced"},
+			{kind: migrationFootprintFunction, name: "enforce_action_interest_agent_surface"},
+			{kind: migrationFootprintFunction, name: "provider_pilot_stage1_surface_is_eligible"},
+		},
+	}
+
 	return map[string]protectedMigrationSpec{
 		"019_provider_exchange.sql":                     providerExchange,
 		"020_action_interest_receipts.sql":              actionInterests,
@@ -653,6 +679,7 @@ func buildProtectedMigrationSpecs() map[string]protectedMigrationSpec {
 		"029_provider_settlement_receipts.sql":          providerSettlementReceipts,
 		"030_provider_processor_net_receipts.sql":       providerProcessorNetReceipts,
 		"031_action_interest_attempt_funnel.sql":        actionInterestAttemptFunnel,
+		"032_stage1_agent_surface_cohort.sql":           stage1AgentSurfaceCohort,
 	}
 }
 

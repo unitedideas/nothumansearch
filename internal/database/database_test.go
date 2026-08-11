@@ -1157,7 +1157,45 @@ func TestActionInterestAttemptFunnelProtectedContractCarries030(t *testing.T) {
 	}
 }
 
-func TestRequiredProtectedMigrationSetIsExactThrough031(t *testing.T) {
+func TestStage1AgentSurfaceCohortProtectedContractCarries031(t *testing.T) {
+	prior := protectedMigrationSpecs["031_action_interest_attempt_funnel.sql"]
+	current, ok := protectedMigrationSpecs["032_stage1_agent_surface_cohort.sql"]
+	if !ok {
+		t.Fatal("Stage 1 agent-surface migration has no protected schema contract")
+	}
+	if !reflect.DeepEqual(current.relations, prior.relations) ||
+		!reflect.DeepEqual(current.rules, prior.rules) ||
+		len(current.fingerprintFunctions) != len(prior.fingerprintFunctions)+2 ||
+		len(current.footprintFunctions) != 2 || len(current.footprintProbes) != 3 {
+		t.Fatalf("032 cumulative contract shape relations=%d/%d rules=%d/%d functions=%d/%d+2 footprint_functions=%d probes=%d",
+			len(current.relations), len(prior.relations), len(current.rules), len(prior.rules),
+			len(current.fingerprintFunctions), len(prior.fingerprintFunctions),
+			len(current.footprintFunctions), len(current.footprintProbes))
+	}
+	data, err := os.ReadFile(filepath.Join("..", "..", "migrations", "032_stage1_agent_surface_cohort.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	migrationSQL := string(data)
+	for _, required := range []string{
+		"action_interest_agent_surface",
+		"stage1_action_interest_agent_surface_enforced",
+		"enforce_provider_pilot_epoch_insert",
+		"provider_pilot_stage1_surface_is_eligible",
+		"nhs-provider-pilot-stage1-snapshot-v2",
+		"'eligible_surface', 'mcp'",
+		"'eligible_surface', 'rest'",
+	} {
+		if !strings.Contains(migrationSQL, required) {
+			t.Fatalf("032 Stage 1 agent-surface contract is missing %q", required)
+		}
+	}
+	if got := strings.Count(migrationSQL, "provider_pilot_stage1_surface_is_eligible(receipt.surface)"); got != 4 {
+		t.Fatalf("032 pilot-gate agent-surface restrictions = %d, want exactly 4", got)
+	}
+}
+
+func TestRequiredProtectedMigrationSetIsExactThrough032(t *testing.T) {
 	migrations, err := loadMigrations(filepath.Join("..", "..", "migrations"))
 	if err != nil {
 		t.Fatal(err)
@@ -1167,17 +1205,17 @@ func TestRequiredProtectedMigrationSetIsExactThrough031(t *testing.T) {
 	}
 	withoutTerminal := make([]migrationFile, 0, len(migrations)-1)
 	for _, migration := range migrations {
-		if migration.name != "031_action_interest_attempt_funnel.sql" {
+		if migration.name != "032_stage1_agent_surface_cohort.sql" {
 			withoutTerminal = append(withoutTerminal, migration)
 		}
 	}
 	if err := validateRequiredProtectedMigrationSet(withoutTerminal); err == nil ||
-		!strings.Contains(err.Error(), "required protected migration is missing: 031_action_interest_attempt_funnel.sql") {
+		!strings.Contains(err.Error(), "required protected migration is missing: 032_stage1_agent_surface_cohort.sql") {
 		t.Fatalf("missing terminal protected migration error=%v", err)
 	}
-	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "032_unreviewed.sql"})
+	withUnknown := append(append([]migrationFile(nil), migrations...), migrationFile{name: "033_unreviewed.sql"})
 	if err := validateRequiredProtectedMigrationSet(withUnknown); err == nil ||
-		!strings.Contains(err.Error(), "protected migration set is not exact through 031_action_interest_attempt_funnel.sql") {
+		!strings.Contains(err.Error(), "protected migration set is not exact through 032_stage1_agent_surface_cohort.sql") {
 		t.Fatalf("extra protected migration error=%v", err)
 	}
 }

@@ -78,6 +78,7 @@ MIGRATION_028_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/028_provider_com
 MIGRATION_029_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/029_provider_settlement_receipts.sql" | /usr/bin/awk '{print $1}')
 MIGRATION_030_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/030_provider_processor_net_receipts.sql" | /usr/bin/awk '{print $1}')
 MIGRATION_031_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/031_action_interest_attempt_funnel.sql" | /usr/bin/awk '{print $1}')
+MIGRATION_032_SHA=$(/usr/bin/shasum -a 256 "$CONTEXT/migrations/032_stage1_agent_surface_cohort.sql" | /usr/bin/awk '{print $1}')
 
 GO_BINARY="${NHS_GO_BINARY:-/Users/shane/.local/bin/go}"
 if [ ! -x "$GO_BINARY" ]; then
@@ -356,6 +357,7 @@ PY
     echo "migration_029_sha256=$MIGRATION_029_SHA"
     echo "migration_030_sha256=$MIGRATION_030_SHA"
     echo "migration_031_sha256=$MIGRATION_031_SHA"
+    echo "migration_032_sha256=$MIGRATION_032_SHA"
     echo "source_archive_sha256=$ARCHIVE_SHA"
     echo "build_arg=RELEASE_REVISION=$COMMIT"
 	echo "exact_archive_tests_passed=true"

@@ -272,6 +272,9 @@ def project_stage1(document: Mapping[str, object], requested_days: int) -> dict[
         or _boolean(raw, "topic_buckets_may_overlap") is not True
     ):
         raise StatusError("invalid_response")
+    eligible_surfaces = raw.get("eligible_surfaces")
+    if eligible_surfaces != ["mcp", "rest"]:
+        raise StatusError("invalid_response")
     bucket_threshold = _integer(raw, "bucket_receipt_threshold", 1, MAX_COUNT)
     if bucket_threshold != 20:
         raise StatusError("invalid_response")
@@ -341,6 +344,7 @@ def project_stage1(document: Mapping[str, object], requested_days: int) -> dict[
         "as_of": as_of,
         "stage1_started_at": stage1_started_at,
         "stage1_epoch_enforced": True,
+        "eligible_surfaces": ["mcp", "rest"],
         "meaningful_search_receipts": meaningful,
         "result_selections": selections,
         "search_receipts_with_selection": selected_receipts,

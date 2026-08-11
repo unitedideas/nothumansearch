@@ -93,6 +93,7 @@ type Stage1DemandProof struct {
 	Stage1StartedAt                  time.Time            `json:"stage1_started_at"`
 	Stage1EpochEnforced              bool                 `json:"stage1_epoch_enforced"`
 	SyntheticExcluded                bool                 `json:"synthetic_excluded"`
+	EligibleSurfaces                 []string             `json:"eligible_surfaces"`
 	CountsAreReceiptsNotUniqueAgents bool                 `json:"counts_are_receipts_not_unique_agents"`
 	CommercialProof                  bool                 `json:"commercial_proof"`
 	MeaningfulSearchReceipts         int                  `json:"meaningful_search_receipts"`
@@ -290,6 +291,7 @@ func RecordActionInterest(db *sql.DB, input ActionInterestInput) (*ActionInteres
 		WHERE receipt.public_id=$1
 		  AND returned.site_domain_snapshot=$2
 		  AND NOT receipt.is_synthetic
+		  AND receipt.surface IN ('mcp','rest')
 		  AND receipt.created_at + INTERVAL '30 days' > NOW()
 		FOR SHARE OF receipt
 		FOR UPDATE OF returned`, normalized.SearchID, normalized.Domain).
@@ -313,6 +315,7 @@ func RecordActionInterest(db *sql.DB, input ActionInterestInput) (*ActionInteres
 		WHERE interest.search_receipt_id=$1::uuid
 		  AND interest.site_domain_snapshot=$2
 		  AND NOT receipt.is_synthetic
+		  AND receipt.surface IN ('mcp','rest')
 		  AND receipt.created_at + INTERVAL '30 days' > clock_timestamp()`, receiptID, normalized.Domain).
 		Scan(
 			&existing.PublicID, &existing.Domain, &existing.ActionType,
@@ -360,6 +363,7 @@ func RecordActionInterest(db *sql.DB, input ActionInterestInput) (*ActionInteres
 		WHERE source.id=$2::uuid
 		  AND returned.site_domain_snapshot=$3
 		  AND NOT source.is_synthetic
+		  AND source.surface IN ('mcp','rest')
 		  AND source.created_at + INTERVAL '30 days' > current_clock.at
 		RETURNING public_id, site_domain_snapshot, action_type, surface,
 		          caller_attests_principal_interest, confirmation_version,
@@ -410,6 +414,7 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 		AsOf:                             cohortAsOf,
 		Stage1EpochEnforced:              true,
 		SyntheticExcluded:                true,
+		EligibleSurfaces:                 []string{"mcp", "rest"},
 		CountsAreReceiptsNotUniqueAgents: true,
 		CommercialProof:                  false,
 		BucketReceiptThreshold:           ProviderDemandPrivacyThreshold,
@@ -448,6 +453,7 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 			FROM search_receipts receipt
 			CROSS JOIN report_window cohort_window
 			WHERE NOT receipt.is_synthetic
+			  AND receipt.surface IN ('mcp','rest')
 			  AND receipt.stage1_integrity_generation=1
 			  AND receipt.created_at >= cohort_window.started_at
 			  AND receipt.created_at <= cohort_window.now_at
@@ -523,6 +529,7 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 			FROM search_receipts receipt
 			CROSS JOIN report_clock clock
 			WHERE NOT receipt.is_synthetic
+			  AND receipt.surface IN ('mcp','rest')
 			  AND receipt.stage1_integrity_generation=1
 			  AND receipt.created_at >= GREATEST(
 			      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')
@@ -589,6 +596,7 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 			FROM search_receipts receipt
 			CROSS JOIN report_clock clock
 			WHERE NOT receipt.is_synthetic
+			  AND receipt.surface IN ('mcp','rest')
 			  AND receipt.stage1_integrity_generation=1
 			  AND receipt.created_at >= GREATEST(
 			      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')
@@ -652,6 +660,7 @@ func GetStage1DemandProof(db *sql.DB, days int) (*Stage1DemandProof, error) {
 			FROM search_receipts receipt
 			CROSS JOIN report_clock clock
 			WHERE NOT receipt.is_synthetic
+			  AND receipt.surface IN ('mcp','rest')
 			  AND receipt.stage1_integrity_generation=1
 			  AND receipt.created_at >= GREATEST(
 			      clock.stage1_started_at, clock.now_at - $1::int * INTERVAL '1 day')

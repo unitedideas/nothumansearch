@@ -3088,19 +3088,22 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 		SET applied_at=clock_timestamp()-INTERVAL '20 days'
 		WHERE name='025_stage1_fact_integrity.sql'`)
 
-	boundarySearch := func(label, category string, synthetic bool, returned []models.Site, resultCount int) string {
+	boundarySearchOnSurface := func(label, surface, category string, synthetic bool, returned []models.Site, resultCount int) string {
 		t.Helper()
 		searchID, err := models.GenerateDemandSearchID()
 		if err != nil {
 			t.Fatalf("generate Stage 1 boundary search %s: %v", label, err)
 		}
 		if err := models.RecordDemandSearch(db, models.DemandSearchReceipt{
-			PublicID: searchID, Surface: "rest", Category: category,
+			PublicID: searchID, Surface: surface, Category: category,
 			ResultCount: resultCount, Page: 1, PageSize: 10, Synthetic: synthetic,
 		}, returned); err != nil {
 			t.Fatalf("record Stage 1 boundary search %s: %v", label, err)
 		}
 		return searchID
+	}
+	boundarySearch := func(label, category string, synthetic bool, returned []models.Site, resultCount int) string {
+		return boundarySearchOnSurface(label, "rest", category, synthetic, returned, resultCount)
 	}
 	// A pilot topic needs breadth, not merely repeated traffic to one domain.
 	// Keep the tenth returned domain classified as spam until the exact
@@ -3235,6 +3238,41 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 		atHundred.TargetsMet["pilot_candidate_topic_receipts"] ||
 		atHundred.TargetsMet["observation_window_days"] || atHundred.Stage1Ready {
 		t.Fatalf("100-search-only Stage 1 boundary = %#v", atHundred)
+	}
+	webOnlyID := boundarySearchOnSurface("web-not-agent-demand", "web", "developer", false, []models.Site{site}, 1)
+	if matched, err := models.RecordDemandSelection(db, webOnlyID, site.Domain, "web"); err != nil || !matched {
+		t.Fatalf("record excluded web selection matched=%t err=%v", matched, err)
+	}
+	if _, err := models.RecordActionInterest(db, inputFor(webOnlyID, "quote")); !errors.Is(err, models.ErrActionInterestUnavailable) {
+		t.Fatalf("web-source action interest error = %v, want ErrActionInterestUnavailable", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO action_interest_receipts (
+			public_id, search_receipt_id, source_is_synthetic,
+			site_domain_snapshot, action_type, surface,
+			caller_attests_principal_interest, confirmation_version,
+			created_at, expires_at
+		)
+		SELECT 'nhs_air_WWWWWWWWWWWWWWWW', receipt.id, false,
+		       returned.site_domain_snapshot, 'quote', 'rest', true,
+		       'nhs-action-interest-v1', clock_timestamp(),
+		       clock_timestamp()+INTERVAL '30 days'
+		FROM search_receipts receipt
+		JOIN organic_results_returned returned ON returned.search_receipt_id=receipt.id
+		WHERE receipt.public_id=$1`, webOnlyID); err == nil {
+		t.Fatal("database accepted action interest backed by a web search receipt")
+	} else {
+		assertPostgresConstraint(t, err, "action_interest_agent_surface")
+	}
+	webExcluded, err := models.GetStage1DemandProof(db, 30)
+	if err != nil {
+		t.Fatalf("read web-excluded Stage 1 boundary: %v", err)
+	}
+	if webExcluded.MeaningfulSearchReceipts != atHundred.MeaningfulSearchReceipts ||
+		webExcluded.ResultSelections != atHundred.ResultSelections ||
+		webExcluded.SearchReceiptsWithSelection != atHundred.SearchReceiptsWithSelection ||
+		!reflect.DeepEqual(webExcluded.EligibleSurfaces, []string{"mcp", "rest"}) {
+		t.Fatalf("web activity changed agent Stage 1 cohort before=%#v after=%#v", atHundred, webExcluded)
 	}
 	if _, err := db.Exec(`
 		UPDATE sites SET category='developer'

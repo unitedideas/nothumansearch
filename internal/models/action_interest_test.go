@@ -195,6 +195,23 @@ func TestActionInterestReplayLookupPrecedesFreshEntropy(t *testing.T) {
 	}
 }
 
+func TestActionInterestSourceIsRestrictedToAgentSurfaces(t *testing.T) {
+	source, err := os.ReadFile("action_interest.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	start := strings.Index(text, "func RecordActionInterest")
+	end := strings.Index(text[start:], "func GetStage1DemandProof")
+	if start < 0 || end < 0 {
+		t.Fatal("could not isolate RecordActionInterest")
+	}
+	recorder := text[start : start+end]
+	if got := strings.Count(recorder, "surface IN ('mcp','rest')"); got != 3 {
+		t.Fatalf("action-interest agent-surface restrictions = %d, want exactly 3", got)
+	}
+}
+
 func TestStage1DemandProofSourceIsAggregateAndSyntheticSafe(t *testing.T) {
 	source, err := os.ReadFile("action_interest.go")
 	if err != nil {
@@ -219,6 +236,8 @@ func TestStage1DemandProofSourceIsAggregateAndSyntheticSafe(t *testing.T) {
 		"returned.stage1_integrity_generation=1",
 		"selection.stage1_integrity_generation=1",
 		"interest.stage1_integrity_generation=1",
+		"EligibleSurfaces:                 []string{\"mcp\", \"rest\"}",
+		"receipt.surface IN ('mcp','rest')",
 		"eligible_searches AS",
 		"EXISTS (\n\t\t\t\tSELECT 1 FROM organic_results_returned returned",
 		"returned.returned_at >= cohort_window.started_at",
@@ -251,6 +270,9 @@ func TestStage1DemandProofSourceIsAggregateAndSyntheticSafe(t *testing.T) {
 	}
 	if got := strings.Count(report, "NOT receipt.is_synthetic"); got < 3 {
 		t.Fatalf("Stage 1 eligible-cohort synthetic exclusions = %d, want at least 3", got)
+	}
+	if got := strings.Count(report, "receipt.surface IN ('mcp','rest')"); got != 4 {
+		t.Fatalf("Stage 1 agent-surface cohort restrictions = %d, want exactly 4", got)
 	}
 	if got := strings.Count(report, "returned.returned_at >="); got < 5 {
 		t.Fatalf("Stage 1 participating-result lower bounds = %d, want at least 5", got)

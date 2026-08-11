@@ -78,6 +78,7 @@ def stage1_document():
             "stage1_started_at": "2026-07-15T12:00:00Z",
             "stage1_epoch_enforced": True,
             "synthetic_excluded": True,
+            "eligible_surfaces": ["mcp", "rest"],
             "counts_are_receipts_not_unique_agents": True,
             "commercial_proof": False,
             "meaningful_search_receipts": 120,
@@ -526,6 +527,15 @@ class ReadContractTest(unittest.TestCase):
         impossible_action_bucket = stage1_document()
         impossible_action_bucket["stage1_demand"]["action_types"][0]["receipt_count"] = 23
         cases.append(impossible_action_bucket)
+        web_surface = stage1_document()
+        web_surface["stage1_demand"]["eligible_surfaces"] = ["web", "rest"]
+        cases.append(web_surface)
+        reordered_surfaces = stage1_document()
+        reordered_surfaces["stage1_demand"]["eligible_surfaces"] = ["rest", "mcp"]
+        cases.append(reordered_surfaces)
+        missing_surfaces = stage1_document()
+        del missing_surfaces["stage1_demand"]["eligible_surfaces"]
+        cases.append(missing_surfaces)
 
         for case, document in enumerate(cases):
             with self.subTest(case=case):
