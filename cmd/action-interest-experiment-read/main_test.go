@@ -1,8 +1,12 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +30,108 @@ func TestValidRevision(t *testing.T) {
 				t.Fatalf("validRevision(%q) = %t, want %t", test.value, got, test.want)
 			}
 		})
+	}
+}
+
+func TestAttemptCheckpointComparison(t *testing.T) {
+	since := time.Date(2026, 8, 11, 9, 41, 28, 0, time.UTC)
+	checkpointReport := &models.PostSelectionActionInterestExperiment{
+		Contract:                        models.PostSelectionActionInterestExperimentContract,
+		Since:                           since,
+		CheckedAt:                       time.Date(2026, 8, 11, 10, 11, 43, 525805000, time.UTC),
+		EligibleSurfaces:                []string{"mcp", "rest"},
+		BoundarySpanningAttemptBuckets:  1,
+		BoundarySpanningAttemptCount:    18,
+		SpanningUnavailableAttemptCount: 18,
+	}
+	rawReport, err := json.Marshal(checkpointReport)
+	if err != nil {
+		t.Fatalf("marshal checkpoint report: %v", err)
+	}
+	digest := sha256.Sum256(rawReport)
+	checkpoint := &attemptCheckpointReceipt{
+		Contract:          readContract,
+		ReportSHA256:      hex.EncodeToString(digest[:]),
+		CandidateRevision: "7ae09dff9274506d58f4ccdc318d85a89813d948",
+		BinaryRevision:    "7ae09dff9274506d58f4ccdc318d85a89813d948",
+		Report:            checkpointReport,
+	}
+	current := *checkpointReport
+	current.CheckedAt = checkpointReport.CheckedAt.Add(time.Hour)
+	current.BoundarySpanningAttemptCount = 21
+	current.SpanningUnavailableAttemptCount = 20
+	current.ExactPostBoundaryAttempts = 1
+	current.ExactInvalidAttempts = 1
+	comparison, err := compareAttemptCheckpoint(checkpoint, &current)
+	if err != nil {
+		t.Fatalf("compare checkpoint: %v", err)
+	}
+	if comparison.AttemptDelta != 4 || comparison.UnavailableAttemptDelta != 2 ||
+		comparison.InvalidRequestAttemptDelta != 1 || comparison.DemandEvidence ||
+		comparison.CommercialProof || !comparison.CountsAreAttemptsNotUniqueAgents {
+		t.Fatalf("checkpoint comparison = %#v", comparison)
+	}
+
+	current.BoundarySpanningAttemptCount = 17
+	current.ExactPostBoundaryAttempts = 0
+	if _, err := compareAttemptCheckpoint(checkpoint, &current); err == nil {
+		t.Fatal("checkpoint comparison accepted a regressed counter")
+	}
+}
+
+func TestLoadAttemptCheckpointFromEvidenceEnvelope(t *testing.T) {
+	report := &models.PostSelectionActionInterestExperiment{
+		Contract:         models.PostSelectionActionInterestExperimentContract,
+		Since:            time.Date(2026, 8, 11, 9, 41, 28, 0, time.UTC),
+		CheckedAt:        time.Date(2026, 8, 11, 10, 11, 43, 525805000, time.UTC),
+		EligibleSurfaces: []string{"mcp", "rest"},
+	}
+	reportJSON, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal report: %v", err)
+	}
+	digest := sha256.Sum256(reportJSON)
+	envelope := map[string]any{
+		"contract": "external-evidence-v1",
+		"reader_receipt": attemptCheckpointReceipt{
+			Contract:          readContract,
+			ReportSHA256:      hex.EncodeToString(digest[:]),
+			CandidateRevision: "7ae09dff9274506d58f4ccdc318d85a89813d948",
+			BinaryRevision:    "7ae09dff9274506d58f4ccdc318d85a89813d948",
+			Report:            report,
+		},
+	}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("marshal envelope: %v", err)
+	}
+	path := t.TempDir() + "/checkpoint.json"
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write checkpoint: %v", err)
+	}
+	loaded, err := loadAttemptCheckpoint(path)
+	if err != nil {
+		t.Fatalf("load checkpoint: %v", err)
+	}
+	if loaded.ReportSHA256 != hex.EncodeToString(digest[:]) || !loaded.Report.Since.Equal(report.Since) {
+		t.Fatalf("loaded checkpoint = %#v", loaded)
+	}
+
+	var tampered map[string]any
+	if err := json.Unmarshal(raw, &tampered); err != nil {
+		t.Fatalf("decode envelope for tamper: %v", err)
+	}
+	tamperedReceipt := tampered["reader_receipt"].(map[string]any)
+	tamperedReceipt["report_sha256"] = strings.Repeat("0", 64)
+	tamperedRaw, err := json.Marshal(tampered)
+	if err != nil {
+		t.Fatalf("marshal tampered checkpoint: %v", err)
+	}
+	if err := os.WriteFile(path, tamperedRaw, 0o600); err != nil {
+		t.Fatalf("write tampered checkpoint: %v", err)
+	}
+	if _, err := loadAttemptCheckpoint(path); err == nil {
+		t.Fatal("checkpoint loader accepted tampered evidence")
 	}
 }
 
