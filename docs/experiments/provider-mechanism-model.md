@@ -48,18 +48,35 @@ contains separate exact paid terms-settlement evidence for accepted-handoff,
 activated-CPA, and converted-CPA tickets. Each arm must also independently meet
 the policy's minimum distinct-provider coverage and charged-event sample. Only
 aggregate provider counts enter the projection; provider IDs remain excluded.
-The final selector compares verified paid revenue per exact non-synthetic
-provider offer returned to an agent and uses paid-settlement latency as its
-tie-breaker. Revenue per observed handoff remains a downstream diagnostic but
-cannot select the winner because it ignores agents that saw an offer and did
-not proceed. The initial 3/5/2/1 milestone proves the revenue rails but cannot
-by itself name a strongest mechanism. Aggregate payment from one charge event
-cannot qualify another. A Checkout, internal receivable, or unsigned payment
-claim is insufficient. The
-decision policy stays separate because its acquisition-cost ceiling, minimum
-paid evidence, reversal-rate ceiling, and cash-latency ceiling are
-provider/business constraints, not facts NHS should infer from outcome
-receipts.
+The final selector starts with verified paid revenue for each exact
+non-synthetic provider offer returned to an agent, then subtracts a conservative
+payment-processing allowance before comparison. The policy currently uses
+Stripe's published US standard online-card rate of 2.9% plus 30 cents per
+successful transaction, verified on 2026-08-10 at
+https://stripe.com/pricing. Because the privacy-safe proof contains aggregate
+paid cents rather than each provider's balance transaction, the allowance
+rounds the percentage up and adds one extra cent per settlement to cover the
+unknown distribution of per-transaction rounding. It is deliberately labeled
+an allowance, not an observed Stripe fee.
+
+An arm must clear both the declared processing-net margin floor and the minimum
+processing-net cents per 1,000 returned offers. The selector then chooses the
+highest processing-net revenue per 1,000 returned offers and uses
+paid-settlement latency as its tie-breaker. This is retained value after the
+declared payment-processing allowance only; it is not full profit because Fly,
+support, fraud, tax, and owner-labor costs are not present in the commercial
+proof. Revenue per observed handoff remains a downstream diagnostic but cannot
+select the winner because it ignores agents that saw an offer and did not
+proceed. Gross revenue per returned offer also remains diagnostic and cannot
+select a winner whose transaction pattern retains less value.
+
+The initial 3/5/2/1 milestone proves the revenue rails but cannot by itself name
+a strongest mechanism. Aggregate payment from one charge event cannot qualify
+another. A Checkout, internal receivable, or unsigned payment claim is
+insufficient. The decision policy stays separate because its acquisition-cost
+ceiling, minimum paid evidence, reversal-rate ceiling, cash-latency ceiling,
+processing allowance, and retained-value floors are business constraints, not
+facts NHS should infer from outcome receipts.
 
 The private proof endpoint now reports only the extra aggregates required by the
 comparison: verified observed-handoff count, positive-event latency sample

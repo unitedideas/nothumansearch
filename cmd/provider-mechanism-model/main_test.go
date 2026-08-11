@@ -2,6 +2,13 @@ package main
 
 import "testing"
 
+const (
+	testProcessingBasisPoints       int64 = 290
+	testProcessingFixedCents        int64 = 30
+	testMinProcessingNetRate              = 0.5
+	testMinProcessingNetPerThousand int64 = 1
+)
+
 func TestEvaluateSelectsActivatedForPilotScenario(t *testing.T) {
 	report, err := evaluate(testScenario())
 	if err != nil {
@@ -132,6 +139,8 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
+		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
+		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		BountyPointsCents: []int64{2500, 7500, 20000},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
@@ -191,6 +200,8 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 		Name: "verified-policy", DemandTopic: "developer-tools", MaxCostPerActivationCents: 10000,
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 1,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
+		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
+		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		BountyPointsCents: []int64{2500},
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
@@ -209,6 +220,8 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
+		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
+		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -247,6 +260,8 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 5, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
+		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
+		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -290,6 +305,8 @@ func TestEvaluateVerifiedMechanismsRequiresEveryProviderInEveryArm(t *testing.T)
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
+		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
+		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -331,6 +348,8 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
+		PaymentProcessingBasisPoints: testProcessingBasisPoints, PaymentProcessingFixedCents: testProcessingFixedCents,
+		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
 		MaxReversalRate: 0.2, PaidSettlements: 3,
 		PaidByCurrency: map[string]int64{"usd": 8000},
 		VerifiedMechanisms: map[string]mechanismEvidence{
@@ -365,6 +384,71 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 	for _, candidate := range report.Results {
 		if candidate.ChargeEvent == "activated" && candidate.RevenuePerHandoffCents != 800 {
 			t.Fatalf("fixture no longer proves handoff-only metric would disagree: %+v", candidate)
+		}
+	}
+}
+
+func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
+	input := scenario{
+		Name: "verified", EvidenceKind: "verified_closed_pilot", MatureCohort: true,
+		Handoffs: 30, Accepted: 21, Activated: 9, Converted: 3,
+		MaxCostPerActivationCents: 10000, MaxMedianDaysToCharge: 14,
+		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
+		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
+		MaxReversalRate: 0.2, PaidSettlements: 7,
+		PaidByCurrency:               map[string]int64{"usd": 6900},
+		PaymentProcessingBasisPoints: testProcessingBasisPoints,
+		PaymentProcessingFixedCents:  testProcessingFixedCents,
+		MinProcessingNetMarginRate:   testMinProcessingNetRate,
+		MinProcessingNetPerThousand:  testMinProcessingNetPerThousand,
+		VerifiedMechanisms: map[string]mechanismEvidence{
+			"accepted": {
+				ChargedProviderCompanies: 3, OfferReturns: 10, ObservedHandoffs: 10,
+				Accepted: 7, Activated: 3, Converted: 1,
+				PaidSettlements: 5, PaidCents: 3000, PaidMedianSeconds: 86400,
+			},
+			"activated": {
+				ChargedProviderCompanies: 3, OfferReturns: 10, ObservedHandoffs: 10,
+				Accepted: 7, Activated: 3, Converted: 1,
+				PaidSettlements: 1, PaidCents: 2900, PaidMedianSeconds: 86400,
+			},
+			"converted": {
+				ChargedProviderCompanies: 3, OfferReturns: 10, ObservedHandoffs: 10,
+				Accepted: 7, Activated: 3, Converted: 1,
+				PaidSettlements: 1, PaidCents: 1000, PaidMedianSeconds: 86400,
+			},
+		},
+	}
+	report, err := evaluate(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.SelectedEvent != "activated" {
+		t.Fatalf("selected event = %q, want activated by processing-net value", report.SelectedEvent)
+	}
+	if report.Results[0].RevenuePerOfferReturnCents != 290 ||
+		report.Results[0].ProcessingFeeAllowanceCents != 116 ||
+		report.Results[0].ProcessingNetRevenueCents != 2784 ||
+		report.Results[0].ProcessingNetPerThousand != 278400 {
+		t.Fatalf("unexpected activated processing-net economics: %+v", report.Results[0])
+	}
+	for _, candidate := range report.Results {
+		if candidate.ChargeEvent == "accepted" && candidate.RevenuePerOfferReturnCents != 300 {
+			t.Fatalf("fixture no longer proves gross revenue would disagree: %+v", candidate)
+		}
+	}
+
+	input.MinProcessingNetPerThousand = 280000
+	report, err = evaluate(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.SelectedEvent != "" {
+		t.Fatalf("processing-net floor selected %q", report.SelectedEvent)
+	}
+	for _, candidate := range report.Results {
+		if candidate.Viable || candidate.Failure != "below processing-net revenue-per-return floor" {
+			t.Fatalf("processing-net floor not applied to %s: %+v", candidate.ChargeEvent, candidate)
 		}
 	}
 }

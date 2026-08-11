@@ -8,5 +8,9 @@
   "min_offer_returns_per_mechanism": 20,
   "min_paid_settlements_per_mechanism": 1,
   "max_reversal_rate": 0.2,
+  "payment_processing_basis_points": 290,
+  "payment_processing_fixed_cents": 30,
+  "min_processing_net_margin_rate": 0.5,
+  "min_processing_net_revenue_per_1000_offer_returns_cents": 1000,
   "bounty_points_cents": [2500, 7500, 20000]
 }
