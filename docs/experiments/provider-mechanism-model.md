@@ -37,7 +37,7 @@ privacy-safe projection produced by `provider-pilot-status.py`:
 ```sh
 go run ./cmd/provider-mechanism-model \
   -proof-status /path/to/redacted-closed-pilot-proof.json \
-  -policy docs/experiments/provider-mechanism-policy-v1.json
+  -policy docs/experiments/provider-mechanism-policy-v2.json
 ```
 
 Proof ingestion fails closed unless the evidence identifies the closed
@@ -65,6 +65,21 @@ proof. Revenue per observed handoff remains a downstream diagnostic but cannot
 select the winner because it ignores agents that saw an offer and did not
 proceed. Gross revenue per returned offer also remains diagnostic and cannot
 select a winner whose transaction pattern retains less value.
+
+Point estimates can be real and still be too close to support a decision. The
+verified policy therefore requires the top viable arm to exceed the runner-up
+by both an absolute processor-net value per 1,000 returns and a relative lead.
+Policy v2 sets those floors to 1,157 cents, the current 31-day NHS
+infrastructure baseline, and 20%. Both must pass. The report exposes the
+required and observed leads; a near tie leaves selection empty.
+
+This is an economic-decisiveness rule, not a statistical-confidence claim. A
+distribution-free or empirical-Bernstein comparison would require a
+predeclared per-offer bound and more per-offer dispersion evidence than the
+current privacy-safe aggregate contains. Applying one to aggregate totals would
+manufacture certainty. The research basis for that boundary is Maurer and
+Pontil, “Empirical Bernstein Bounds and Sample Variance Penalization,” Theorem
+4: https://arxiv.org/abs/0907.3740.
 
 The initial 3/5/2/1 milestone proves the revenue rails but cannot by itself name
 a strongest mechanism. Aggregate payment from one charge event cannot qualify

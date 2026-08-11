@@ -116,7 +116,10 @@ requires the matching Stripe balance transaction to be verified available,
 and divides its exact processor net by the exact eligible offers returned to
 agents in that arm. The policy declares the minimum processor-net margin and
 minimum processor-net cents per 1,000 returns, but never supplies a modeled fee
-for winner selection. The result must not be called full profit.
+for winner selection. It also declares absolute and relative processor-net lead
+floors; a near tie leaves selection empty. These are economic-decisiveness
+constraints, not a statistical-significance claim, and the result must not be
+called full profit.
 The initial 3-provider, 5-accepted-handoff, 2-activation, 1-renewal milestone
 proves that the consent, attribution, outcome, billing, renewal, and settlement
 rails can produce real revenue. It does not by itself select a strongest

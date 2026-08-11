@@ -3,10 +3,12 @@ package main
 import "testing"
 
 const (
-	testProcessingBasisPoints       int64 = 290
-	testProcessingFixedCents        int64 = 30
-	testMinProcessingNetRate              = 0.5
-	testMinProcessingNetPerThousand int64 = 1
+	testProcessingBasisPoints           int64 = 290
+	testProcessingFixedCents            int64 = 30
+	testMinProcessingNetRate                  = 0.5
+	testMinProcessingNetPerThousand     int64 = 1
+	testMinProcessingNetLeadPerThousand int64 = 1
+	testMinProcessingNetLeadRate              = 0.001
 )
 
 func attachActualProcessorNetScenario(input scenario) scenario {
@@ -186,6 +188,7 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -195,9 +198,12 @@ func TestScenarioFromVerifiedProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if report.Synthetic || report.EvidenceKind != "verified_closed_pilot" || report.SelectedEvent != "activated" ||
+	if report.Contract != "nhs-provider-mechanism-model-v4" || report.Synthetic ||
+		report.EvidenceKind != "verified_closed_pilot" || report.SelectedEvent != "activated" ||
 		!report.CollectedRevenueEvidence || report.VerifiedPaidSettlements != 3 ||
-		report.Results[0].ValueKind != "verified_processor_net_available" {
+		report.Results[0].ValueKind != "verified_processor_net_available" ||
+		report.RequiredNetLeadPerThousand != testMinProcessingNetLeadPerThousand ||
+		report.RequiredNetLeadRate != testMinProcessingNetLeadRate {
 		t.Fatalf("unexpected verified report: %+v", report)
 	}
 
@@ -251,6 +257,7 @@ func TestEvaluateVerifiedMechanismsRequiresRealPaymentForEveryArm(t *testing.T) 
 		MaxMedianDaysToCharge: 14, MinChargedEvents: 1, MinChargedProviderCompanies: 1,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
 	}
 	input, err := scenarioFromVerifiedProof(proof, decision)
 	if err != nil {
@@ -269,6 +276,7 @@ func TestEvaluateVerifiedMechanismsAppliesReversalCeiling(t *testing.T) {
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.05,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -308,6 +316,7 @@ func TestEvaluateVerifiedMechanismsAppliesChargedEventSamplePerArm(t *testing.T)
 		MinChargedEvents: 5, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -352,6 +361,7 @@ func TestEvaluateVerifiedMechanismsRequiresEveryProviderInEveryArm(t *testing.T)
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1, MaxReversalRate: 0.2,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
 		PaidSettlements: 3, PaidByCurrency: map[string]int64{"usd": 7500},
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
@@ -394,6 +404,7 @@ func TestEvaluateVerifiedMechanismsSelectsRevenuePerReturnedOffer(t *testing.T) 
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MinProcessingNetMarginRate: testMinProcessingNetRate, MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand, MinProcessingNetLeadRate: testMinProcessingNetLeadRate,
 		MaxReversalRate: 0.2, PaidSettlements: 3,
 		PaidByCurrency: map[string]int64{"usd": 8000},
 		VerifiedMechanisms: map[string]mechanismEvidence{
@@ -440,9 +451,11 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 		MinChargedEvents: 1, MinChargedProviderCompanies: 3,
 		MinOfferReturnsPerMechanism: 1, MinPaidSettlementsPerMechanism: 1,
 		MaxReversalRate: 0.2, PaidSettlements: 7,
-		PaidByCurrency:              map[string]int64{"usd": 6900},
-		MinProcessingNetMarginRate:  testMinProcessingNetRate,
-		MinProcessingNetPerThousand: testMinProcessingNetPerThousand,
+		PaidByCurrency:                  map[string]int64{"usd": 6900},
+		MinProcessingNetMarginRate:      testMinProcessingNetRate,
+		MinProcessingNetPerThousand:     testMinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: testMinProcessingNetLeadPerThousand,
+		MinProcessingNetLeadRate:        testMinProcessingNetLeadRate,
 		VerifiedMechanisms: map[string]mechanismEvidence{
 			"accepted": {
 				ChargedProviderCompanies: 3, OfferReturns: 10, ObservedHandoffs: 10,
@@ -480,6 +493,31 @@ func TestEvaluateVerifiedMechanismsSelectsProcessingNetValue(t *testing.T) {
 		}
 	}
 
+	for _, gate := range []struct {
+		name         string
+		absoluteLead int64
+		relativeLead float64
+	}{
+		{name: "absolute", absoluteLead: 3000, relativeLead: 0.001},
+		{name: "relative", absoluteLead: 2500, relativeLead: 0.2},
+	} {
+		t.Run("near tie fails "+gate.name+" lead floor", func(t *testing.T) {
+			input.MinProcessingNetLeadPerThousand = gate.absoluteLead
+			input.MinProcessingNetLeadRate = gate.relativeLead
+			report, err = evaluate(attachActualProcessorNetScenario(input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if report.SelectedEvent != "" ||
+				report.SelectionReason != "top mechanism lead is not economically decisive under the declared absolute and relative processing-net lead floors" ||
+				report.ObservedNetLeadPerThousand != 2600 {
+				t.Fatalf("near-tie comparison selected or misreported a winner: %+v", report)
+			}
+		})
+	}
+
+	input.MinProcessingNetLeadPerThousand = testMinProcessingNetLeadPerThousand
+	input.MinProcessingNetLeadRate = testMinProcessingNetLeadRate
 	input.MinProcessingNetPerThousand = 280000
 	report, err = evaluate(attachActualProcessorNetScenario(input))
 	if err != nil {

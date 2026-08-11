@@ -14,28 +14,30 @@ import (
 )
 
 type scenario struct {
-	Name                           string                       `json:"name"`
-	EvidenceKind                   string                       `json:"evidence_kind"`
-	MatureCohort                   bool                         `json:"mature_cohort"`
-	Handoffs                       int64                        `json:"handoffs"`
-	Accepted                       int64                        `json:"accepted"`
-	Activated                      int64                        `json:"activated"`
-	Converted                      int64                        `json:"converted"`
-	MaxCostPerActivationCents      int64                        `json:"max_cost_per_activation_cents"`
-	MaxMedianDaysToCharge          float64                      `json:"max_median_days_to_charge"`
-	MinChargedEvents               int64                        `json:"min_charged_events"`
-	MinChargedProviderCompanies    int64                        `json:"min_charged_provider_companies_per_mechanism,omitempty"`
-	MinOfferReturnsPerMechanism    int64                        `json:"min_offer_returns_per_mechanism,omitempty"`
-	MinPaidSettlementsPerMechanism int64                        `json:"min_paid_settlements_per_mechanism,omitempty"`
-	MaxReversalRate                float64                      `json:"max_reversal_rate,omitempty"`
-	MinProcessingNetMarginRate     float64                      `json:"min_processing_net_margin_rate,omitempty"`
-	MinProcessingNetPerThousand    int64                        `json:"min_processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
-	BountyPointsCents              []int64                      `json:"bounty_points_cents"`
-	ChargeEvents                   []chargeEvent                `json:"charge_events"`
-	PaidSettlements                int64                        `json:"paid_settlements,omitempty"`
-	PaidByCurrency                 map[string]int64             `json:"paid_by_currency,omitempty"`
-	PaidMedianDays                 float64                      `json:"paid_median_days,omitempty"`
-	VerifiedMechanisms             map[string]mechanismEvidence `json:"verified_mechanisms,omitempty"`
+	Name                            string                       `json:"name"`
+	EvidenceKind                    string                       `json:"evidence_kind"`
+	MatureCohort                    bool                         `json:"mature_cohort"`
+	Handoffs                        int64                        `json:"handoffs"`
+	Accepted                        int64                        `json:"accepted"`
+	Activated                       int64                        `json:"activated"`
+	Converted                       int64                        `json:"converted"`
+	MaxCostPerActivationCents       int64                        `json:"max_cost_per_activation_cents"`
+	MaxMedianDaysToCharge           float64                      `json:"max_median_days_to_charge"`
+	MinChargedEvents                int64                        `json:"min_charged_events"`
+	MinChargedProviderCompanies     int64                        `json:"min_charged_provider_companies_per_mechanism,omitempty"`
+	MinOfferReturnsPerMechanism     int64                        `json:"min_offer_returns_per_mechanism,omitempty"`
+	MinPaidSettlementsPerMechanism  int64                        `json:"min_paid_settlements_per_mechanism,omitempty"`
+	MaxReversalRate                 float64                      `json:"max_reversal_rate,omitempty"`
+	MinProcessingNetMarginRate      float64                      `json:"min_processing_net_margin_rate,omitempty"`
+	MinProcessingNetPerThousand     int64                        `json:"min_processing_net_revenue_per_1000_offer_returns_cents,omitempty"`
+	MinProcessingNetLeadPerThousand int64                        `json:"min_processing_net_lead_per_1000_offer_returns_cents,omitempty"`
+	MinProcessingNetLeadRate        float64                      `json:"min_processing_net_lead_rate,omitempty"`
+	BountyPointsCents               []int64                      `json:"bounty_points_cents"`
+	ChargeEvents                    []chargeEvent                `json:"charge_events"`
+	PaidSettlements                 int64                        `json:"paid_settlements,omitempty"`
+	PaidByCurrency                  map[string]int64             `json:"paid_by_currency,omitempty"`
+	PaidMedianDays                  float64                      `json:"paid_median_days,omitempty"`
+	VerifiedMechanisms              map[string]mechanismEvidence `json:"verified_mechanisms,omitempty"`
 }
 
 type mechanismEvidence struct {
@@ -83,34 +85,40 @@ type result struct {
 }
 
 type report struct {
-	Contract                 string           `json:"contract"`
-	Scenario                 string           `json:"scenario"`
-	EvidenceKind             string           `json:"evidence_kind"`
-	Synthetic                bool             `json:"synthetic"`
-	SelectedEvent            string           `json:"selected_event,omitempty"`
-	SelectedBountyCents      int64            `json:"selected_bounty_cents,omitempty"`
-	SelectionReason          string           `json:"selection_reason"`
-	Results                  []result         `json:"results"`
-	CommercialProof          bool             `json:"commercial_proof"`
-	CollectedRevenueEvidence bool             `json:"collected_revenue_evidence"`
-	VerifiedPaidSettlements  int64            `json:"verified_paid_settlements,omitempty"`
-	VerifiedPaidByCurrency   map[string]int64 `json:"verified_paid_by_currency,omitempty"`
-	VerifiedPaidMedianDays   float64          `json:"verified_paid_median_days,omitempty"`
-	ProductionChanged        bool             `json:"production_changed"`
+	Contract                   string           `json:"contract"`
+	Scenario                   string           `json:"scenario"`
+	EvidenceKind               string           `json:"evidence_kind"`
+	Synthetic                  bool             `json:"synthetic"`
+	SelectedEvent              string           `json:"selected_event,omitempty"`
+	SelectedBountyCents        int64            `json:"selected_bounty_cents,omitempty"`
+	SelectionReason            string           `json:"selection_reason"`
+	Results                    []result         `json:"results"`
+	CommercialProof            bool             `json:"commercial_proof"`
+	CollectedRevenueEvidence   bool             `json:"collected_revenue_evidence"`
+	VerifiedPaidSettlements    int64            `json:"verified_paid_settlements,omitempty"`
+	VerifiedPaidByCurrency     map[string]int64 `json:"verified_paid_by_currency,omitempty"`
+	VerifiedPaidMedianDays     float64          `json:"verified_paid_median_days,omitempty"`
+	RequiredNetLeadPerThousand int64            `json:"required_processing_net_lead_per_1000_offer_returns_cents,omitempty"`
+	RequiredNetLeadRate        float64          `json:"required_processing_net_lead_rate,omitempty"`
+	ObservedNetLeadPerThousand float64          `json:"observed_processing_net_lead_per_1000_offer_returns_cents,omitempty"`
+	ObservedNetLeadRate        float64          `json:"observed_processing_net_lead_rate,omitempty"`
+	ProductionChanged          bool             `json:"production_changed"`
 }
 
 type policy struct {
-	Name                           string  `json:"name"`
-	DemandTopic                    string  `json:"demand_topic"`
-	MaxCostPerActivationCents      int64   `json:"max_cost_per_activation_cents"`
-	MaxMedianDaysToCharge          float64 `json:"max_median_days_to_charge"`
-	MinChargedEvents               int64   `json:"min_charged_events"`
-	MinChargedProviderCompanies    int64   `json:"min_charged_provider_companies_per_mechanism"`
-	MinOfferReturnsPerMechanism    int64   `json:"min_offer_returns_per_mechanism"`
-	MinPaidSettlementsPerMechanism int64   `json:"min_paid_settlements_per_mechanism"`
-	MaxReversalRate                float64 `json:"max_reversal_rate"`
-	MinProcessingNetMarginRate     float64 `json:"min_processing_net_margin_rate"`
-	MinProcessingNetPerThousand    int64   `json:"min_processing_net_revenue_per_1000_offer_returns_cents"`
+	Name                            string  `json:"name"`
+	DemandTopic                     string  `json:"demand_topic"`
+	MaxCostPerActivationCents       int64   `json:"max_cost_per_activation_cents"`
+	MaxMedianDaysToCharge           float64 `json:"max_median_days_to_charge"`
+	MinChargedEvents                int64   `json:"min_charged_events"`
+	MinChargedProviderCompanies     int64   `json:"min_charged_provider_companies_per_mechanism"`
+	MinOfferReturnsPerMechanism     int64   `json:"min_offer_returns_per_mechanism"`
+	MinPaidSettlementsPerMechanism  int64   `json:"min_paid_settlements_per_mechanism"`
+	MaxReversalRate                 float64 `json:"max_reversal_rate"`
+	MinProcessingNetMarginRate      float64 `json:"min_processing_net_margin_rate"`
+	MinProcessingNetPerThousand     int64   `json:"min_processing_net_revenue_per_1000_offer_returns_cents"`
+	MinProcessingNetLeadPerThousand int64   `json:"min_processing_net_lead_per_1000_offer_returns_cents"`
+	MinProcessingNetLeadRate        float64 `json:"min_processing_net_lead_rate"`
 }
 
 type proofStatusDocument struct {
@@ -248,22 +256,24 @@ func scenarioFromVerifiedProof(proof verifiedProof, policy policy) (scenario, er
 		return scenario{}, errors.New("verified proof latencies cannot be negative")
 	}
 	return scenario{
-		Name:                           policy.Name + ":" + proof.PilotID,
-		EvidenceKind:                   "verified_closed_pilot",
-		MatureCohort:                   true,
-		Handoffs:                       proof.ObservedHandoffs,
-		Accepted:                       proof.Accepted,
-		Activated:                      proof.Activated,
-		Converted:                      proof.Converted,
-		MaxCostPerActivationCents:      policy.MaxCostPerActivationCents,
-		MaxMedianDaysToCharge:          policy.MaxMedianDaysToCharge,
-		MinChargedEvents:               policy.MinChargedEvents,
-		MinChargedProviderCompanies:    policy.MinChargedProviderCompanies,
-		MinOfferReturnsPerMechanism:    policy.MinOfferReturnsPerMechanism,
-		MinPaidSettlementsPerMechanism: policy.MinPaidSettlementsPerMechanism,
-		MaxReversalRate:                policy.MaxReversalRate,
-		MinProcessingNetMarginRate:     policy.MinProcessingNetMarginRate,
-		MinProcessingNetPerThousand:    policy.MinProcessingNetPerThousand,
+		Name:                            policy.Name + ":" + proof.PilotID,
+		EvidenceKind:                    "verified_closed_pilot",
+		MatureCohort:                    true,
+		Handoffs:                        proof.ObservedHandoffs,
+		Accepted:                        proof.Accepted,
+		Activated:                       proof.Activated,
+		Converted:                       proof.Converted,
+		MaxCostPerActivationCents:       policy.MaxCostPerActivationCents,
+		MaxMedianDaysToCharge:           policy.MaxMedianDaysToCharge,
+		MinChargedEvents:                policy.MinChargedEvents,
+		MinChargedProviderCompanies:     policy.MinChargedProviderCompanies,
+		MinOfferReturnsPerMechanism:     policy.MinOfferReturnsPerMechanism,
+		MinPaidSettlementsPerMechanism:  policy.MinPaidSettlementsPerMechanism,
+		MaxReversalRate:                 policy.MaxReversalRate,
+		MinProcessingNetMarginRate:      policy.MinProcessingNetMarginRate,
+		MinProcessingNetPerThousand:     policy.MinProcessingNetPerThousand,
+		MinProcessingNetLeadPerThousand: policy.MinProcessingNetLeadPerThousand,
+		MinProcessingNetLeadRate:        policy.MinProcessingNetLeadRate,
 		ChargeEvents: []chargeEvent{
 			{Name: "accepted", MedianDaysToCharge: float64(proof.AcceptedMedianSeconds) / 86400},
 			{Name: "activated", MedianDaysToCharge: float64(proof.ActivatedMedianSeconds) / 86400},
@@ -391,7 +401,9 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		input.MinPaidSettlementsPerMechanism < 1 || input.MaxCostPerActivationCents < 1 ||
 		input.MaxMedianDaysToCharge < 0 || input.MaxReversalRate < 0 || input.MaxReversalRate > 1 ||
 		input.MinProcessingNetMarginRate <= 0 ||
-		input.MinProcessingNetMarginRate > 1 || input.MinProcessingNetPerThousand < 1 {
+		input.MinProcessingNetMarginRate > 1 || input.MinProcessingNetPerThousand < 1 ||
+		input.MinProcessingNetLeadPerThousand < 1 || input.MinProcessingNetLeadRate <= 0 ||
+		input.MinProcessingNetLeadRate > 10 {
 		return report{}, errors.New("verified selection constraints must be positive")
 	}
 	expected := []string{"accepted", "activated", "converted"}
@@ -399,16 +411,18 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		return report{}, errors.New("verified proof must contain accepted, activated, and converted mechanism evidence")
 	}
 	output := report{
-		Contract:                 "nhs-provider-mechanism-model-v3",
-		Scenario:                 input.Name,
-		EvidenceKind:             input.EvidenceKind,
-		Synthetic:                false,
-		CommercialProof:          false,
-		CollectedRevenueEvidence: input.PaidSettlements > 0,
-		VerifiedPaidSettlements:  input.PaidSettlements,
-		VerifiedPaidByCurrency:   input.PaidByCurrency,
-		VerifiedPaidMedianDays:   input.PaidMedianDays,
-		ProductionChanged:        false,
+		Contract:                   "nhs-provider-mechanism-model-v4",
+		Scenario:                   input.Name,
+		EvidenceKind:               input.EvidenceKind,
+		Synthetic:                  false,
+		CommercialProof:            false,
+		CollectedRevenueEvidence:   input.PaidSettlements > 0,
+		VerifiedPaidSettlements:    input.PaidSettlements,
+		VerifiedPaidByCurrency:     input.PaidByCurrency,
+		VerifiedPaidMedianDays:     input.PaidMedianDays,
+		RequiredNetLeadPerThousand: input.MinProcessingNetLeadPerThousand,
+		RequiredNetLeadRate:        input.MinProcessingNetLeadRate,
+		ProductionChanged:          false,
 	}
 	var mechanismPaidTotal int64
 	var mechanismSettlementTotal int64
@@ -520,10 +534,26 @@ func evaluateVerifiedMechanisms(input scenario) (report, error) {
 		output.SelectionReason = "mechanism comparison incomplete because at least one arm lacks the declared offer-return sample, provider coverage, or charged-event sample"
 		return output, nil
 	}
+	viable := make([]result, 0, len(output.Results))
+	for _, candidate := range output.Results {
+		if candidate.Viable {
+			viable = append(viable, candidate)
+		}
+	}
+	if len(viable) >= 2 {
+		lead := viable[0].ProcessingNetPerThousand - viable[1].ProcessingNetPerThousand
+		leadRate := lead / viable[1].ProcessingNetPerThousand
+		output.ObservedNetLeadPerThousand = lead
+		output.ObservedNetLeadRate = leadRate
+		if lead < float64(input.MinProcessingNetLeadPerThousand) || leadRate < input.MinProcessingNetLeadRate {
+			output.SelectionReason = "top mechanism lead is not economically decisive under the declared absolute and relative processing-net lead floors"
+			return output, nil
+		}
+	}
 	for _, candidate := range output.Results {
 		if candidate.Viable {
 			output.SelectedEvent = candidate.ChargeEvent
-			output.SelectionReason = "highest actual available processor-net revenue per 1000 returned offers among mechanisms meeting offer-return sample, charged-provider coverage, charged-event sample, provider cost-per-activation, reversal-rate, paid-settlement latency, processing-net margin, and processing-net revenue-per-return constraints"
+			output.SelectionReason = "highest actual available processor-net revenue per 1000 returned offers with an economically decisive lead among mechanisms meeting offer-return sample, charged-provider coverage, charged-event sample, provider cost-per-activation, reversal-rate, paid-settlement latency, processing-net margin, and processing-net revenue-per-return constraints"
 			return output, nil
 		}
 	}

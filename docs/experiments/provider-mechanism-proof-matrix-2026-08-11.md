@@ -27,7 +27,7 @@ or a winning mechanism.
 | Converted-CPA mechanism | Authenticated conversion and exact available processor-net settlement for its own arm | Synthetic fixtures only | Unmet business proof |
 | Billing and settlement | Signed paid webhook bound to the exact charged outcome, matching Stripe balance transaction, and a later availability receipt | Rails are deployed and fail closed; no provider has been charged | Implemented, unobserved |
 | Bounded 3/5/2/1 revenue milestone | 3 verified providers, 5 accepted handoffs, 2 activations, 1 genuine renewal, and available settlement receipts | Provider activation is owner-gated and has not been authorized | Owner-gated, unmet |
-| Strongest mechanism selection | Closed mature three-arm cohort; every arm independently meets provider, offer-return, charged-event, paid-settlement, reversal, time-to-cash, margin, and retained-value floors | Selector contract v3 consumes only actual available processor fee/net; no real cohort exists | Correctly empty |
+| Strongest mechanism selection | Closed mature three-arm cohort; every arm independently meets provider, offer-return, charged-event, paid-settlement, reversal, time-to-cash, margin, retained-value, and economic-lead floors | Selector contract v4 consumes only actual available processor fee/net and leaves near ties empty; no real cohort exists | Correctly empty |
 
 ## What can be extracted
 
@@ -46,8 +46,12 @@ The winner remains empty until each arm has real available processor net. The
 verified selector does not accept a published processing rate. It compares the
 exact Stripe-observed available net per 1,000 returned offers, using paid
 settlement latency only as a tie-breaker after all declared constraints pass.
-This prevents a high-price, low-exposure arm or a modeled fee assumption from
-appearing strongest.
+The top arm must also beat the runner-up by at least 1,157 processor-net cents
+per 1,000 returns and 20%. This prevents a high-price, low-exposure arm, modeled
+fee assumption, or economically immaterial near tie from appearing strongest.
+The lead gate is not represented as statistical significance because the
+privacy-safe proof does not contain the per-offer dispersion required for that
+claim.
 
 No provider was contacted, invited, enrolled, activated, or charged while
 producing this matrix. Production provider exchange remains disabled.

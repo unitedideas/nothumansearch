@@ -1,5 +1,5 @@
 {
-  "name": "developer-tools-policy-v1",
+  "name": "developer-tools-policy-v2",
   "demand_topic": "developer-tools",
   "max_cost_per_activation_cents": 10000,
   "max_median_days_to_charge": 14,
@@ -9,5 +9,7 @@
   "min_paid_settlements_per_mechanism": 1,
   "max_reversal_rate": 0.2,
   "min_processing_net_margin_rate": 0.5,
-  "min_processing_net_revenue_per_1000_offer_returns_cents": 1000
+  "min_processing_net_revenue_per_1000_offer_returns_cents": 1000,
+  "min_processing_net_lead_per_1000_offer_returns_cents": 1157,
+  "min_processing_net_lead_rate": 0.2
 }
