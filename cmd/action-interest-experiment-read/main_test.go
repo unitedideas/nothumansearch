@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -115,6 +116,17 @@ func TestLoadAttemptCheckpointFromEvidenceEnvelope(t *testing.T) {
 	}
 	if loaded.ReportSHA256 != hex.EncodeToString(digest[:]) || !loaded.Report.Since.Equal(report.Since) {
 		t.Fatalf("loaded checkpoint = %#v", loaded)
+	}
+	t.Setenv("NHS_ATTEMPT_CHECKPOINT_B64", base64.StdEncoding.EncodeToString(raw))
+	environmentLoaded, err := loadAttemptCheckpointEnvironment("NHS_ATTEMPT_CHECKPOINT_B64")
+	if err != nil {
+		t.Fatalf("load checkpoint environment: %v", err)
+	}
+	if environmentLoaded.ReportSHA256 != loaded.ReportSHA256 {
+		t.Fatalf("environment checkpoint = %#v, want %#v", environmentLoaded, loaded)
+	}
+	if _, err := loadAttemptCheckpointEnvironment("DATABASE_URL"); err == nil {
+		t.Fatal("checkpoint loader accepted an unrestricted environment name")
 	}
 
 	var tampered map[string]any

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
@@ -69,6 +70,7 @@ func main() {
 	revision := flag.String("revision", "", "exact 40-character deployed commit")
 	sinceRaw := flag.String("since", "", "UTC RFC3339 experiment boundary, no older than 30 days")
 	checkpointPath := flag.String("attempt-checkpoint", "", "optional prior v2 receipt or evidence envelope")
+	checkpointEnv := flag.String("attempt-checkpoint-base64-env", "", "optional environment name containing a base64 prior v2 receipt")
 	flag.Parse()
 
 	candidate := strings.ToLower(strings.TrimSpace(*revision))
@@ -84,9 +86,17 @@ func main() {
 	if offset != 0 || since.Format(time.RFC3339) != strings.TrimSpace(*sinceRaw) {
 		fail("since_must_be_canonical_utc_rfc3339")
 	}
+	if strings.TrimSpace(*checkpointPath) != "" && strings.TrimSpace(*checkpointEnv) != "" {
+		fail("multiple_attempt_checkpoints")
+	}
 	var checkpoint *attemptCheckpointReceipt
 	if strings.TrimSpace(*checkpointPath) != "" {
 		checkpoint, err = loadAttemptCheckpoint(strings.TrimSpace(*checkpointPath))
+		if err != nil {
+			fail("invalid_attempt_checkpoint")
+		}
+	} else if strings.TrimSpace(*checkpointEnv) != "" {
+		checkpoint, err = loadAttemptCheckpointEnvironment(strings.TrimSpace(*checkpointEnv))
 		if err != nil {
 			fail("invalid_attempt_checkpoint")
 		}
@@ -152,6 +162,25 @@ func loadAttemptCheckpoint(path string) (*attemptCheckpointReceipt, error) {
 	if err != nil || len(raw) == 0 || len(raw) > checkpointMaximumBytes {
 		return nil, fmt.Errorf("checkpoint size invalid")
 	}
+	return parseAttemptCheckpoint(raw)
+}
+
+func loadAttemptCheckpointEnvironment(name string) (*attemptCheckpointReceipt, error) {
+	if name != "NHS_ATTEMPT_CHECKPOINT_B64" {
+		return nil, fmt.Errorf("checkpoint environment name invalid")
+	}
+	encoded := strings.TrimSpace(os.Getenv(name))
+	if encoded == "" || len(encoded) > base64.StdEncoding.EncodedLen(checkpointMaximumBytes) {
+		return nil, fmt.Errorf("checkpoint environment size invalid")
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(raw) == 0 || len(raw) > checkpointMaximumBytes {
+		return nil, fmt.Errorf("checkpoint environment encoding invalid")
+	}
+	return parseAttemptCheckpoint(raw)
+}
+
+func parseAttemptCheckpoint(raw []byte) (*attemptCheckpointReceipt, error) {
 	var envelope struct {
 		ReaderReceipt json.RawMessage `json:"reader_receipt"`
 	}
