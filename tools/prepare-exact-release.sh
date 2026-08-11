@@ -371,7 +371,7 @@ PY
 echo "Exact NHS release context verified. No deployment was performed."
 echo "Manifest: $MANIFEST"
 echo "Candidate commit: $COMMIT"
-echo "No deploy command was emitted. Migrations 019-028 require an owner-authorized"
+echo "No deploy command was emitted. Migrations 019-030 require an owner-authorized"
 echo "single-machine cutover with old writers quiesced, a target-database"
 echo "preflight, staged signer references, and a verified forward rollback or"
 echo "database recovery plan. Use the pilot runbook for that separate gate."

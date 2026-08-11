@@ -93,7 +93,7 @@ reused ID.
 
 This runbook describes the local release candidate and the evidence required
 for a future authorized pilot. It is not evidence that migrations 019 through
-028 are deployed, that the provider exchange is active in production, or that
+030 are deployed, that the provider exchange is active in production, or that
 any live commercial threshold has been met.
 
 ## Technical release checklist

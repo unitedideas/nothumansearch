@@ -273,7 +273,7 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		"deployment_command_emitted=false",
 		"No deploy command was emitted",
 		"No deployment was performed",
-		"Migrations 019-028 require an owner-authorized",
+		"Migrations 019-030 require an owner-authorized",
 	} {
 		if !strings.Contains(preparer, required) {
 			t.Fatalf("exact release preparer is missing %q", required)
