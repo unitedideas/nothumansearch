@@ -826,6 +826,13 @@ Readiness does not select a category,
 authorize provider invitations, or start Stage 2. Read it without placing the
 admin key in argv or logs:
 
+The separate post-selection experiment v3 must also be inspected before
+proposing `developer-tools`. It reports the controlled topic's own aggregate
+search, selection, explicit-interest, and post-selection-interest funnel. Do
+not pair developer-tools search volume with global selections or global intent;
+zero category-specific intent must be reported as zero. This extra diagnostic
+does not lower or replace any Stage 1 target and does not authorize Stage 2.
+
 ```sh
 /Users/shane/.local/bin/codex-secret run \
   --env NHS_PROVIDER_OPERATOR_ADMIN_KEY=NHS_ADMIN_API_KEY \

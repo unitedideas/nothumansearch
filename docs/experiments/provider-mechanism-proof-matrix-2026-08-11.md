@@ -31,6 +31,7 @@ or a winning mechanism.
 | Bounded 3/5/2/1 revenue milestone | 3 verified providers, 5 accepted handoffs, 2 activations, 1 genuine renewal, and available settlement receipts | Provider activation is owner-gated and has not been authorized | Owner-gated, unmet |
 | Strongest mechanism selection | Closed mature three-arm cohort; every arm independently meets provider, offer-return, charged-event, paid-settlement, reversal, time-to-cash, margin, retained-value, economic-lead, and simultaneous-confidence gates | Selector contract v5 consumes actual available processor fee/net plus privacy-safe dispersion aggregates and leaves overlapping intervals empty; no real cohort exists | Correctly empty |
 | Selection-design feasibility | Preregistered cohort can satisfy both the per-arm evidence floors and a sufficient confidence/power design at plausible eligible traffic | Executable audit proves the 3/5/2/1 milestone cannot satisfy the three-arm floors; policy v4's zero-variance necessary confidence floor at its smallest decisive lead is 446,360 returns per arm | Revenue-proof pilot is bounded; winner-selection design is not ready |
+| Developer-tools intent funnel | Privacy-safe aggregate search, selection, explicit-interest, and post-selection-interest counts restricted to controlled `developer-tools` receipts | Experiment contract v3 adds the complete category funnel without returning a search receipt, domain, query, prompt, contact, provider, agent, or principal coordinate | Search volume alone can no longer be presented as category-specific monetizable intent |
 
 ## What can be extracted
 
@@ -310,3 +311,27 @@ Its embedded Stage 1 and attempt-funnel SHA-256 values were independently
 recomputed and matched. The disposable 256 MB capture machine was destroyed.
 No provider was contacted, invited, activated, or charged; no commercial state
 or organic rank changed.
+
+## Developer-tools category funnel correction
+
+The original owner experiment separated developer-tools search receipts from
+all searches, but its selection and explicit-interest counts were global. It
+therefore could not prove whether any of the seven selected receipts belonged
+to the intended developer-tools pilot category. Global intent from another
+controlled topic could be mistakenly presented beside developer-tools search
+volume.
+
+Experiment contract v3 adds only six aggregate developer-tools counters:
+result selections, distinct selected-search receipts, active explicit-interest
+receipts, distinct interest-backed searches, post-selection interests, and
+distinct post-selection interest-backed searches. The database derives every
+counter inside the same read-only repeatable-read snapshot and the reader binds
+the complete report with SHA-256. The contract still emits no domain, search
+receipt, query, prompt, contact, network, provider, agent, or principal
+coordinate. Existing v2 checkpoints are intentionally not accepted by v3; the
+first production read after deployment becomes the clean comparison baseline.
+
+This is measurement, not a new readiness shortcut. A developer-tools search is
+not a lead, a selection is not explicit interest, and explicit interest is not
+a handoff or revenue. Provider mode remains disabled and no category can be
+activated without the separate owner gate.

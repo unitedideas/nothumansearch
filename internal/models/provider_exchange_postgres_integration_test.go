@@ -2732,6 +2732,12 @@ func exerciseActionInterestPostgres(t *testing.T, db *sql.DB, site models.Site) 
 	}
 	if experiment.MeaningfulSearchReceipts != 2 ||
 		experiment.DeveloperToolsSearchReceipts != 2 ||
+		experiment.DeveloperToolsResultSelections != 2 ||
+		experiment.DeveloperToolsSearchesSelected != 2 ||
+		experiment.DeveloperToolsInterestReceipts != 1 ||
+		experiment.DeveloperToolsSearchesInterested != 1 ||
+		experiment.DeveloperToolsPostSelectionInterests != 1 ||
+		experiment.DeveloperToolsPostSelectionSearches != 1 ||
 		experiment.ResultSelections != 2 ||
 		experiment.SearchReceiptsWithSelection != 2 ||
 		experiment.ActiveActionInterestReceipts != 1 ||

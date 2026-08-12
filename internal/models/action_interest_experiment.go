@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const PostSelectionActionInterestExperimentContract = "nhs-post-selection-action-interest-experiment-v2"
+const PostSelectionActionInterestExperimentContract = "nhs-post-selection-action-interest-experiment-v3"
 
 var ErrInvalidPostSelectionExperimentWindow = errors.New("invalid post-selection experiment window")
 
@@ -18,45 +18,51 @@ var ErrInvalidPostSelectionExperimentWindow = errors.New("invalid post-selection
 // selection, so search-time interest and selection alone cannot be relabeled as
 // evidence for this intervention.
 type PostSelectionActionInterestExperiment struct {
-	Contract                         string    `json:"contract"`
-	Since                            time.Time `json:"since"`
-	CheckedAt                        time.Time `json:"checked_at"`
-	EligibleSurfaces                 []string  `json:"eligible_surfaces"`
-	MeaningfulSearchReceipts         int       `json:"meaningful_search_receipts"`
-	DeveloperToolsSearchReceipts     int       `json:"developer_tools_search_receipts"`
-	ResultSelections                 int       `json:"result_selections"`
-	SearchReceiptsWithSelection      int       `json:"search_receipts_with_selection"`
-	ActiveActionInterestReceipts     int       `json:"active_action_interest_receipts"`
-	SearchReceiptsWithActionInterest int       `json:"search_receipts_with_action_interest"`
-	PostSelectionInterestReceipts    int       `json:"post_selection_action_interest_receipts"`
-	PostSelectionSearchReceipts      int       `json:"post_selection_search_receipts"`
-	PostSelectionConversionRate      *float64  `json:"post_selection_conversion_rate"`
-	MCPSearchReceipts                int       `json:"mcp_search_receipts"`
-	MCPResultSelections              int       `json:"mcp_result_selections"`
-	MCPPostSelectionInterests        int       `json:"mcp_post_selection_action_interests"`
-	RESTSearchReceipts               int       `json:"rest_search_receipts"`
-	RESTResultSelections             int       `json:"rest_result_selections"`
-	RESTPostSelectionInterests       int       `json:"rest_post_selection_action_interests"`
-	SyntheticActionInterestReceipts  int       `json:"synthetic_action_interest_receipts"`
-	ExactPostBoundaryAttempts        int64     `json:"exact_post_boundary_attempts"`
-	BoundarySpanningAttemptBuckets   int       `json:"boundary_spanning_attempt_buckets"`
-	BoundarySpanningAttemptCount     int64     `json:"boundary_spanning_attempt_count"`
-	ExactUnavailableAttempts         int64     `json:"exact_unavailable_attempts"`
-	SpanningUnavailableAttemptCount  int64     `json:"spanning_unavailable_attempt_count"`
-	ExactInvalidAttempts             int64     `json:"exact_invalid_request_attempts"`
-	SpanningInvalidAttemptCount      int64     `json:"spanning_invalid_request_attempt_count"`
-	AttemptCoverageExact             bool      `json:"attempt_coverage_exact"`
-	ProviderPilotActivations         int       `json:"provider_pilot_activations"`
-	ProviderOfferActivations         int       `json:"provider_offer_activations"`
-	ProviderCommercialAcceptances    int       `json:"provider_commercial_acceptances"`
-	ProviderCommercialCommitments    int       `json:"provider_commercial_commitments"`
-	ProviderOffersReturned           int       `json:"provider_offers_returned"`
-	ProviderTicketsCreated           int       `json:"provider_tickets_created"`
-	ProviderHandoffsObserved         int       `json:"provider_handoffs_observed"`
-	ProviderOutcomesReported         int       `json:"provider_outcomes_reported"`
-	ProviderPaidSettlements          int       `json:"provider_paid_settlements"`
-	ProviderAvailableSettlements     int       `json:"provider_available_settlements"`
-	CommercialStateEventsTotal       int       `json:"commercial_state_events_total"`
+	Contract                             string    `json:"contract"`
+	Since                                time.Time `json:"since"`
+	CheckedAt                            time.Time `json:"checked_at"`
+	EligibleSurfaces                     []string  `json:"eligible_surfaces"`
+	MeaningfulSearchReceipts             int       `json:"meaningful_search_receipts"`
+	DeveloperToolsSearchReceipts         int       `json:"developer_tools_search_receipts"`
+	DeveloperToolsResultSelections       int       `json:"developer_tools_result_selections"`
+	DeveloperToolsSearchesSelected       int       `json:"developer_tools_search_receipts_with_selection"`
+	DeveloperToolsInterestReceipts       int       `json:"developer_tools_action_interest_receipts"`
+	DeveloperToolsSearchesInterested     int       `json:"developer_tools_search_receipts_with_action_interest"`
+	DeveloperToolsPostSelectionInterests int       `json:"developer_tools_post_selection_action_interest_receipts"`
+	DeveloperToolsPostSelectionSearches  int       `json:"developer_tools_post_selection_search_receipts"`
+	ResultSelections                     int       `json:"result_selections"`
+	SearchReceiptsWithSelection          int       `json:"search_receipts_with_selection"`
+	ActiveActionInterestReceipts         int       `json:"active_action_interest_receipts"`
+	SearchReceiptsWithActionInterest     int       `json:"search_receipts_with_action_interest"`
+	PostSelectionInterestReceipts        int       `json:"post_selection_action_interest_receipts"`
+	PostSelectionSearchReceipts          int       `json:"post_selection_search_receipts"`
+	PostSelectionConversionRate          *float64  `json:"post_selection_conversion_rate"`
+	MCPSearchReceipts                    int       `json:"mcp_search_receipts"`
+	MCPResultSelections                  int       `json:"mcp_result_selections"`
+	MCPPostSelectionInterests            int       `json:"mcp_post_selection_action_interests"`
+	RESTSearchReceipts                   int       `json:"rest_search_receipts"`
+	RESTResultSelections                 int       `json:"rest_result_selections"`
+	RESTPostSelectionInterests           int       `json:"rest_post_selection_action_interests"`
+	SyntheticActionInterestReceipts      int       `json:"synthetic_action_interest_receipts"`
+	ExactPostBoundaryAttempts            int64     `json:"exact_post_boundary_attempts"`
+	BoundarySpanningAttemptBuckets       int       `json:"boundary_spanning_attempt_buckets"`
+	BoundarySpanningAttemptCount         int64     `json:"boundary_spanning_attempt_count"`
+	ExactUnavailableAttempts             int64     `json:"exact_unavailable_attempts"`
+	SpanningUnavailableAttemptCount      int64     `json:"spanning_unavailable_attempt_count"`
+	ExactInvalidAttempts                 int64     `json:"exact_invalid_request_attempts"`
+	SpanningInvalidAttemptCount          int64     `json:"spanning_invalid_request_attempt_count"`
+	AttemptCoverageExact                 bool      `json:"attempt_coverage_exact"`
+	ProviderPilotActivations             int       `json:"provider_pilot_activations"`
+	ProviderOfferActivations             int       `json:"provider_offer_activations"`
+	ProviderCommercialAcceptances        int       `json:"provider_commercial_acceptances"`
+	ProviderCommercialCommitments        int       `json:"provider_commercial_commitments"`
+	ProviderOffersReturned               int       `json:"provider_offers_returned"`
+	ProviderTicketsCreated               int       `json:"provider_tickets_created"`
+	ProviderHandoffsObserved             int       `json:"provider_handoffs_observed"`
+	ProviderOutcomesReported             int       `json:"provider_outcomes_reported"`
+	ProviderPaidSettlements              int       `json:"provider_paid_settlements"`
+	ProviderAvailableSettlements         int       `json:"provider_available_settlements"`
+	CommercialStateEventsTotal           int       `json:"commercial_state_events_total"`
 }
 
 // ReadPostSelectionActionInterestExperiment performs one repeatable-read,
@@ -110,7 +116,7 @@ func ReadPostSelectionActionInterestExperiment(
 			  )
 		), eligible_selections AS (
 			SELECT selection.search_receipt_id, selection.site_domain_snapshot,
-			       selection.selected_at, receipt.surface
+			       selection.selected_at, receipt.surface, receipt.demand_topics
 			FROM result_selections selection
 			JOIN eligible_searches receipt ON receipt.id=selection.search_receipt_id
 			JOIN organic_results_returned returned
@@ -124,7 +130,7 @@ func ReadPostSelectionActionInterestExperiment(
 			  AND returned.returned_at <= $2
 		), eligible_interests AS (
 			SELECT interest.search_receipt_id, interest.site_domain_snapshot,
-			       interest.created_at, receipt.surface
+			       interest.created_at, receipt.surface, receipt.demand_topics
 			FROM action_interest_receipts interest
 			JOIN eligible_searches receipt ON receipt.id=interest.search_receipt_id
 			WHERE interest.stage1_integrity_generation=1
@@ -133,7 +139,8 @@ func ReadPostSelectionActionInterestExperiment(
 			  AND interest.expires_at > $2
 		), post_selection_interests AS (
 			SELECT DISTINCT interest.search_receipt_id,
-			       interest.site_domain_snapshot, interest.surface
+			       interest.site_domain_snapshot, interest.surface,
+			       interest.demand_topics
 			FROM eligible_interests interest
 			JOIN eligible_selections selection
 			  ON selection.search_receipt_id=interest.search_receipt_id
@@ -143,6 +150,18 @@ func ReadPostSelectionActionInterestExperiment(
 		SELECT
 		  (SELECT COUNT(*)::int FROM eligible_searches),
 		  (SELECT COUNT(*)::int FROM eligible_searches
+		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
+		  (SELECT COUNT(*)::int FROM eligible_selections
+		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
+		  (SELECT COUNT(DISTINCT search_receipt_id)::int FROM eligible_selections
+		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
+		  (SELECT COUNT(*)::int FROM eligible_interests
+		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
+		  (SELECT COUNT(DISTINCT search_receipt_id)::int FROM eligible_interests
+		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
+		  (SELECT COUNT(*)::int FROM post_selection_interests
+		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
+		  (SELECT COUNT(DISTINCT search_receipt_id)::int FROM post_selection_interests
 		    WHERE demand_topics @> ARRAY['developer-tools']::text[]),
 		  (SELECT COUNT(*)::int FROM eligible_selections),
 		  (SELECT COUNT(DISTINCT search_receipt_id)::int FROM eligible_selections),
@@ -160,6 +179,12 @@ func ReadPostSelectionActionInterestExperiment(
 	).Scan(
 		&report.MeaningfulSearchReceipts,
 		&report.DeveloperToolsSearchReceipts,
+		&report.DeveloperToolsResultSelections,
+		&report.DeveloperToolsSearchesSelected,
+		&report.DeveloperToolsInterestReceipts,
+		&report.DeveloperToolsSearchesInterested,
+		&report.DeveloperToolsPostSelectionInterests,
+		&report.DeveloperToolsPostSelectionSearches,
 		&report.ResultSelections,
 		&report.SearchReceiptsWithSelection,
 		&report.ActiveActionInterestReceipts,

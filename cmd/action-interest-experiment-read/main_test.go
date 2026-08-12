@@ -83,29 +83,35 @@ func TestAttemptCheckpointComparison(t *testing.T) {
 func TestFunnelCheckpointComparisonCoversDiscoveryIntentAndSettlement(t *testing.T) {
 	since := time.Date(2026, 8, 11, 9, 41, 28, 0, time.UTC)
 	checkpointReport := &models.PostSelectionActionInterestExperiment{
-		Contract:                         models.PostSelectionActionInterestExperimentContract,
-		Since:                            since,
-		CheckedAt:                        time.Date(2026, 8, 12, 0, 41, 26, 0, time.UTC),
-		EligibleSurfaces:                 []string{"mcp", "rest"},
-		MeaningfulSearchReceipts:         10,
-		DeveloperToolsSearchReceipts:     3,
-		ResultSelections:                 3,
-		SearchReceiptsWithSelection:      2,
-		ActiveActionInterestReceipts:     1,
-		SearchReceiptsWithActionInterest: 1,
-		PostSelectionInterestReceipts:    1,
-		PostSelectionSearchReceipts:      1,
-		MCPSearchReceipts:                4,
-		MCPResultSelections:              2,
-		MCPPostSelectionInterests:        1,
-		RESTSearchReceipts:               6,
-		RESTResultSelections:             1,
-		ProviderOffersReturned:           3,
-		ProviderTicketsCreated:           2,
-		ProviderHandoffsObserved:         1,
-		ProviderOutcomesReported:         1,
-		ProviderPaidSettlements:          1,
-		CommercialStateEventsTotal:       8,
+		Contract:                             models.PostSelectionActionInterestExperimentContract,
+		Since:                                since,
+		CheckedAt:                            time.Date(2026, 8, 12, 0, 41, 26, 0, time.UTC),
+		EligibleSurfaces:                     []string{"mcp", "rest"},
+		MeaningfulSearchReceipts:             10,
+		DeveloperToolsSearchReceipts:         3,
+		DeveloperToolsResultSelections:       1,
+		DeveloperToolsSearchesSelected:       1,
+		DeveloperToolsInterestReceipts:       1,
+		DeveloperToolsSearchesInterested:     1,
+		DeveloperToolsPostSelectionInterests: 1,
+		DeveloperToolsPostSelectionSearches:  1,
+		ResultSelections:                     3,
+		SearchReceiptsWithSelection:          2,
+		ActiveActionInterestReceipts:         1,
+		SearchReceiptsWithActionInterest:     1,
+		PostSelectionInterestReceipts:        1,
+		PostSelectionSearchReceipts:          1,
+		MCPSearchReceipts:                    4,
+		MCPResultSelections:                  2,
+		MCPPostSelectionInterests:            1,
+		RESTSearchReceipts:                   6,
+		RESTResultSelections:                 1,
+		ProviderOffersReturned:               3,
+		ProviderTicketsCreated:               2,
+		ProviderHandoffsObserved:             1,
+		ProviderOutcomesReported:             1,
+		ProviderPaidSettlements:              1,
+		CommercialStateEventsTotal:           8,
 	}
 	rawReport, err := json.Marshal(checkpointReport)
 	if err != nil {
@@ -123,6 +129,12 @@ func TestFunnelCheckpointComparisonCoversDiscoveryIntentAndSettlement(t *testing
 	current.CheckedAt = checkpointReport.CheckedAt.Add(time.Hour)
 	current.MeaningfulSearchReceipts = 15
 	current.DeveloperToolsSearchReceipts = 5
+	current.DeveloperToolsResultSelections = 2
+	current.DeveloperToolsSearchesSelected = 2
+	current.DeveloperToolsInterestReceipts = 2
+	current.DeveloperToolsSearchesInterested = 2
+	current.DeveloperToolsPostSelectionInterests = 2
+	current.DeveloperToolsPostSelectionSearches = 2
 	current.MCPSearchReceipts = 6
 	current.RESTSearchReceipts = 9
 	current.ResultSelections = 5
@@ -153,6 +165,12 @@ func TestFunnelCheckpointComparisonCoversDiscoveryIntentAndSettlement(t *testing
 	}
 	if comparison.MeaningfulSearchReceiptsDelta != 5 ||
 		comparison.DeveloperToolsSearchReceiptsDelta != 2 ||
+		comparison.DeveloperToolsResultSelectionsDelta != 1 ||
+		comparison.DeveloperToolsSearchesSelectedDelta != 1 ||
+		comparison.DeveloperToolsInterestReceiptsNetChange != 1 ||
+		comparison.DeveloperToolsSearchesInterestedNetChange != 1 ||
+		comparison.DeveloperToolsPostSelectionInterestsNetChange != 1 ||
+		comparison.DeveloperToolsPostSelectionSearchesNetChange != 1 ||
 		comparison.MCPSearchReceiptsDelta != 2 || comparison.RESTSearchReceiptsDelta != 3 ||
 		comparison.ResultSelectionsDelta != 2 || comparison.SearchReceiptsWithSelectionDelta != 1 ||
 		comparison.PostSelectionInterestReceiptsNetChange != 1 ||
@@ -185,12 +203,18 @@ func TestFunnelCheckpointComparisonCoversDiscoveryIntentAndSettlement(t *testing
 	expired.PostSelectionSearchReceipts = 0
 	expired.MCPPostSelectionInterests = 0
 	expired.RESTPostSelectionInterests = 0
+	expired.DeveloperToolsInterestReceipts = 0
+	expired.DeveloperToolsSearchesInterested = 0
+	expired.DeveloperToolsPostSelectionInterests = 0
+	expired.DeveloperToolsPostSelectionSearches = 0
 	expiredComparison, err := compareFunnelCheckpoint(checkpoint, &expired, attempts)
 	if err != nil {
 		t.Fatalf("active-state expiration was rejected: %v", err)
 	}
 	if expiredComparison.ActiveActionInterestReceiptsNetChange != -1 ||
 		expiredComparison.PostSelectionInterestReceiptsNetChange != -1 ||
+		expiredComparison.DeveloperToolsInterestReceiptsNetChange != -1 ||
+		expiredComparison.DeveloperToolsPostSelectionInterestsNetChange != -1 ||
 		expiredComparison.ExplicitPostSelectionInterestNetIncrease {
 		t.Fatalf("expired active-state comparison = %#v", expiredComparison)
 	}
