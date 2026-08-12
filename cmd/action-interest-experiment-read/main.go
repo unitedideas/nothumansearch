@@ -1,6 +1,8 @@
 // Command action-interest-experiment-read emits one privacy-bounded,
 // read-only owner receipt for the post-selection action-interest experiment.
-// It has no public route and never mutates NHS or provider state.
+// Given a sealed prior receipt, it also emits a hash-verified delta for the
+// complete privacy-safe discovery-to-settlement funnel. It has no public route
+// and never mutates NHS or provider state.
 package main
 
 import (
@@ -36,6 +38,7 @@ type readReceipt struct {
 	BinaryRevision                 string                                        `json:"binary_revision"`
 	Report                         *models.PostSelectionActionInterestExperiment `json:"report"`
 	AttemptCheckpoint              *attemptCheckpointComparison                  `json:"attempt_checkpoint,omitempty"`
+	FunnelCheckpoint               *funnelCheckpointComparison                   `json:"funnel_checkpoint,omitempty"`
 	ContainsIdentifiers            bool                                          `json:"contains_identifiers"`
 	ContainsQueriesOrPrompts       bool                                          `json:"contains_queries_or_prompts"`
 	ContainsContactData            bool                                          `json:"contains_contact_data"`
@@ -66,11 +69,60 @@ type attemptCheckpointComparison struct {
 	CommercialProof                  bool      `json:"commercial_proof"`
 }
 
+type funnelCheckpointComparison struct {
+	Contract                                  string                       `json:"contract"`
+	CheckpointReportSHA256                    string                       `json:"checkpoint_report_sha256"`
+	CheckpointRevision                        string                       `json:"checkpoint_revision"`
+	CheckpointCheckedAt                       time.Time                    `json:"checkpoint_checked_at"`
+	CurrentCheckedAt                          time.Time                    `json:"current_checked_at"`
+	MeaningfulSearchReceiptsDelta             int                          `json:"meaningful_search_receipts_delta"`
+	DeveloperToolsSearchReceiptsDelta         int                          `json:"developer_tools_search_receipts_delta"`
+	MCPSearchReceiptsDelta                    int                          `json:"mcp_search_receipts_delta"`
+	RESTSearchReceiptsDelta                   int                          `json:"rest_search_receipts_delta"`
+	ResultSelectionsDelta                     int                          `json:"result_selections_delta"`
+	SearchReceiptsWithSelectionDelta          int                          `json:"search_receipts_with_selection_delta"`
+	MCPResultSelectionsDelta                  int                          `json:"mcp_result_selections_delta"`
+	RESTResultSelectionsDelta                 int                          `json:"rest_result_selections_delta"`
+	ActiveActionInterestReceiptsNetChange     int                          `json:"active_action_interest_receipts_net_change"`
+	SearchesWithActionInterestNetChange       int                          `json:"search_receipts_with_action_interest_net_change"`
+	PostSelectionInterestReceiptsNetChange    int                          `json:"post_selection_action_interest_receipts_net_change"`
+	PostSelectionSearchReceiptsNetChange      int                          `json:"post_selection_search_receipts_net_change"`
+	MCPPostSelectionInterestsNetChange        int                          `json:"mcp_post_selection_action_interests_net_change"`
+	RESTPostSelectionInterestsNetChange       int                          `json:"rest_post_selection_action_interests_net_change"`
+	SyntheticActionInterestReceiptsDelta      int                          `json:"synthetic_action_interest_receipts_delta"`
+	ProviderPilotActivationsDelta             int                          `json:"provider_pilot_activations_delta"`
+	ProviderOfferActivationsDelta             int                          `json:"provider_offer_activations_delta"`
+	ProviderCommercialAcceptancesDelta        int                          `json:"provider_commercial_acceptances_delta"`
+	ProviderCommercialCommitmentsDelta        int                          `json:"provider_commercial_commitments_delta"`
+	ProviderOffersReturnedDelta               int                          `json:"provider_offers_returned_delta"`
+	ProviderTicketsCreatedDelta               int                          `json:"provider_tickets_created_delta"`
+	ProviderHandoffsObservedDelta             int                          `json:"provider_handoffs_observed_delta"`
+	ProviderOutcomesReportedDelta             int                          `json:"provider_outcomes_reported_delta"`
+	ProviderPaidSettlementsDelta              int                          `json:"provider_paid_settlements_delta"`
+	ProviderAvailableSettlementsDelta         int                          `json:"provider_available_settlements_delta"`
+	CommercialStateEventsDelta                int                          `json:"commercial_state_events_delta"`
+	Attempts                                  *attemptCheckpointComparison `json:"attempts"`
+	CountsAreEventsNotUniqueAgents            bool                         `json:"counts_are_events_not_unique_agents"`
+	ActiveInterestStateMayExpire              bool                         `json:"active_interest_state_may_expire"`
+	ActiveInterestNetChangeIsNotCreatedEvents bool                         `json:"active_interest_net_change_is_not_created_event_count"`
+	SearchesAreNotLeads                       bool                         `json:"searches_are_not_leads"`
+	DiscoveryUsageObserved                    bool                         `json:"discovery_usage_observed"`
+	ResultSelectionObserved                   bool                         `json:"result_selection_observed"`
+	ExplicitPostSelectionInterestNetIncrease  bool                         `json:"explicit_post_selection_interest_net_increase"`
+	ProviderHandoffObserved                   bool                         `json:"provider_handoff_observed"`
+	PaidSettlementObserved                    bool                         `json:"paid_settlement_observed"`
+	AvailableSettlementObserved               bool                         `json:"available_settlement_observed"`
+	StrongestMechanismSelected                bool                         `json:"strongest_mechanism_selected"`
+	ContainsIdentifiers                       bool                         `json:"contains_identifiers"`
+	ContainsQueriesOrPrompts                  bool                         `json:"contains_queries_or_prompts"`
+	ContainsContactData                       bool                         `json:"contains_contact_data"`
+}
+
 func main() {
 	revision := flag.String("revision", "", "exact 40-character deployed commit")
 	sinceRaw := flag.String("since", "", "UTC RFC3339 experiment boundary, no older than 30 days")
-	checkpointPath := flag.String("attempt-checkpoint", "", "optional prior v2 receipt or evidence envelope")
-	checkpointEnv := flag.String("attempt-checkpoint-base64-env", "", "optional environment name containing a base64 prior v2 receipt")
+	checkpointPath := flag.String("attempt-checkpoint", "", "optional prior v2 receipt or evidence envelope for attempt and full-funnel comparison")
+	checkpointEnv := flag.String("attempt-checkpoint-base64-env", "", "optional environment name containing a base64 prior v2 receipt for attempt and full-funnel comparison")
 	flag.Parse()
 
 	candidate := strings.ToLower(strings.TrimSpace(*revision))
@@ -127,10 +179,15 @@ func main() {
 	}
 	digest := sha256.Sum256(reportJSON)
 	var comparison *attemptCheckpointComparison
+	var funnelComparison *funnelCheckpointComparison
 	if checkpoint != nil {
 		comparison, err = compareAttemptCheckpoint(checkpoint, report)
 		if err != nil {
 			fail("attempt_checkpoint_comparison_failed")
+		}
+		funnelComparison, err = compareFunnelCheckpoint(checkpoint, report, comparison)
+		if err != nil {
+			fail("funnel_checkpoint_comparison_failed")
 		}
 	}
 	receipt := readReceipt{
@@ -140,6 +197,7 @@ func main() {
 		BinaryRevision:                 compiled,
 		Report:                         report,
 		AttemptCheckpoint:              comparison,
+		FunnelCheckpoint:               funnelComparison,
 		ContainsIdentifiers:            false,
 		ContainsQueriesOrPrompts:       false,
 		ContainsContactData:            false,
@@ -150,6 +208,141 @@ func main() {
 	if err := json.NewEncoder(os.Stdout).Encode(receipt); err != nil {
 		os.Exit(1)
 	}
+}
+
+func compareFunnelCheckpoint(
+	checkpoint *attemptCheckpointReceipt,
+	current *models.PostSelectionActionInterestExperiment,
+	attempts *attemptCheckpointComparison,
+) (*funnelCheckpointComparison, error) {
+	if checkpoint == nil || checkpoint.Report == nil || current == nil || attempts == nil {
+		return nil, fmt.Errorf("funnel checkpoint unavailable")
+	}
+	if err := validateExperimentCounters(checkpoint.Report); err != nil {
+		return nil, fmt.Errorf("checkpoint report counters invalid: %w", err)
+	}
+	if err := validateExperimentCounters(current); err != nil {
+		return nil, fmt.Errorf("current report counters invalid: %w", err)
+	}
+
+	monotonic := []struct {
+		name                string
+		checkpoint, current int
+	}{
+		{"meaningful_search_receipts", checkpoint.Report.MeaningfulSearchReceipts, current.MeaningfulSearchReceipts},
+		{"developer_tools_search_receipts", checkpoint.Report.DeveloperToolsSearchReceipts, current.DeveloperToolsSearchReceipts},
+		{"mcp_search_receipts", checkpoint.Report.MCPSearchReceipts, current.MCPSearchReceipts},
+		{"rest_search_receipts", checkpoint.Report.RESTSearchReceipts, current.RESTSearchReceipts},
+		{"result_selections", checkpoint.Report.ResultSelections, current.ResultSelections},
+		{"search_receipts_with_selection", checkpoint.Report.SearchReceiptsWithSelection, current.SearchReceiptsWithSelection},
+		{"mcp_result_selections", checkpoint.Report.MCPResultSelections, current.MCPResultSelections},
+		{"rest_result_selections", checkpoint.Report.RESTResultSelections, current.RESTResultSelections},
+		{"synthetic_action_interest_receipts", checkpoint.Report.SyntheticActionInterestReceipts, current.SyntheticActionInterestReceipts},
+		{"provider_pilot_activations", checkpoint.Report.ProviderPilotActivations, current.ProviderPilotActivations},
+		{"provider_offer_activations", checkpoint.Report.ProviderOfferActivations, current.ProviderOfferActivations},
+		{"provider_commercial_acceptances", checkpoint.Report.ProviderCommercialAcceptances, current.ProviderCommercialAcceptances},
+		{"provider_commercial_commitments", checkpoint.Report.ProviderCommercialCommitments, current.ProviderCommercialCommitments},
+		{"provider_offers_returned", checkpoint.Report.ProviderOffersReturned, current.ProviderOffersReturned},
+		{"provider_tickets_created", checkpoint.Report.ProviderTicketsCreated, current.ProviderTicketsCreated},
+		{"provider_handoffs_observed", checkpoint.Report.ProviderHandoffsObserved, current.ProviderHandoffsObserved},
+		{"provider_outcomes_reported", checkpoint.Report.ProviderOutcomesReported, current.ProviderOutcomesReported},
+		{"provider_paid_settlements", checkpoint.Report.ProviderPaidSettlements, current.ProviderPaidSettlements},
+		{"provider_available_settlements", checkpoint.Report.ProviderAvailableSettlements, current.ProviderAvailableSettlements},
+		{"commercial_state_events_total", checkpoint.Report.CommercialStateEventsTotal, current.CommercialStateEventsTotal},
+	}
+	for _, counter := range monotonic {
+		if counter.current < counter.checkpoint {
+			return nil, fmt.Errorf("%s regressed", counter.name)
+		}
+	}
+
+	result := &funnelCheckpointComparison{
+		Contract:                                  "nhs-agent-monetization-funnel-checkpoint-comparison-v1",
+		CheckpointReportSHA256:                    checkpoint.ReportSHA256,
+		CheckpointRevision:                        checkpoint.CandidateRevision,
+		CheckpointCheckedAt:                       checkpoint.Report.CheckedAt,
+		CurrentCheckedAt:                          current.CheckedAt,
+		MeaningfulSearchReceiptsDelta:             current.MeaningfulSearchReceipts - checkpoint.Report.MeaningfulSearchReceipts,
+		DeveloperToolsSearchReceiptsDelta:         current.DeveloperToolsSearchReceipts - checkpoint.Report.DeveloperToolsSearchReceipts,
+		MCPSearchReceiptsDelta:                    current.MCPSearchReceipts - checkpoint.Report.MCPSearchReceipts,
+		RESTSearchReceiptsDelta:                   current.RESTSearchReceipts - checkpoint.Report.RESTSearchReceipts,
+		ResultSelectionsDelta:                     current.ResultSelections - checkpoint.Report.ResultSelections,
+		SearchReceiptsWithSelectionDelta:          current.SearchReceiptsWithSelection - checkpoint.Report.SearchReceiptsWithSelection,
+		MCPResultSelectionsDelta:                  current.MCPResultSelections - checkpoint.Report.MCPResultSelections,
+		RESTResultSelectionsDelta:                 current.RESTResultSelections - checkpoint.Report.RESTResultSelections,
+		ActiveActionInterestReceiptsNetChange:     current.ActiveActionInterestReceipts - checkpoint.Report.ActiveActionInterestReceipts,
+		SearchesWithActionInterestNetChange:       current.SearchReceiptsWithActionInterest - checkpoint.Report.SearchReceiptsWithActionInterest,
+		PostSelectionInterestReceiptsNetChange:    current.PostSelectionInterestReceipts - checkpoint.Report.PostSelectionInterestReceipts,
+		PostSelectionSearchReceiptsNetChange:      current.PostSelectionSearchReceipts - checkpoint.Report.PostSelectionSearchReceipts,
+		MCPPostSelectionInterestsNetChange:        current.MCPPostSelectionInterests - checkpoint.Report.MCPPostSelectionInterests,
+		RESTPostSelectionInterestsNetChange:       current.RESTPostSelectionInterests - checkpoint.Report.RESTPostSelectionInterests,
+		SyntheticActionInterestReceiptsDelta:      current.SyntheticActionInterestReceipts - checkpoint.Report.SyntheticActionInterestReceipts,
+		ProviderPilotActivationsDelta:             current.ProviderPilotActivations - checkpoint.Report.ProviderPilotActivations,
+		ProviderOfferActivationsDelta:             current.ProviderOfferActivations - checkpoint.Report.ProviderOfferActivations,
+		ProviderCommercialAcceptancesDelta:        current.ProviderCommercialAcceptances - checkpoint.Report.ProviderCommercialAcceptances,
+		ProviderCommercialCommitmentsDelta:        current.ProviderCommercialCommitments - checkpoint.Report.ProviderCommercialCommitments,
+		ProviderOffersReturnedDelta:               current.ProviderOffersReturned - checkpoint.Report.ProviderOffersReturned,
+		ProviderTicketsCreatedDelta:               current.ProviderTicketsCreated - checkpoint.Report.ProviderTicketsCreated,
+		ProviderHandoffsObservedDelta:             current.ProviderHandoffsObserved - checkpoint.Report.ProviderHandoffsObserved,
+		ProviderOutcomesReportedDelta:             current.ProviderOutcomesReported - checkpoint.Report.ProviderOutcomesReported,
+		ProviderPaidSettlementsDelta:              current.ProviderPaidSettlements - checkpoint.Report.ProviderPaidSettlements,
+		ProviderAvailableSettlementsDelta:         current.ProviderAvailableSettlements - checkpoint.Report.ProviderAvailableSettlements,
+		CommercialStateEventsDelta:                current.CommercialStateEventsTotal - checkpoint.Report.CommercialStateEventsTotal,
+		Attempts:                                  attempts,
+		CountsAreEventsNotUniqueAgents:            true,
+		ActiveInterestStateMayExpire:              true,
+		ActiveInterestNetChangeIsNotCreatedEvents: true,
+		SearchesAreNotLeads:                       true,
+		StrongestMechanismSelected:                false,
+		ContainsIdentifiers:                       false,
+		ContainsQueriesOrPrompts:                  false,
+		ContainsContactData:                       false,
+	}
+	result.DiscoveryUsageObserved = result.MeaningfulSearchReceiptsDelta > 0
+	result.ResultSelectionObserved = result.ResultSelectionsDelta > 0
+	result.ExplicitPostSelectionInterestNetIncrease = result.PostSelectionInterestReceiptsNetChange > 0
+	result.ProviderHandoffObserved = result.ProviderHandoffsObservedDelta > 0
+	result.PaidSettlementObserved = result.ProviderPaidSettlementsDelta > 0
+	result.AvailableSettlementObserved = result.ProviderAvailableSettlementsDelta > 0
+	return result, nil
+}
+
+func validateExperimentCounters(report *models.PostSelectionActionInterestExperiment) error {
+	if report == nil {
+		return fmt.Errorf("report unavailable")
+	}
+	values := []int{
+		report.MeaningfulSearchReceipts, report.DeveloperToolsSearchReceipts,
+		report.ResultSelections, report.SearchReceiptsWithSelection,
+		report.ActiveActionInterestReceipts, report.SearchReceiptsWithActionInterest,
+		report.PostSelectionInterestReceipts, report.PostSelectionSearchReceipts,
+		report.MCPSearchReceipts, report.MCPResultSelections, report.MCPPostSelectionInterests,
+		report.RESTSearchReceipts, report.RESTResultSelections, report.RESTPostSelectionInterests,
+		report.SyntheticActionInterestReceipts, report.ProviderPilotActivations,
+		report.ProviderOfferActivations, report.ProviderCommercialAcceptances,
+		report.ProviderCommercialCommitments, report.ProviderOffersReturned,
+		report.ProviderTicketsCreated, report.ProviderHandoffsObserved,
+		report.ProviderOutcomesReported, report.ProviderPaidSettlements,
+		report.ProviderAvailableSettlements, report.CommercialStateEventsTotal,
+	}
+	for _, value := range values {
+		if value < 0 {
+			return fmt.Errorf("negative counter")
+		}
+	}
+	if report.MeaningfulSearchReceipts != report.MCPSearchReceipts+report.RESTSearchReceipts ||
+		report.ResultSelections != report.MCPResultSelections+report.RESTResultSelections ||
+		report.PostSelectionInterestReceipts != report.MCPPostSelectionInterests+report.RESTPostSelectionInterests ||
+		report.DeveloperToolsSearchReceipts > report.MeaningfulSearchReceipts ||
+		report.SearchReceiptsWithSelection > report.MeaningfulSearchReceipts ||
+		report.SearchReceiptsWithSelection > report.ResultSelections ||
+		report.SearchReceiptsWithActionInterest > report.MeaningfulSearchReceipts ||
+		report.PostSelectionSearchReceipts > report.SearchReceiptsWithSelection ||
+		report.PostSelectionSearchReceipts > report.SearchReceiptsWithActionInterest ||
+		report.ProviderAvailableSettlements > report.ProviderPaidSettlements {
+		return fmt.Errorf("counter relationship invalid")
+	}
+	return nil
 }
 
 func loadAttemptCheckpoint(path string) (*attemptCheckpointReceipt, error) {

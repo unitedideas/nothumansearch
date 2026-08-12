@@ -80,6 +80,162 @@ func TestAttemptCheckpointComparison(t *testing.T) {
 	}
 }
 
+func TestFunnelCheckpointComparisonCoversDiscoveryIntentAndSettlement(t *testing.T) {
+	since := time.Date(2026, 8, 11, 9, 41, 28, 0, time.UTC)
+	checkpointReport := &models.PostSelectionActionInterestExperiment{
+		Contract:                         models.PostSelectionActionInterestExperimentContract,
+		Since:                            since,
+		CheckedAt:                        time.Date(2026, 8, 12, 0, 41, 26, 0, time.UTC),
+		EligibleSurfaces:                 []string{"mcp", "rest"},
+		MeaningfulSearchReceipts:         10,
+		DeveloperToolsSearchReceipts:     3,
+		ResultSelections:                 3,
+		SearchReceiptsWithSelection:      2,
+		ActiveActionInterestReceipts:     1,
+		SearchReceiptsWithActionInterest: 1,
+		PostSelectionInterestReceipts:    1,
+		PostSelectionSearchReceipts:      1,
+		MCPSearchReceipts:                4,
+		MCPResultSelections:              2,
+		MCPPostSelectionInterests:        1,
+		RESTSearchReceipts:               6,
+		RESTResultSelections:             1,
+		ProviderOffersReturned:           3,
+		ProviderTicketsCreated:           2,
+		ProviderHandoffsObserved:         1,
+		ProviderOutcomesReported:         1,
+		ProviderPaidSettlements:          1,
+		CommercialStateEventsTotal:       8,
+	}
+	rawReport, err := json.Marshal(checkpointReport)
+	if err != nil {
+		t.Fatalf("marshal checkpoint report: %v", err)
+	}
+	digest := sha256.Sum256(rawReport)
+	checkpoint := &attemptCheckpointReceipt{
+		Contract:          readContract,
+		ReportSHA256:      hex.EncodeToString(digest[:]),
+		CandidateRevision: "7ad7cbfde04b239b6e12a563e05f765de9701df8",
+		BinaryRevision:    "7ad7cbfde04b239b6e12a563e05f765de9701df8",
+		Report:            checkpointReport,
+	}
+	current := *checkpointReport
+	current.CheckedAt = checkpointReport.CheckedAt.Add(time.Hour)
+	current.MeaningfulSearchReceipts = 15
+	current.DeveloperToolsSearchReceipts = 5
+	current.MCPSearchReceipts = 6
+	current.RESTSearchReceipts = 9
+	current.ResultSelections = 5
+	current.SearchReceiptsWithSelection = 3
+	current.MCPResultSelections = 3
+	current.RESTResultSelections = 2
+	current.ActiveActionInterestReceipts = 2
+	current.SearchReceiptsWithActionInterest = 2
+	current.PostSelectionInterestReceipts = 2
+	current.PostSelectionSearchReceipts = 2
+	current.MCPPostSelectionInterests = 1
+	current.RESTPostSelectionInterests = 1
+	current.ProviderOffersReturned = 4
+	current.ProviderTicketsCreated = 3
+	current.ProviderHandoffsObserved = 2
+	current.ProviderOutcomesReported = 2
+	current.ProviderPaidSettlements = 2
+	current.ProviderAvailableSettlements = 1
+	current.CommercialStateEventsTotal = 14
+
+	attempts, err := compareAttemptCheckpoint(checkpoint, &current)
+	if err != nil {
+		t.Fatalf("compare attempt checkpoint: %v", err)
+	}
+	comparison, err := compareFunnelCheckpoint(checkpoint, &current, attempts)
+	if err != nil {
+		t.Fatalf("compare funnel checkpoint: %v", err)
+	}
+	if comparison.MeaningfulSearchReceiptsDelta != 5 ||
+		comparison.DeveloperToolsSearchReceiptsDelta != 2 ||
+		comparison.MCPSearchReceiptsDelta != 2 || comparison.RESTSearchReceiptsDelta != 3 ||
+		comparison.ResultSelectionsDelta != 2 || comparison.SearchReceiptsWithSelectionDelta != 1 ||
+		comparison.PostSelectionInterestReceiptsNetChange != 1 ||
+		comparison.ProviderHandoffsObservedDelta != 1 ||
+		comparison.ProviderPaidSettlementsDelta != 1 ||
+		comparison.ProviderAvailableSettlementsDelta != 1 ||
+		!comparison.DiscoveryUsageObserved || !comparison.ResultSelectionObserved ||
+		!comparison.ExplicitPostSelectionInterestNetIncrease || !comparison.ProviderHandoffObserved ||
+		!comparison.PaidSettlementObserved || !comparison.AvailableSettlementObserved ||
+		!comparison.CountsAreEventsNotUniqueAgents || !comparison.ActiveInterestStateMayExpire ||
+		!comparison.ActiveInterestNetChangeIsNotCreatedEvents ||
+		!comparison.SearchesAreNotLeads || comparison.StrongestMechanismSelected ||
+		comparison.ContainsIdentifiers || comparison.ContainsQueriesOrPrompts || comparison.ContainsContactData {
+		t.Fatalf("funnel checkpoint comparison = %#v", comparison)
+	}
+	rawComparison, err := json.Marshal(comparison)
+	if err != nil {
+		t.Fatalf("marshal funnel comparison: %v", err)
+	}
+	var decodedComparison any
+	if err := json.Unmarshal(rawComparison, &decodedComparison); err != nil {
+		t.Fatalf("decode funnel comparison: %v", err)
+	}
+	assertNoForbiddenFunnelKeys(t, decodedComparison)
+
+	expired := current
+	expired.ActiveActionInterestReceipts = 0
+	expired.SearchReceiptsWithActionInterest = 0
+	expired.PostSelectionInterestReceipts = 0
+	expired.PostSelectionSearchReceipts = 0
+	expired.MCPPostSelectionInterests = 0
+	expired.RESTPostSelectionInterests = 0
+	expiredComparison, err := compareFunnelCheckpoint(checkpoint, &expired, attempts)
+	if err != nil {
+		t.Fatalf("active-state expiration was rejected: %v", err)
+	}
+	if expiredComparison.ActiveActionInterestReceiptsNetChange != -1 ||
+		expiredComparison.PostSelectionInterestReceiptsNetChange != -1 ||
+		expiredComparison.ExplicitPostSelectionInterestNetIncrease {
+		t.Fatalf("expired active-state comparison = %#v", expiredComparison)
+	}
+
+	regressed := current
+	regressed.MeaningfulSearchReceipts = 9
+	regressed.MCPSearchReceipts = 4
+	regressed.RESTSearchReceipts = 5
+	if _, err := compareFunnelCheckpoint(checkpoint, &regressed, attempts); err == nil {
+		t.Fatal("funnel comparison accepted a regressed durable counter")
+	}
+
+	invalid := current
+	invalid.DeveloperToolsSearchReceipts = invalid.MeaningfulSearchReceipts + 1
+	if _, err := compareFunnelCheckpoint(checkpoint, &invalid, attempts); err == nil {
+		t.Fatal("funnel comparison accepted inconsistent counters")
+	}
+}
+
+func assertNoForbiddenFunnelKeys(t *testing.T, value any) {
+	t.Helper()
+	forbidden := map[string]struct{}{
+		"agent_id": {}, "principal_id": {}, "domain": {}, "query": {}, "prompt": {},
+		"contact": {}, "search_id": {}, "provider_id": {}, "offer_id": {},
+		"ticket_id": {}, "outcome_id": {}, "settlement_id": {},
+	}
+	var walk func(any)
+	walk = func(current any) {
+		switch typed := current.(type) {
+		case map[string]any:
+			for key, child := range typed {
+				if _, blocked := forbidden[key]; blocked {
+					t.Fatalf("funnel comparison exposed forbidden key %q", key)
+				}
+				walk(child)
+			}
+		case []any:
+			for _, child := range typed {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+}
+
 func TestLoadAttemptCheckpointFromEvidenceEnvelope(t *testing.T) {
 	report := &models.PostSelectionActionInterestExperiment{
 		Contract:         models.PostSelectionActionInterestExperimentContract,
