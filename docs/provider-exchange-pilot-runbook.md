@@ -861,6 +861,31 @@ privacy/non-contact assertion changes. Its output is aggregate measurement
 evidence only. It does not create a search, selection, action-interest receipt,
 provider contact, ticket, checkout, charge, or commercial authorization.
 
+### Evidence-triggered recheck while blocked
+
+The local `nhs-demand-trigger` launchd job runs daily at 08:15 local time and
+can be inspected or run immediately through the shared control plane:
+
+```sh
+/Users/shane/.local/bin/codex-launchd-control status nhs-demand-trigger
+/Users/shane/.local/bin/codex-launchd-control run-now nhs-demand-trigger
+```
+
+It verifies one exact started Fly machine, an exact OCI digest/revision, and
+`NHS_PROVIDER_EXCHANGE_MODE=disabled` before reading the v3 developer-tools
+funnel and Stage 1 aggregates. The checksum-identical sealed baseline lives in
+its private runtime directory because macOS background agents cannot rely on
+iCloud/Documents access. The job writes
+`~/.codex/run/launchd/nhs-demand-trigger/state.json` on every check.
+
+The bounded trigger is any new developer-tools selected-search receipt, any
+new developer-tools explicit or post-selection interest receipt, or
+`stage1_ready=true`. A new trigger fingerprint writes `trigger-current.json`
+and emits one local notification. It does not resume the pilot automatically:
+the next action is to inspect the sealed aggregates and request separate owner
+authorization before provider contact or activation. Quiet scheduler state is
+not demand or commercial proof.
+
 ## Stage 2: bounded provider pilot
 
 Invite 3 to 20 providers in the one selected category only after owner release.

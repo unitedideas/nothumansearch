@@ -210,7 +210,12 @@ def notify(title: str, body: str, runner: Runner) -> None:
 def monitor(args: argparse.Namespace, runner: Runner = subprocess.run) -> dict[str, Any]:
     control = read_object(Path(args.control))
     if control.get("enabled") is not True:
-        return {"contract": "nhs-demand-trigger-monitor-v1", "status": "paused", "checked_at": stamp()}
+        return {
+            "contract": "nhs-demand-trigger-monitor-v1",
+            "status": "paused",
+            "checked_at": stamp(),
+            "exit_code": 0,
+        }
     baseline = read_object(Path(args.baseline))
     baseline_receipt = baseline.get("reader_receipt")
     if not isinstance(baseline_receipt, dict):
@@ -286,6 +291,7 @@ def monitor(args: argparse.Namespace, runner: Runner = subprocess.run) -> dict[s
     trigger_payload = {
         "contract": "nhs-demand-evidence-trigger-v1",
         "status": "triggered" if trigger_reasons else "quiet",
+        "exit_code": 0,
         "checked_at": stamp(),
         "triggered": bool(trigger_reasons),
         "trigger_reasons": trigger_reasons,
@@ -359,6 +365,7 @@ def main() -> int:
         failure = {
             "contract": "nhs-demand-trigger-monitor-v1",
             "status": "error",
+            "exit_code": 2,
             "checked_at": stamp(),
             "error": str(error)[-1200:],
         }

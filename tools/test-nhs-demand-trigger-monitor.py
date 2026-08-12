@@ -116,6 +116,7 @@ class MonitorTest(unittest.TestCase):
             runner = FakeRunner([inventory(), json.dumps(funnel()), json.dumps(stage1())])
             result = MODULE.monitor(args, runner)
             self.assertFalse(result["triggered"])
+            self.assertEqual(result["exit_code"], 0)
             self.assertFalse(result["notification_emitted"])
             self.assertFalse(Path(args.trigger).exists())
             self.assertEqual(len(runner.commands), 3)
