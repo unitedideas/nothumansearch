@@ -93,6 +93,19 @@ rejection, and disabled provider-funded routes. Machine autostart and autostop
 were explicitly restored after the direct image updates. No provider or
 commercial state was activated.
 
+The first post-cutover comparison covered
+`2026-08-12T00:54:51.695779Z` through
+`2026-08-12T01:11:02.979061Z` and advanced the sealed report hash to
+`fc66efce95fea23d2a493ebc65a107f4d069329c9c3f890a8488ba473e9e92eb`.
+It observed four additional non-synthetic MCP discovery receipts, zero
+developer-tools receipts, zero result selections, and zero active-interest net
+change. Handoffs, outcomes, settlements, and commercial-state deltas also
+remained zero. The two unavailable attempt increments were the expected
+disabled-mode release-smoke probes and are explicitly not demand. The added
+search receipts show free discovery usage only; they are events rather than
+unique agents and cannot be sold or relabeled as leads. No mechanism can yet
+be selected.
+
 ## Receipt-bound MCP action correction
 
 Production now returns one exact machine-readable `get_site_details` action for
