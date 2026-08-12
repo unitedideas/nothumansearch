@@ -217,9 +217,16 @@ check_mcp_free_synthetic_search() {
         .result.structuredContent.paid_offers_available == false and
         (.result.structuredContent.paid_offers | type == "array" and length == 0) and
         .result.structuredContent.action_interest.available == false and
-        (.result.structuredContent.results | type == "array" and length > 0)
+        (.result.structuredContent.results | type == "array" and length > 0) and
+        (.result.structuredContent.detail_actions | type == "array" and length == (.result.structuredContent.results | length)) and
+        .result.structuredContent as $discovery |
+        (.result.content[0].text | contains(
+            "get_site_details {\"domain\":\"" +
+            ($discovery.results[0].domain | ascii_downcase) +
+            "\",\"search_id\":\"" + $discovery.search_id + "\"}"
+        ))
     ' >/dev/null; then
-        printf "  \033[32m✓\033[0m %-45s free synthetic receipt\n" "MCP tools/call search_agents"
+		printf "  \033[32m✓\033[0m %-45s free receipt + exact text action\n" "MCP tools/call search_agents"
     else
         printf "  \033[31m✗\033[0m %-45s free/synthetic contract mismatch\n" "MCP tools/call search_agents"
         FAILED=$((FAILED + 1))

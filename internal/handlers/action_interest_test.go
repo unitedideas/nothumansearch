@@ -307,6 +307,37 @@ func TestMCPReceiptBoundDetailActionsCarryExactSelectionWithoutInterest(t *testi
 	}
 }
 
+func TestMCPReceiptBoundDetailActionTextCarriesExactCallWithoutCommercialClaim(t *testing.T) {
+	var builder strings.Builder
+	appendMCPReceiptBoundDetailActionText(&builder, "", "example.dev")
+	appendMCPReceiptBoundDetailActionText(&builder, "nhs_sr_AAAAAAAAAAAAAAAA", "")
+	if builder.Len() != 0 {
+		t.Fatalf("unscoped detail action text = %q, want empty", builder.String())
+	}
+
+	appendMCPReceiptBoundDetailActionText(
+		&builder,
+		"nhs_sr_AAAAAAAAAAAAAAAA",
+		"Example.DEV",
+	)
+	text := builder.String()
+	for _, required := range []string{
+		`get_site_details {"domain":"example.dev","search_id":"nhs_sr_AAAAAAAAAAAAAAAA"}`,
+		"records selection only",
+		"does not infer interest",
+		"contact a provider",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("detail action text missing %q: %s", required, text)
+		}
+	}
+	for _, forbidden := range []string{"query", "prompt", "identity", "provider_offer", "paid"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("detail action text exposed %q: %s", forbidden, text)
+		}
+	}
+}
+
 func TestActionInterestOpportunityIsExplicitBoundedAndNonCommercial(t *testing.T) {
 	sites := []models.Site{
 		{Domain: "Example.COM"},

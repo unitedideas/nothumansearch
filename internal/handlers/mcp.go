@@ -1289,7 +1289,9 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		if len(signals) > 0 {
 			fmt.Fprintf(&b, "   Signals: %s\n", strings.Join(signals, ", "))
 		}
-		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n\n", s.URL, h.BaseURL, s.Domain)
+		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n", s.URL, h.BaseURL, s.Domain)
+		appendMCPReceiptBoundDetailActionText(&b, searchID, s.Domain)
+		b.WriteString("\n")
 	}
 	appendMCPProviderFundedActions(&b, exchange)
 	appendMCPActionInterestGuidance(&b, exchange)
@@ -1367,6 +1369,24 @@ func mcpReceiptBoundDetailActions(searchID string, sites []models.Site) []map[st
 		})
 	}
 	return actions
+}
+
+// appendMCPReceiptBoundDetailActionText mirrors the structured detail action
+// for MCP clients that expose only text content to the model. It deliberately
+// names the effect as selection-only so an agent cannot mistake following a
+// result for principal interest or provider contact.
+func appendMCPReceiptBoundDetailActionText(builder *strings.Builder, searchID, rawDomain string) {
+	if builder == nil {
+		return
+	}
+	searchID = strings.TrimSpace(searchID)
+	domain := strings.ToLower(strings.TrimSpace(rawDomain))
+	if searchID == "" || domain == "" {
+		return
+	}
+	fmt.Fprintf(builder,
+		"   Detail action (records selection only; does not infer interest or contact a provider): get_site_details {\"domain\":%s,\"search_id\":%s}\n",
+		strconv.Quote(domain), strconv.Quote(searchID))
 }
 
 type mcpDiscoveryExchange struct {
@@ -1887,7 +1907,9 @@ func (h *MCPHandler) toolGetTopSites(w http.ResponseWriter, id json.RawMessage, 
 		if len(signals) > 0 {
 			fmt.Fprintf(&b, "   Signals: %s\n", strings.Join(signals, ", "))
 		}
-		fmt.Fprintf(&b, "   URL: %s\n\n", s.URL)
+		fmt.Fprintf(&b, "   URL: %s\n", s.URL)
+		appendMCPReceiptBoundDetailActionText(&b, exchange.searchID, s.Domain)
+		b.WriteString("\n")
 	}
 	appendMCPProviderFundedActions(&b, exchange)
 	appendMCPActionInterestGuidance(&b, exchange)
@@ -1981,7 +2003,9 @@ func (h *MCPHandler) toolRecentAdditions(w http.ResponseWriter, id json.RawMessa
 		if len(signals) > 0 {
 			fmt.Fprintf(&b, "   Signals: %s\n", strings.Join(signals, ", "))
 		}
-		fmt.Fprintf(&b, "   Added: %s   URL: %s\n\n", s.CreatedAt.Format("2006-01-02"), s.URL)
+		fmt.Fprintf(&b, "   Added: %s   URL: %s\n", s.CreatedAt.Format("2006-01-02"), s.URL)
+		appendMCPReceiptBoundDetailActionText(&b, exchange.searchID, s.Domain)
+		b.WriteString("\n")
 	}
 	appendMCPProviderFundedActions(&b, exchange)
 	appendMCPActionInterestGuidance(&b, exchange)
@@ -2054,7 +2078,9 @@ func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessag
 		if s.Description != "" {
 			fmt.Fprintf(&b, "   %s\n", s.Description)
 		}
-		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n\n", s.URL, h.BaseURL, s.Domain)
+		fmt.Fprintf(&b, "   URL: %s\n   Report: %s/site/%s\n", s.URL, h.BaseURL, s.Domain)
+		appendMCPReceiptBoundDetailActionText(&b, searchID, s.Domain)
+		b.WriteString("\n")
 	}
 	appendMCPProviderFundedActions(&b, exchange)
 	appendMCPActionInterestGuidance(&b, exchange)
