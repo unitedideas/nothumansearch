@@ -303,8 +303,10 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		`"method":"tools/list"`,
 		`"method":"tools/call"`,
 		`"name":"search_agents"`,
-		`.result.structuredContent.access == "free"`,
-		`.result.structuredContent.paid_offers_available == false`,
+		`$discovery.access == "free"`,
+		`$discovery.paid_offers_available == false`,
+		`get_site_details {\"domain\":\"`,
+		`$discovery.search_id`,
 	} {
 		if !strings.Contains(smoke, required) {
 			t.Fatalf("live smoke is missing runtime MCP assertion %q", required)
