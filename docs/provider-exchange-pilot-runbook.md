@@ -341,6 +341,26 @@ profit claim, or mechanism-selection result. Owner labor, support, fraud, tax,
 and margin remain outside the baseline. Actual available processor-net
 settlement receipts control the eventual selection.
 
+Before any processor sandbox exercise, use an isolated Stripe test-mode secret;
+never reuse the live production key. The bounded drill requires an explicit
+`--confirm-test-mode-write`, reads `/v1/balance`, and refuses its first POST
+unless Stripe returns `livemode=false`. It creates and refunds one 50-to-100
+cent test PaymentIntent, reconciles the expanded charge balance transaction,
+and emits no Stripe object IDs or customer/provider data:
+
+```sh
+/Users/shane/.local/bin/codex-secret run \
+  --env STRIPE_SECRET_KEY=NHS_STRIPE_TEST_SECRET_KEY -- \
+  /usr/bin/python3 tools/provider-stripe-test-mode-drill.py \
+  --drill-id OWNER_APPROVED_UNIQUE_ID --amount-cents 50 \
+  --confirm-test-mode-write
+```
+
+The test credential and test webhook secret must remain separate from
+production. A passing receipt proves only the processor sandbox boundary; it is
+not a provider payment, production settlement, commercial proof, or mechanism
+selection.
+
 ### Mandatory one-way cutover order
 
 The order below controls over the surrounding evidence checklist. Do not start

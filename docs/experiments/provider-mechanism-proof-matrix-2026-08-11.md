@@ -236,3 +236,21 @@ and secret scan. Its 41 MB OCI was pushed and deployed by exact digest with
 checks. The reader machine exited zero and was destroyed. No provider was
 contacted, invited, activated, or charged, and the mechanism winner remains
 empty.
+
+## Live processor boundary
+
+At `2026-08-12T02:01:36Z`, a read-only Stripe balance metadata call proved that
+the Keychain-backed processor credential is live-mode. Production Fly secret
+metadata contains both `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, while
+the provider signing-key names remain absent because the exchange is disabled.
+A live Stripe search for PaymentIntents carrying product metadata
+`nhs_provider_outcome_settlement` returned zero objects with no additional
+page. No Stripe object identifiers or customer/provider data were retained.
+
+Because the only resolved processor credential is live-mode, the proposed
+write-side sandbox drill failed closed before creating an object. This proves
+configuration and the absence of tagged live provider-settlement intents; it
+does not prove a successful provider payment, webhook, processor fee, available
+net, or mechanism winner. A future processor write drill requires a separately
+provisioned test-mode credential and test webhook secret, isolated from
+production. Provider exchange remains disabled and charges created remain zero.
