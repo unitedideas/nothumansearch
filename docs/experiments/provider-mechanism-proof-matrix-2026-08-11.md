@@ -21,7 +21,7 @@ or a winning mechanism.
 | --- | --- | --- | --- |
 | Organic REST/MCP discovery remains free | Live search response says `access=free`; provider sidecar cannot affect organic rank | Exact-revision disabled smoke passes free REST and MCP checks | Proved current |
 | Neutrality and privacy | Explicit false assertions for sold rank, queries, prompts, agent identity, and principal identity; no prohibited fields in the proof projection | Production projection and selector fail closed on missing or true assertions | Implemented, no commercial cohort |
-| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The post-text-action baseline at `2026-08-12T00:41:26Z` contains 158 meaningful searches, including 15 developer-tools searches, but 0 selections and 0 genuine action-interest receipts | Discovery demand observed; action intent unmet |
+| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The post-text-action report at `2026-08-12T00:41:26Z` contains 158 nominally meaningful searches and 15 developer-tools searches, including two known operator audits that used non-canonical synthetic markers; selections and genuine action-interest receipts remain 0 | Discovery demand observed before correction; clean post-correction intent observation starts at this checkpoint |
 | Consent before handoff | Immutable ticket authority plus separate handoff consent | Rail and rejection tests exist; no real pilot ticket | Implemented, unobserved |
 | Attribution | One randomly assigned offer arm, immutable terms, exact ticket-to-outcome binding | Database and proof-verifier gates exist; no real pilot outcome | Implemented, unobserved |
 | Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcome and available processor net; no real provider evidence | Rail proved, business proof unmet |
@@ -89,12 +89,20 @@ The new sealed comparison baseline is
 `NHS_POST_TEXT_ACTION_BASELINE_2026-08-12_004126Z_7ad7cbf.json`, checked at
 `2026-08-12T00:41:26.157992Z` with report SHA-256
 `8bd891aa6bfac6f6fa12cb1832eb22a720b4017a1a82484c6fd1db98548bb03e`.
-It contains 158 meaningful eligible searches: 25 MCP, 133 REST, and 15 in the
-developer-tools topic. It still contains zero result selections, explicit
+It contains 158 nominally meaningful eligible searches: 25 MCP, 133 REST, and
+15 in the developer-tools topic. It still contains zero result selections, explicit
 action-interest receipts, provider activations, handoffs, outcomes, payments,
 or settlements. This is the correct zero baseline for measuring whether text-
 only and structured clients follow the exact action; it is not a monetization
 win.
+
+Two operator MCP audits before this checkpoint used header values other than
+the deliberately narrow canonical `NHS-Synthetic-Test: deploy-smoke` marker.
+Those two calls are included in the report's nominal meaningful and developer-
+tools counters even though they are not demand. The immutable aggregate is not
+rewritten or causally relabeled because its privacy boundary provides no row-
+level request join. Future delta measurement begins after the checkpoint, so
+the contamination is fully on the baseline side of the comparison.
 
 ## Sealed post-selection checkpoint
 
