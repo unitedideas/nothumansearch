@@ -276,3 +276,36 @@ ticket/charge; and cannot affect organic rank. Synthetic production smoke must
 see an unavailable empty contract, while disposable disabled-recovery smoke
 must see an exact receipt-bound available contract. This fixes measurement
 clarity; it does not turn a selection into interest or create demand evidence.
+
+### Production correction and sealed baseline
+
+Revision `9589816820a213e9a2ff77a4ff95f832a52ab088` passed the exact
+release gate, including full tests, race tests, vet, two disposable PostgreSQL
+17 checks, disabled-mode recovery smoke, and a zero-finding secret scan. The
+verified source archive SHA-256 is
+`9c9fb953edc6a2c7f7435b15b27e0fe9723e29196ab0abed5de37050381eb397`.
+Its 41 MB OCI was pushed and production was rotated to exact digest
+`sha256:4538c9c3c4c4bfa2a80989d1e5f0bf23bdc3b5eb1dcca666a025567bc3be7cee`.
+Both production machines report that digest and its revision/archive labels,
+provider mode remains disabled, and the started machine's health check passes.
+Autostart, autostop, and the one-machine minimum remain configured. The public
+production suite passed 54/54.
+
+The first sealed post-correction read is as of
+`2026-08-12T02:25:39.905203Z`. It reports 706 meaningful search receipts,
+20 result selections spanning seven distinct selected-search receipts, zero
+action-interest receipts, and zero interest-backed search receipts. Compared
+with the prior checkpoint, meaningful searches increased by two, selection and
+explicit-interest receipts did not change, and disabled REST attempts increased
+by four. Operator release verification can contribute to those search and
+unavailable-attempt deltas, so they are not represented as new agents, demand,
+leads, or commercial evidence. Stage 1 remains unready: the 14-day observation
+window, 20 selected-search receipts, and 10 interest-backed search receipts are
+still unmet. The mechanism winner remains empty.
+
+The aggregate receipt is sealed outside the repository as
+`NHS_ACTION_INTEREST_CONTRACT_BASELINE_2026-08-12_022540Z_9589816.json`.
+Its embedded Stage 1 and attempt-funnel SHA-256 values were independently
+recomputed and matched. The disposable 256 MB capture machine was destroyed.
+No provider was contacted, invited, activated, or charged; no commercial state
+or organic rank changed.
