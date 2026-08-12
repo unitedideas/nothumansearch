@@ -2,9 +2,9 @@
 
 **Scope:** Not Human Search only
 
-**Production revision checked:** `0b1ba7e45682a7c0243a8a0101d7ffe2dd22d331`
+**Production revision checked:** `aa690c95e2ccccda4b4d6be7e0c87afb96f9144a`
 
-**Production OCI digest checked:** `sha256:6f7224f58851b0e09bb1467f8aa623f4286a967c6c08718db7ac6c4835f4369a`
+**Production OCI digest checked:** `sha256:9b84c99d43a064e0d7bddd12b924912c58748a73e664ff765606222877c36434`
 
 **Production mode checked:** `disabled`
 
@@ -201,3 +201,30 @@ rotated to the exact digest with provider mode disabled; Fly health passed on
 both and the public production suite passed 54/54. Autostart, autostop, and a
 one-machine minimum remain configured. No provider was contacted and no
 commercial state changed.
+
+## Rolling Stage 1 checkpoint comparison
+
+Revision `aa690c95e2ccccda4b4d6be7e0c87afb96f9144a` adds a sealed Stage 1
+checkpoint comparator. It cryptographically revalidates the prior Stage 1 and
+attempt-funnel projections, requires the same Stage 1 epoch and rolling window,
+and emits aggregate net changes only. It contains no agent, principal, search,
+domain, query, prompt, contact, or request coordinates. Net changes may be
+negative when old rows expire and are explicitly not represented as newly
+created event counts.
+
+The first comparison covered `2026-08-12T01:27:09.111765Z` through
+`2026-08-12T01:44:46.13295Z`. Meaningful search, selection, and explicit-interest
+net changes were all zero. The MCP invalid-attempt bucket stayed flat; the REST
+unavailable bucket increased by two. Those two attempts are disabled-mode
+operational probes, not unique agents, demand, leads, or commercial proof.
+Stage 1 remains unready at 704 meaningful search receipts, seven distinct
+selected-search receipts, zero explicit-interest search receipts, and six
+complete observation days.
+
+The exact archive passed full tests, race tests, vet, build, protected migration
+checks against two disposable PostgreSQL 17 instances, disabled recovery smoke,
+and secret scan. Its 41 MB OCI was pushed and deployed by exact digest with
+`NHS_PROVIDER_EXCHANGE_MODE=disabled`; production then passed 54/54 public
+checks. The reader machine exited zero and was destroyed. No provider was
+contacted, invited, activated, or charged, and the mechanism winner remains
+empty.
