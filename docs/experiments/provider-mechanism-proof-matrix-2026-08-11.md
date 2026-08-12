@@ -254,3 +254,25 @@ does not prove a successful provider payment, webhook, processor fee, available
 net, or mechanism winner. A future processor write drill requires a separately
 provisioned test-mode credential and test webhook secret, isolated from
 production. Provider exchange remains disabled and charges created remain zero.
+
+## Selection-to-interest client contract
+
+The first Stage 1 funnel has seven distinct selected-search receipts but zero
+explicit-interest receipts. The rail itself is reachable and privacy-safe, but
+the MCP initialize message previously named only search and detail tools. Its
+post-selection text told text-first agents to call `record_action_interest`
+without carrying the fixed search receipt, attestation, and confirmation-version
+fields required by that tool. Structured clients could reconstruct those fields
+from the tool inventory; text-first clients had a weaker transition.
+
+The additive correction introduces `action_interest.call_contract` on REST and
+MCP discovery/detail responses. It supplies the fixed fields only under the
+published invocation condition, enumerates the eligible organic domains and
+controlled action types, keeps the exact five-field allowlist, and says it is
+not executable without explicit current-principal intent. MCP initialization
+and text-only guidance now point to this same contract. It never accepts query,
+prompt, contact, or identity data; records neither provider contact nor a
+ticket/charge; and cannot affect organic rank. Synthetic production smoke must
+see an unavailable empty contract, while disposable disabled-recovery smoke
+must see an exact receipt-bound available contract. This fixes measurement
+clarity; it does not turn a selection into interest or create demand evidence.

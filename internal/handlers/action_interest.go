@@ -15,6 +15,43 @@ import (
 
 const actionInterestInvocationCondition = "Use only when the caller can truthfully attest that its principal currently wants one listed action with one eligible domain; do not infer interest from the search, result order, selection, or provider availability."
 
+var actionInterestArgumentNames = []string{
+	"search_id", "domain", "action_type",
+	"caller_attests_principal_interest", "confirmation_version",
+}
+
+// actionInterestCallContract separates the fixed receipt/consent protocol from
+// the two choices that must come from explicit current-principal intent. It is
+// deliberately not an executable tool action: an agent still has to select one
+// returned domain and one action type under the invocation condition.
+func actionInterestCallContract(searchID string, domains []string, available bool) map[string]any {
+	fixedArguments := map[string]any{}
+	eligibleDomains := []string{}
+	actionTypes := []string{}
+	if available && strings.TrimSpace(searchID) != "" && len(domains) > 0 {
+		fixedArguments = map[string]any{
+			"search_id":                         searchID,
+			"caller_attests_principal_interest": true,
+			"confirmation_version":              models.ActionInterestConfirmationV1,
+		}
+		eligibleDomains = append(eligibleDomains, domains...)
+		actionTypes = models.ActionInterestTypes()
+	} else {
+		available = false
+	}
+	return map[string]any{
+		"available": available,
+		"tool":      "record_action_interest",
+		"fixed_arguments_if_invocation_condition_met":       fixedArguments,
+		"domain_must_be_one_of":                             eligibleDomains,
+		"action_type_must_be_one_of":                        actionTypes,
+		"arguments_must_contain_only":                       append([]string(nil), actionInterestArgumentNames...),
+		"invoke_only_if":                                    actionInterestInvocationCondition,
+		"executable_without_explicit_principal_intent":      false,
+		"query_prompt_contact_identity_fields_are_accepted": false,
+	}
+}
+
 // publicActionInterestOpportunity keeps the optional next step machine-readable
 // without converting discovery or a result selection into intent. Every domain
 // returned here was already present in the public organic result set.
@@ -47,6 +84,7 @@ func publicActionInterestOpportunity(baseURL, searchID string, sites []models.Si
 		"confirmation_version":        models.ActionInterestConfirmationV1,
 		"confirmation_url":            strings.TrimRight(baseURL, "/") + "/privacy#action-interest-v1",
 		"invocation_condition":        actionInterestInvocationCondition,
+		"call_contract":               actionInterestCallContract(searchID, domains, available),
 		"provider_contacted":          false,
 		"commercial_proof":            false,
 		"organic_rank_affected":       false,

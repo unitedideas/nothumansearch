@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -115,10 +116,65 @@ func TestSelectedActionInterestOpportunityIsExactAndNonCommercial(t *testing.T) 
 	if condition, _ := opportunity["invocation_condition"].(string); !strings.Contains(condition, "do not infer interest") {
 		t.Fatalf("invocation condition lost anti-inference boundary: %#v", condition)
 	}
+	contract, ok := opportunity["call_contract"].(map[string]any)
+	if !ok || contract["available"] != true || contract["tool"] != "record_action_interest" ||
+		contract["invoke_only_if"] != actionInterestInvocationCondition ||
+		contract["executable_without_explicit_principal_intent"] != false ||
+		contract["query_prompt_contact_identity_fields_are_accepted"] != false {
+		t.Fatalf("selected call contract = %#v", opportunity["call_contract"])
+	}
+	fixed, ok := contract["fixed_arguments_if_invocation_condition_met"].(map[string]any)
+	if !ok || !reflect.DeepEqual(fixed, map[string]any{
+		"search_id":                         "nhs_sr_AAAAAAAAAAAAAAAA",
+		"caller_attests_principal_interest": true,
+		"confirmation_version":              models.ActionInterestConfirmationV1,
+	}) {
+		t.Fatalf("selected fixed arguments = %#v", contract["fixed_arguments_if_invocation_condition_met"])
+	}
+	if !reflect.DeepEqual(contract["domain_must_be_one_of"], []string{"example.com"}) ||
+		!reflect.DeepEqual(contract["action_type_must_be_one_of"], models.ActionInterestTypes()) ||
+		!reflect.DeepEqual(contract["arguments_must_contain_only"], actionInterestArgumentNames) {
+		t.Fatalf("selected choices = %#v", contract)
+	}
 
 	unavailable := selectedActionInterestOpportunity("https://nothumansearch.ai", "nhs_sr_AAAAAAAAAAAAAAAA", nil)
 	if available, _ := unavailable["available"].(bool); available || unavailable["search_id"] != "" {
 		t.Fatalf("nil-site opportunity did not fail closed: %#v", unavailable)
+	}
+	unavailableContract, _ := unavailable["call_contract"].(map[string]any)
+	if unavailableContract["available"] != false ||
+		len(unavailableContract["fixed_arguments_if_invocation_condition_met"].(map[string]any)) != 0 ||
+		len(unavailableContract["domain_must_be_one_of"].([]string)) != 0 ||
+		len(unavailableContract["action_type_must_be_one_of"].([]string)) != 0 {
+		t.Fatalf("unavailable call contract retained capability: %#v", unavailableContract)
+	}
+}
+
+func TestMCPInitializeExplainsSelectionToInterestBoundary(t *testing.T) {
+	handler := NewMCPHandler(nil, "https://nothumansearch.ai")
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
+	))
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("initialize status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	var response struct {
+		Result struct {
+			Instructions string `json:"instructions"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{
+		"record selection only", "If and only if the principal explicitly currently wants",
+		"action_interest.call_contract", "never infer interest", "contacts no provider",
+	} {
+		if !strings.Contains(response.Result.Instructions, required) {
+			t.Fatalf("initialize instructions missing %q: %s", required, response.Result.Instructions)
+		}
 	}
 }
 
@@ -400,6 +456,27 @@ func TestMCPActionInterestOpportunityCarriesReadyInputsWithoutInferringIntent(t 
 	}
 	if opportunity["invocation_condition"] != actionInterestInvocationCondition {
 		t.Fatalf("MCP opportunity can infer intent: %#v", opportunity)
+	}
+}
+
+func TestMCPActionInterestGuidanceUsesConditionalCallContract(t *testing.T) {
+	var unavailable strings.Builder
+	appendMCPActionInterestGuidance(&unavailable, mcpDiscoveryExchange{})
+	if unavailable.Len() != 0 {
+		t.Fatalf("unavailable guidance = %q", unavailable.String())
+	}
+
+	var available strings.Builder
+	appendMCPActionInterestGuidance(&available, mcpDiscoveryExchange{actionInterestAvailable: true})
+	text := available.String()
+	for _, required := range []string{
+		"action_interest.call_contract", "fixed receipt and consent-version fields",
+		"choose only that returned domain", "Do not call it otherwise",
+		"does not contact the provider", "no later than 30 days",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("action-interest guidance missing %q: %s", required, text)
+		}
 	}
 }
 

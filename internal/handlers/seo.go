@@ -734,7 +734,7 @@ paths:
                   action_interest:
                     type: object
                     description: Provider-independent way to record caller-attested principal interest against an exact returned organic result
-                    required: [available, search_id, eligible_domains, action_types, caller_attestation_required, confirmation_version, confirmation_url, invocation_condition, endpoint, provider_contacted, commercial_proof, organic_rank_affected]
+                    required: [available, search_id, eligible_domains, action_types, caller_attestation_required, confirmation_version, confirmation_url, invocation_condition, call_contract, endpoint, provider_contacted, commercial_proof, organic_rank_affected]
                     properties:
                       available: { type: boolean }
                       search_id: { type: string, description: Exact discovery receipt to pass only when the invocation condition is true }
@@ -745,6 +745,7 @@ paths:
                       confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
                       confirmation_url: { type: string, format: uri }
                       invocation_condition: { type: string, description: Requires explicit current principal intent and forbids inference from discovery or selection }
+                      call_contract: { $ref: "#/components/schemas/ActionInterestCallContract" }
                       provider_contacted: { type: boolean, enum: [false] }
                       commercial_proof: { type: boolean, enum: [false] }
                       organic_rank_affected: { type: boolean, enum: [false] }
@@ -1909,6 +1910,26 @@ components:
           type: boolean
           deprecated: true
           description: Legacy display metadata only; never affects organic score or ordering
+    ActionInterestCallContract:
+      type: object
+      description: Non-executable call contract. Fixed receipt and confirmation fields are supplied only for use after the explicit invocation condition is met; the principal-requested domain and action type remain required choices.
+      required: [available, tool, fixed_arguments_if_invocation_condition_met, domain_must_be_one_of, action_type_must_be_one_of, arguments_must_contain_only, invoke_only_if, executable_without_explicit_principal_intent, query_prompt_contact_identity_fields_are_accepted]
+      properties:
+        available: { type: boolean }
+        tool: { type: string, enum: [record_action_interest] }
+        fixed_arguments_if_invocation_condition_met:
+          type: object
+          additionalProperties: false
+          properties:
+            search_id: { type: string }
+            caller_attests_principal_interest: { type: boolean, enum: [true] }
+            confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
+        domain_must_be_one_of: { type: array, items: { type: string } }
+        action_type_must_be_one_of: { type: array, items: { type: string, enum: [quote, trial, demo, booking, application, signup, purchase] } }
+        arguments_must_contain_only: { type: array, items: { type: string, enum: [search_id, domain, action_type, caller_attests_principal_interest, confirmation_version] } }
+        invoke_only_if: { type: string, description: Explicit current-principal intent is required; discovery, ranking, selection, and provider availability are insufficient }
+        executable_without_explicit_principal_intent: { type: boolean, enum: [false] }
+        query_prompt_contact_identity_fields_are_accepted: { type: boolean, enum: [false] }
     SelectedSiteDetail:
       allOf:
         - { $ref: "#/components/schemas/Site" }
@@ -1918,7 +1939,7 @@ components:
             action_interest:
               type: object
               description: Optional provider-independent next step for the one selected organic domain; invoking it still requires explicit current-principal attestation
-              required: [available, search_id, eligible_domains, action_types, caller_attestation_required, confirmation_version, confirmation_url, invocation_condition, endpoint, provider_contacted, commercial_proof, organic_rank_affected]
+              required: [available, search_id, eligible_domains, action_types, caller_attestation_required, confirmation_version, confirmation_url, invocation_condition, call_contract, endpoint, provider_contacted, commercial_proof, organic_rank_affected]
               properties:
                 available: { type: boolean, enum: [true] }
                 search_id: { type: string }
@@ -1929,6 +1950,7 @@ components:
                 confirmation_version: { type: string, enum: [nhs-action-interest-v1] }
                 confirmation_url: { type: string, format: uri }
                 invocation_condition: { type: string, description: Requires explicit current principal intent and forbids inference from discovery or selection }
+                call_contract: { $ref: "#/components/schemas/ActionInterestCallContract" }
                 provider_contacted: { type: boolean, enum: [false] }
                 commercial_proof: { type: boolean, enum: [false] }
                 organic_rank_affected: { type: boolean, enum: [false] }

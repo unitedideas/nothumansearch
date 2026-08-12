@@ -424,6 +424,16 @@ func TestOpenAPIProviderStatusAndDemandAreStrictClaimScopedReads(t *testing.T) {
 			t.Fatalf("provider status/demand schemas missing %q", required)
 		}
 	}
+	for _, required := range []string{
+		"ActionInterestCallContract:",
+		"fixed_arguments_if_invocation_condition_met:",
+		"executable_without_explicit_principal_intent: { type: boolean, enum: [false] }",
+		"call_contract: { $ref: \"#/components/schemas/ActionInterestCallContract\" }",
+	} {
+		if !strings.Contains(body, required) {
+			t.Fatalf("OpenAPI action-interest call contract missing %q", required)
+		}
+	}
 	for _, forbidden := range []string{
 		"\n        attribution_token:",
 		"\n        search_receipt_id:",

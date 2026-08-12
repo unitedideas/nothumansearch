@@ -267,7 +267,7 @@ func (h *MCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"title":   "Not Human Search",
 				"version": "1.1.0",
 			},
-			"instructions": "Search engine for AI agents. Use search_agents to find agent-ready tools, APIs, and services ranked by agentic readiness score (0-100). Use get_site_details for a full readiness report on a specific domain.",
+			"instructions": "Search engine for AI agents. Use search_agents to find agent-ready tools, APIs, and services ranked by agentic readiness score (0-100). Use get_site_details with the returned search_id to inspect one result and record selection only. If and only if the principal explicitly currently wants one supported next step with that selected domain, use the returned action_interest.call_contract to call record_action_interest; never infer interest from search, rank, selection, or provider availability. Recording interest contacts no provider and creates no ticket, charge, rank change, or commercial proof.",
 		})
 		go models.LogMCPRequest(h.DB, "initialize", "", nil, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 
@@ -1458,7 +1458,7 @@ func appendMCPActionInterestGuidance(builder *strings.Builder, context mcpDiscov
 	if !context.actionInterestAvailable {
 		return
 	}
-	builder.WriteString("If the principal already wants a quote, trial, demo, booking, application, signup, or purchase from one returned domain, record_action_interest can create an aggregate-demand receipt that expires with the source discovery receipt, no later than 30 days after it. It does not contact the provider or create a ticket, charge, rank change, or commercial proof.\n")
+	builder.WriteString("If the principal already wants a quote, trial, demo, booking, application, signup, or purchase from one returned domain, use action_interest.call_contract to supply the fixed receipt and consent-version fields, then choose only that returned domain and the one requested action_type. Do not call it otherwise. record_action_interest creates an aggregate-demand receipt that expires with the source discovery receipt, no later than 30 days after it. It does not contact the provider or create a ticket, charge, rank change, or commercial proof.\n")
 }
 
 // mcpPublicCategory accepts only the public discovery taxonomy. Audit-only
@@ -1639,7 +1639,7 @@ func (h *MCPHandler) toolGetSiteDetails(w http.ResponseWriter, id json.RawMessag
 			SelectionRecorded: true,
 			ActionInterest:    opportunity,
 		}
-		fmt.Fprintf(&b, "\nOptional next step: only if the principal currently wants a quote, trial, demo, booking, application, signup, or purchase from %s, call record_action_interest with this search_id and domain. Selection alone is not interest. No provider is contacted and no ticket, charge, rank change, or commercial proof is created.\n", site.Domain)
+		fmt.Fprintf(&b, "\nOptional next step: only if the principal currently wants a quote, trial, demo, booking, application, signup, or purchase from %s, use action_interest.call_contract for the fixed search_id, attestation, and confirmation-version fields; choose %s as domain and only the action_type the principal currently requested. Then call record_action_interest. Selection alone is not interest. No provider is contacted and no ticket, charge, rank change, or commercial proof is created.\n", site.Domain, site.Domain)
 	}
 
 	h.writeResult(w, id, map[string]any{

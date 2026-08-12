@@ -170,7 +170,9 @@ check_mcp_initialize() {
         .jsonrpc == "2.0" and .id == 1 and
         .result.protocolVersion == "2025-06-18" and
         .result.serverInfo.name == "nothumansearch" and
-        .result.serverInfo.version == "1.1.0"
+        .result.serverInfo.version == "1.1.0" and
+        (.result.instructions | contains("action_interest.call_contract")) and
+        (.result.instructions | contains("never infer interest"))
     ' >/dev/null; then
         printf "  \033[32m✓\033[0m %-45s negotiated\n" "MCP initialize"
     else
@@ -219,6 +221,13 @@ check_mcp_free_synthetic_search() {
         $discovery.paid_offers_available == false and
         ($discovery.paid_offers | type == "array" and length == 0) and
         $discovery.action_interest.available == false and
+        $discovery.action_interest.call_contract.available == false and
+        $discovery.action_interest.call_contract.tool == "record_action_interest" and
+        $discovery.action_interest.call_contract.fixed_arguments_if_invocation_condition_met == {} and
+        $discovery.action_interest.call_contract.domain_must_be_one_of == [] and
+        $discovery.action_interest.call_contract.action_type_must_be_one_of == [] and
+        $discovery.action_interest.call_contract.executable_without_explicit_principal_intent == false and
+        $discovery.action_interest.call_contract.query_prompt_contact_identity_fields_are_accepted == false and
         ($discovery.results | type == "array" and length > 0) and
         ($discovery.detail_actions | type == "array" and length == ($discovery.results | length)) and
         ($response.result.content[0].text | contains(

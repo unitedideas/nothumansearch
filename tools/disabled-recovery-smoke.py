@@ -125,12 +125,19 @@ def assert_usable_free_discovery(
         raise AssertionError(f"disabled recovery MCP discovery contract mismatch: {tool_name}")
 
     action_interest = structured.get("action_interest")
+    call_contract = action_interest.get("call_contract") if isinstance(action_interest, dict) else None
     if (
         not isinstance(action_interest, dict)
         or action_interest.get("available") is not receipt_expected
         or action_interest.get("provider_contacted") is not False
         or action_interest.get("commercial_proof") is not False
         or action_interest.get("organic_rank_affected") is not False
+        or not isinstance(call_contract, dict)
+        or call_contract.get("available") is not receipt_expected
+        or call_contract.get("tool") != "record_action_interest"
+        or call_contract.get("invoke_only_if") != action_interest.get("invocation_condition")
+        or call_contract.get("executable_without_explicit_principal_intent") is not False
+        or call_contract.get("query_prompt_contact_identity_fields_are_accepted") is not False
     ):
         raise AssertionError(f"disabled recovery MCP action-interest boundary mismatch: {tool_name}")
 
@@ -138,8 +145,26 @@ def assert_usable_free_discovery(
         search_id = structured.get("search_id")
         if not isinstance(search_id, str) or not search_id.startswith("nhs_sr_"):
             raise AssertionError(f"disabled recovery MCP receipt missing: {tool_name}")
+        fixed = call_contract.get("fixed_arguments_if_invocation_condition_met")
+        if (
+            fixed != {
+                "search_id": search_id,
+                "caller_attests_principal_interest": True,
+                "confirmation_version": "nhs-action-interest-v1",
+            }
+            or results[0]["domain"].lower() not in call_contract.get("domain_must_be_one_of", [])
+            or call_contract.get("action_type_must_be_one_of")
+            != ["quote", "trial", "demo", "booking", "application", "signup", "purchase"]
+        ):
+            raise AssertionError(f"disabled recovery MCP call contract mismatch: {tool_name}")
     elif "search_id" in structured:
         raise AssertionError(f"disabled recovery unfiltered browse created a receipt: {tool_name}")
+    elif (
+        call_contract.get("fixed_arguments_if_invocation_condition_met") != {}
+        or call_contract.get("domain_must_be_one_of") != []
+        or call_contract.get("action_type_must_be_one_of") != []
+    ):
+        raise AssertionError(f"disabled recovery unavailable call contract retained a capability: {tool_name}")
 
 
 def main() -> None:
