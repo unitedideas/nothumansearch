@@ -335,3 +335,33 @@ This is measurement, not a new readiness shortcut. A developer-tools search is
 not a lead, a selection is not explicit interest, and explicit interest is not
 a handoff or revenue. Provider mode remains disabled and no category can be
 activated without the separate owner gate.
+
+### Production v3 baseline
+
+Revision `eaf14affe9b206eb26325b7c36648bf854953040` passed full tests,
+race tests, vet, the exact two-PostgreSQL release gate, disabled recovery smoke,
+and a zero-finding secret scan. Its verified source archive SHA-256 is
+`8c77b31bafc7e5ebc412c123076ca67e6f8e6d6aa5712f6d56475f8ebe58beb4`.
+Production was rotated to exact OCI digest
+`sha256:ccc2adfab8bbee198af721c18cf19db3e0374fff66325791aa783deac3081a3c`
+with provider mode explicitly disabled, then passed the 54/54 public suite.
+Both Fly machines report the exact digest/revision/archive labels; the started
+machine is healthy and the stopped standby retains autostart, autostop, and the
+one-machine minimum. No disposable reader remains.
+
+The first v3 aggregate, checked at `2026-08-12T02:53:26.952818Z` over the
+fixed experiment window beginning `2026-08-11T09:41:28Z`, reports 170
+meaningful searches and zero selections, explicit-interest receipts, or
+post-selection interest searches. Fifteen of those searches are controlled
+developer-tools receipts. Their category funnel is also exactly zero for
+selections, selected-search receipts, explicit interests, interest-backed
+searches, post-selection interests, and post-selection interest-backed
+searches. Commercial-state events remain zero.
+
+Report SHA-256
+`470cdefacbe95f89d7f8592eee06b07e9a7c514281d7fba009fb46d5dcc2e5d6`
+was independently recomputed from the sealed receipt and matched. The evidence
+file is
+`NHS_DEVELOPER_TOOLS_FUNNEL_BASELINE_2026-08-12_0253Z_eaf14af.json`.
+The finding is discovery usage without observed developer-tools action intent;
+it is not a lead, provider opportunity, or reason to activate the pilot.
