@@ -2,9 +2,9 @@
 
 **Scope:** Not Human Search only
 
-**Production revision checked:** `37390802a59d259f0e80e79c484b848a6cd8748b`
+**Production revision checked:** `0b1ba7e45682a7c0243a8a0101d7ffe2dd22d331`
 
-**Production OCI digest checked:** `sha256:ba7c6ed06c5eddf9e9a06c5feddbbe52316445d2fc09529717a7611d778121ba`
+**Production OCI digest checked:** `sha256:6f7224f58851b0e09bb1467f8aa623f4286a967c6c08718db7ac6c4835f4369a`
 
 **Production mode checked:** `disabled`
 
@@ -177,12 +177,27 @@ rate is unobserved at zero; the system must not relabel discovery as a lead.
 
 ## Current agent-only readiness
 
-The last authenticated Stage 1 aggregate at `2026-08-11T08:30:56Z` contains 538 meaningful
-MCP/REST search receipts, 20 selections, 7 search receipts with a selection, 32
-`developer-tools` receipts, and zero action-interest receipts. The observation
-span is six days. Stage 1 remains false because the 14-day window, 20 distinct
+The release-bound read-only Stage 1 operator at
+`2026-08-12T01:27:09.111765Z` contains 704 meaningful MCP/REST search receipts,
+20 selection events on seven distinct search receipts, and zero explicit
+action-interest receipts. Its threshold-qualified candidate topics are
+`ai-tools` 118, `search` 54, `developer-tools` 47, and `storage` 21. Counts are
+receipts rather than unique agents, and topic buckets may overlap.
+
+Stage 1 report SHA-256
+`dc549c4199bfe0665136d2ca158f99c290efb85590619b4a736cbf31fa1a2c2a`
+and attempt-funnel SHA-256
+`b47330cccf73061c24bfbd9248930b48be18ae22a87937bfb66f57bdc63236a4`
+both independently revalidate. The 586,990-second observation span is only six
+complete days. Stage 1 remains false because the 14-day window, 20 distinct
 selected-search receipts, and 10 genuine action-interest-backed search receipts
-are unmet. The newer sealed post-selection checkpoint above is the authoritative
-baseline for incremental action-interest measurement. The registered Fly
-credential bridge was restored by running the approved injector outside the
-sandbox; no token value was exposed.
+are unmet. Developer-tools is a candidate, not an owner selection or pilot
+authorization.
+
+The exact archive passed the complete release gate against two temporary local
+PostgreSQL 17 instances before its 40 MB OCI was pushed. One disposable 256 MB
+reader exited zero and was destroyed. Both production machines were then
+rotated to the exact digest with provider mode disabled; Fly health passed on
+both and the public production suite passed 54/54. Autostart, autostop, and a
+one-machine minimum remain configured. No provider was contacted and no
+commercial state changed.
