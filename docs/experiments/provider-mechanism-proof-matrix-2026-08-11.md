@@ -60,6 +60,30 @@ opportunities, explicitly not unique agents.
 No provider was contacted, invited, enrolled, activated, or charged while
 producing this matrix. Production provider exchange remains disabled.
 
+## Cryptographic full-funnel delta
+
+The comparator at revision
+`37390802a59d259f0e80e79c484b848a6cd8748b` now accepts the sealed v2
+post-selection receipt, verifies its report SHA-256, and emits one privacy-safe
+comparison across the complete measurable funnel: free REST/MCP discovery,
+result selection, active action-interest net state, provider activation,
+returned offers, tickets, consented handoffs, authenticated outcomes, paid and
+available settlements, and commercial-state events. Durable counters fail
+closed if they regress. Active-interest fields are labeled as net changes
+because receipts can expire; they are not misrepresented as event creation
+counts.
+
+The first production-database comparison covered
+`2026-08-12T00:41:26.157992Z` through
+`2026-08-12T00:54:51.695779Z`. It revalidated checkpoint SHA-256
+`8bd891aa6bfac6f6fa12cb1832eb22a720b4017a1a82484c6fd1db98548bb03e`
+and emitted current report SHA-256
+`3da07d033095c28e11b1ab0b4e5321ba4444b562db38a7fbd6153665c5958169`.
+Every funnel delta was zero. The receipt contains no identifiers, queries,
+prompts, or contacts; explicitly says searches are not leads; and leaves the
+strongest mechanism unselected. The disposable operator exited zero and was
+destroyed. This is a zero-delta control, not demand or commercial proof.
+
 ## Receipt-bound MCP action correction
 
 Production now returns one exact machine-readable `get_site_details` action for
