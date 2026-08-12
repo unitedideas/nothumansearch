@@ -2,9 +2,9 @@
 
 **Scope:** Not Human Search only
 
-**Production revision checked:** `7ad7cbfde04b239b6e12a563e05f765de9701df8`
+**Production revision checked:** `37390802a59d259f0e80e79c484b848a6cd8748b`
 
-**Production OCI digest checked:** `sha256:df56436486523a17575f629430cece0c3efffb34bc99bc0efae9b491baffd6b1`
+**Production OCI digest checked:** `sha256:ba7c6ed06c5eddf9e9a06c5feddbbe52316445d2fc09529717a7611d778121ba`
 
 **Production mode checked:** `disabled`
 
@@ -83,6 +83,15 @@ Every funnel delta was zero. The receipt contains no identifiers, queries,
 prompts, or contacts; explicitly says searches are not leads; and leaves the
 strongest mechanism unselected. The disposable operator exited zero and was
 destroyed. This is a zero-delta control, not demand or commercial proof.
+
+The same exact OCI digest was then rotated across both production machines
+with `NHS_PROVIDER_EXCHANGE_MODE=disabled`. Both Fly service checks reported
+the exact revision, a healthy database, and disabled provider mode. The public
+production suite passed 54/54, including free REST/MCP discovery, exact
+receipt-bound text actions, an empty paid sidecar, synthetic/invalid interest
+rejection, and disabled provider-funded routes. Machine autostart and autostop
+were explicitly restored after the direct image updates. No provider or
+commercial state was activated.
 
 ## Receipt-bound MCP action correction
 
