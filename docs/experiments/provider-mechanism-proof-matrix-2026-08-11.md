@@ -106,6 +106,14 @@ search receipts show free discovery usage only; they are events rather than
 unique agents and cannot be sold or relabeled as leads. No mechanism can yet
 be selected.
 
+The live no-write agent-evaluation dry-run also passed the strict production
+`record_action_interest` schema check. The six-scenario Responses API behavior
+run remains unexecuted because the canonical `OPENAI_API_KEY` reference does
+not resolve from Keychain, 1Password, injected environment, or the
+non-sensitive registry. No alternate credential was substituted. This leaves
+model comprehension unproved but does not affect the production funnel
+receipt; neither result is commercial evidence.
+
 ## Receipt-bound MCP action correction
 
 Production now returns one exact machine-readable `get_site_details` action for
