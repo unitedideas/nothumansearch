@@ -833,6 +833,27 @@ admin key in argv or logs:
   --scope stage1 --stage1-days 30
 ```
 
+For repeated production measurement while the exchange is disabled, prefer the
+existing-machine collector. It first verifies the exact started machine's OCI
+revision, source-archive digest label, image digest, and explicit disabled mode;
+only then does it run the private read-only binary through Fly SSH. It creates
+no Fly machine and filters the secret-injection status line from its JSON
+evidence. Supply the currently started machine ID from a metadata-only Fly
+inventory read:
+
+```sh
+/usr/bin/python3 tools/stage1-fly-read.py \
+  --revision EXACT_40_CHARACTER_DEPLOYED_REVISION \
+  --machine EXACT_STARTED_FLY_MACHINE_ID \
+  --days 30
+```
+
+The collector fails closed if the image labels or disabled-mode assertion do
+not match, if the receipt carries a forbidden coordinate field, or if any
+privacy/non-contact assertion changes. Its output is aggregate measurement
+evidence only. It does not create a search, selection, action-interest receipt,
+provider contact, ticket, checkout, charge, or commercial authorization.
+
 ## Stage 2: bounded provider pilot
 
 Invite 3 to 20 providers in the one selected category only after owner release.
