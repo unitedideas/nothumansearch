@@ -1,0 +1,88 @@
+{
+  "baseline": {
+    "observed_fixed_cost_cents": 1146,
+    "period_days": 31,
+    "period_end": "2026-08-12",
+    "period_start": "2026-07-13",
+    "source": "fly-cost-explorer-per-app",
+    "source_is_final_invoice": false
+  },
+  "commercial_proof": false,
+  "contract": "nhs-provider-mechanism-price-floor-v1",
+  "currency": "usd",
+  "equal_three_arm_pilot_cost_allocation": {
+    "accepted": {
+      "event_count": 5,
+      "minimum_gross_cents_per_event": 111,
+      "one_cent_lower_total_processing_net_cents": 380,
+      "processing_fee_allowance_cents_per_event": 34,
+      "projected_total_gross_cents": 555,
+      "projected_total_processing_fee_cents": 170,
+      "projected_total_processing_net_cents": 385,
+      "required_net_cents": 382
+    },
+    "activated": {
+      "event_count": 2,
+      "minimum_gross_cents_per_event": 228,
+      "one_cent_lower_total_processing_net_cents": 380,
+      "processing_fee_allowance_cents_per_event": 37,
+      "projected_total_gross_cents": 456,
+      "projected_total_processing_fee_cents": 74,
+      "projected_total_processing_net_cents": 382,
+      "required_net_cents": 382
+    },
+    "converted": {
+      "event_count": 1,
+      "minimum_gross_cents_per_event": 425,
+      "one_cent_lower_total_processing_net_cents": 381,
+      "processing_fee_allowance_cents_per_event": 43,
+      "projected_total_gross_cents": 425,
+      "projected_total_processing_fee_cents": 43,
+      "projected_total_processing_net_cents": 382,
+      "required_net_cents": 382
+    }
+  },
+  "interpretation": "Infrastructure contribution floor only; excludes labor, support, fraud, tax, and profit. Final mechanism selection requires actual available processor-net settlement receipts.",
+  "organic_discovery_paywalled": false,
+  "principal_charged": false,
+  "processing_policy": {
+    "basis_points": 290,
+    "fee_kind": "conservative_published_allowance_not_observed_processor_receipt",
+    "fixed_cents_per_successful_charge": 30
+  },
+  "production_changed": false,
+  "provider_contacted": false,
+  "scope": "not-human-search-only",
+  "standalone_monthly_fixed_cost_coverage": {
+    "accepted": {
+      "event_count": 5,
+      "minimum_gross_cents_per_event": 268,
+      "one_cent_lower_total_processing_net_cents": 1145,
+      "processing_fee_allowance_cents_per_event": 38,
+      "projected_total_gross_cents": 1340,
+      "projected_total_processing_fee_cents": 190,
+      "projected_total_processing_net_cents": 1150,
+      "required_net_cents": 1146
+    },
+    "activated": {
+      "event_count": 2,
+      "minimum_gross_cents_per_event": 622,
+      "one_cent_lower_total_processing_net_cents": 1144,
+      "processing_fee_allowance_cents_per_event": 49,
+      "projected_total_gross_cents": 1244,
+      "projected_total_processing_fee_cents": 98,
+      "projected_total_processing_net_cents": 1146,
+      "required_net_cents": 1146
+    },
+    "converted": {
+      "event_count": 1,
+      "minimum_gross_cents_per_event": 1212,
+      "one_cent_lower_total_processing_net_cents": 1145,
+      "processing_fee_allowance_cents_per_event": 66,
+      "projected_total_gross_cents": 1212,
+      "projected_total_processing_fee_cents": 66,
+      "projected_total_processing_net_cents": 1146,
+      "required_net_cents": 1146
+    }
+  }
+}

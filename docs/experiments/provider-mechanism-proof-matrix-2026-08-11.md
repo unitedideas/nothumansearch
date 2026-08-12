@@ -37,8 +37,8 @@ NHS can charge a provider only for the immutable downstream event assigned to
 that offer: accepted handoff, verified activation, or verified conversion. It
 cannot charge the principal or sell discovery, rank, query, prompt, or identity
 data. The current 31-day NHS-only infrastructure contribution hypotheses are
-`$2.70` per accepted handoff at five events, `$6.28` per activation at two
-events, or `$12.23` for one conversion. Those figures are floors based on
+`$2.68` per accepted handoff at five events, `$6.22` per activation at two
+events, or `$12.12` for one conversion. Those figures are floors based on
 observed Fly usage and a published processing-fee allowance; they are not
 offers, profit, or settlement evidence.
 
@@ -48,10 +48,10 @@ The winner remains empty until each arm has real available processor net. The
 verified selector does not accept a published processing rate. It compares the
 exact Stripe-observed available net per 1,000 returned offers, using paid
 settlement latency only as a tie-breaker after all declared constraints pass.
-The top arm must also beat the runner-up by at least 1,157 processor-net cents
+The top arm must also beat the runner-up by at least 1,146 processor-net cents
 per 1,000 returns and 20%. This prevents a high-price, low-exposure arm, modeled
 fee assumption, or economically immaterial near tie from appearing strongest.
-Policy v3 additionally requires the leader's 95% simultaneous empirical-
+Policy v4 additionally requires the leader's 95% simultaneous empirical-
 Bernstein lower bound to exceed the runner-up's upper bound. The proof exports
 only each arm's maximum bounty, net sum of squares, and maximum net—not ticket,
 provider, query, prompt, or identity data. Its unit is randomized returned-offer
@@ -59,6 +59,14 @@ opportunities, explicitly not unique agents.
 
 No provider was contacted, invited, enrolled, activated, or charged while
 producing this matrix. Production provider exchange remains disabled.
+
+The current Cost Explorer baseline covers 2026-07-13 through 2026-08-12 and
+attributes `$4.36` to `nothumansearch` plus `$7.10` to `nothumansearch-db`, or
+`$11.46` total for 31 days. It is a live usage estimate rather than a final
+invoice and excludes labor, support, fraud, tax, and profit. The equal-cost
+three-arm experiment floors are `$1.11` per accepted handoff at five events,
+`$2.28` per activation at two events, and `$4.25` for one conversion. These are
+pre-pilot pricing hypotheses, not offers or commercial evidence.
 
 ## Cryptographic full-funnel delta
 

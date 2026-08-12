@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-DEFAULT_BASELINE = pathlib.Path("docs/experiments/nhs-cost-baseline-2026-08-11.json")
+DEFAULT_BASELINE = pathlib.Path("docs/experiments/nhs-cost-baseline-2026-08-12.json")
 MECHANISMS = ("accepted", "activated", "converted")
 DEFAULT_EVENT_COUNTS = {"accepted": 5, "activated": 2, "converted": 1}
 BASELINE_KEYS = {

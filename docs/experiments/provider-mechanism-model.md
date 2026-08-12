@@ -37,7 +37,7 @@ privacy-safe projection produced by `provider-pilot-status.py`:
 ```sh
 go run ./cmd/provider-mechanism-model \
   -proof-status /path/to/redacted-closed-pilot-proof.json \
-  -policy docs/experiments/provider-mechanism-policy-v3.json
+  -policy docs/experiments/provider-mechanism-policy-v4.json
 ```
 
 Proof ingestion fails closed unless the evidence identifies the closed
@@ -69,11 +69,11 @@ select a winner whose transaction pattern retains less value.
 Point estimates can be real and still be too close to support a decision. The
 verified policy therefore requires the top viable arm to exceed the runner-up
 by both an absolute processor-net value per 1,000 returns and a relative lead.
-Policy v3 sets those floors to 1,157 cents, the current 31-day NHS
+Policy v4 sets those floors to 1,146 cents, the current 31-day NHS
 infrastructure baseline, and 20%. Both must pass. The report exposes the
 required and observed leads; a near tie leaves selection empty.
 
-Policy v3 also preregisters a 95% confidence level and a 20,000-cent maximum
+Policy v4 also preregisters a 95% confidence level and a 20,000-cent maximum
 processor net per returned offer. The private proof exposes only each arm's
 maximum offered bounty, exact available-net sum, net sum of squares, and maximum
 net settlement. Unsettled returned offers are zero observations. Those
