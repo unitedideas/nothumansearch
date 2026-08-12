@@ -271,6 +271,42 @@ func TestRecordActionInterestMCPToolHasExactPrivacySchema(t *testing.T) {
 	}
 }
 
+func TestMCPReceiptBoundDetailActionsCarryExactSelectionWithoutInterest(t *testing.T) {
+	sites := []models.Site{{Domain: "Example.DEV"}, {Domain: "second.example"}}
+	if actions := mcpReceiptBoundDetailActions("", sites); len(actions) != 0 {
+		t.Fatalf("unscoped detail actions = %#v, want none", actions)
+	}
+
+	const searchID = "nhs_sr_AAAAAAAAAAAAAAAA"
+	actions := mcpReceiptBoundDetailActions(searchID, sites)
+	if len(actions) != len(sites) {
+		t.Fatalf("detail action count = %d, want %d", len(actions), len(sites))
+	}
+	for index, action := range actions {
+		arguments, ok := action["arguments"].(map[string]any)
+		if !ok {
+			t.Fatalf("detail action %d arguments = %#v", index, action["arguments"])
+		}
+		if action["tool"] != "get_site_details" ||
+			arguments["search_id"] != searchID ||
+			arguments["domain"] != strings.ToLower(sites[index].Domain) ||
+			action["records_result_selection"] != true ||
+			action["action_interest_inferred"] != false ||
+			action["provider_contacted"] != false ||
+			action["organic_rank_affected"] != false {
+			t.Fatalf("detail action %d boundary = %#v", index, action)
+		}
+		for _, forbidden := range []string{"query", "prompt", "contact", "identity", "provider_offer"} {
+			if _, exists := action[forbidden]; exists {
+				t.Fatalf("detail action exposed %q: %#v", forbidden, action)
+			}
+			if _, exists := arguments[forbidden]; exists {
+				t.Fatalf("detail arguments exposed %q: %#v", forbidden, arguments)
+			}
+		}
+	}
+}
+
 func TestActionInterestOpportunityIsExplicitBoundedAndNonCommercial(t *testing.T) {
 	sites := []models.Site{
 		{Domain: "Example.COM"},

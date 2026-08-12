@@ -569,8 +569,25 @@ func loopbackRequireMCPDiscoveryExchange(
 	if !loopbackBool(t, structured, "receipt_recorded") {
 		t.Fatalf("%s did not record an eligible discovery receipt", label)
 	}
-	_ = loopbackString(t, structured, "search_id")
+	searchID := loopbackString(t, structured, "search_id")
 	loopbackRequireMCPOrganicOrder(t, label, structured, expected)
+	detailActions := loopbackArray(t, structured, "detail_actions")
+	if len(detailActions) != len(expected) {
+		t.Fatalf("%s detail action count = %d, want %d", label, len(detailActions), len(expected))
+	}
+	for index, rawAction := range detailActions {
+		action := loopbackObjectValue(t, rawAction)
+		arguments := loopbackObject(t, action, "arguments")
+		if loopbackString(t, action, "tool") != "get_site_details" ||
+			loopbackString(t, arguments, "domain") != expected[index].Domain ||
+			loopbackString(t, arguments, "search_id") != searchID ||
+			!loopbackBool(t, action, "records_result_selection") ||
+			loopbackBool(t, action, "action_interest_inferred") ||
+			loopbackBool(t, action, "provider_contacted") ||
+			loopbackBool(t, action, "organic_rank_affected") {
+			t.Fatalf("%s detail action %d boundary = %#v", label, index, action)
+		}
+	}
 
 	actionInterest := loopbackObject(t, structured, "action_interest")
 	if !loopbackBool(t, actionInterest, "available") ||
@@ -617,6 +634,9 @@ func loopbackRequireMCPUnscopedBrowse(
 	}
 	if _, exists := structured["search_id"]; exists {
 		t.Fatalf("%s exposed a search_id without an eligible receipt", label)
+	}
+	if actions := loopbackArray(t, structured, "detail_actions"); len(actions) != 0 {
+		t.Fatalf("%s exposed receipt-bound detail actions without an eligible receipt: %#v", label, actions)
 	}
 	if loopbackBool(t, structured, "paid_offers_available") || len(loopbackArray(t, structured, "paid_offers")) != 0 {
 		t.Fatalf("%s disclosed provider-funded sidecars without scoped discovery", label)

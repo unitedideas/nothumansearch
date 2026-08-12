@@ -1301,6 +1301,7 @@ func (h *MCPHandler) toolSearchAgents(w http.ResponseWriter, id json.RawMessage,
 		"receipt_recorded":      searchID != "",
 		"total":                 total,
 		"results":               sites,
+		"detail_actions":        mcpReceiptBoundDetailActions(searchID, sites),
 		"paid_offers":           paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
 		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
@@ -1335,6 +1336,37 @@ func (h *MCPHandler) recordMCPSearchReceipt(p models.SearchParams, total int, si
 		return ""
 	}
 	return searchID
+}
+
+// mcpReceiptBoundDetailActions makes the exact selection-producing follow-up
+// machine-readable for every returned organic result. Agents no longer have to
+// reconstruct the domain/search_id pair from prose, while an unscoped browse
+// or failed receipt write exposes no attribution action. Calling the action
+// records only a result selection; it never asserts interest or contacts a
+// provider.
+func mcpReceiptBoundDetailActions(searchID string, sites []models.Site) []map[string]any {
+	actions := make([]map[string]any, 0, len(sites))
+	if strings.TrimSpace(searchID) == "" {
+		return actions
+	}
+	for _, site := range sites {
+		domain := strings.ToLower(strings.TrimSpace(site.Domain))
+		if domain == "" {
+			continue
+		}
+		actions = append(actions, map[string]any{
+			"tool": "get_site_details",
+			"arguments": map[string]any{
+				"domain":    domain,
+				"search_id": searchID,
+			},
+			"records_result_selection": true,
+			"action_interest_inferred": false,
+			"provider_contacted":       false,
+			"organic_rank_affected":    false,
+		})
+	}
+	return actions
 }
 
 type mcpDiscoveryExchange struct {
@@ -1865,6 +1897,7 @@ func (h *MCPHandler) toolGetTopSites(w http.ResponseWriter, id json.RawMessage, 
 		"receipt_recorded":      exchange.searchID != "",
 		"category":              category,
 		"results":               sites,
+		"detail_actions":        mcpReceiptBoundDetailActions(exchange.searchID, sites),
 		"paid_offers":           exchange.paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
 		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
@@ -1959,6 +1992,7 @@ func (h *MCPHandler) toolRecentAdditions(w http.ResponseWriter, id json.RawMessa
 		"category":              category,
 		"days":                  days,
 		"results":               sites,
+		"detail_actions":        mcpReceiptBoundDetailActions(exchange.searchID, sites),
 		"paid_offers":           exchange.paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
 		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
@@ -2030,6 +2064,7 @@ func (h *MCPHandler) toolFindMCPServers(w http.ResponseWriter, id json.RawMessag
 		"receipt_recorded":      searchID != "",
 		"total":                 total,
 		"results":               sites,
+		"detail_actions":        mcpReceiptBoundDetailActions(searchID, sites),
 		"paid_offers":           exchange.paidOffers,
 		"paid_offers_available": exchange.paidOffersAvailable,
 		"action_interest":       mcpDiscoveryActionInterest(h.BaseURL, exchange),
