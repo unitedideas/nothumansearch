@@ -8,6 +8,8 @@ cmd/provider-cutover-preflight/main.go
 cmd/provider-cutover-preflight/main_test.go
 cmd/action-interest-experiment-read/main.go
 cmd/action-interest-experiment-read/main_test.go
+cmd/stage1-demand-read/main.go
+cmd/stage1-demand-read/main_test.go
 cmd/server/main.go
 cmd/server/main_test.go
 design/reviews/2026-08-01-provider-exchange-audit.json

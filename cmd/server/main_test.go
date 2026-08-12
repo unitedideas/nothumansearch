@@ -239,6 +239,8 @@ func TestReleaseBuildRequiresArchiveCommitIdentity(t *testing.T) {
 		`COPY --from=builder /app/provider-cutover-preflight .`,
 		`go build -trimpath -ldflags "-X main.releaseRevision=${RELEASE_REVISION}" -o action-interest-experiment-read ./cmd/action-interest-experiment-read/`,
 		`COPY --from=builder /app/action-interest-experiment-read .`,
+		`go build -trimpath -ldflags "-X main.releaseRevision=${RELEASE_REVISION}" -o stage1-demand-read ./cmd/stage1-demand-read/`,
+		`COPY --from=builder /app/stage1-demand-read .`,
 	} {
 		if !strings.Contains(dockerfile, required) {
 			t.Fatalf("Dockerfile is missing release binding %q", required)
