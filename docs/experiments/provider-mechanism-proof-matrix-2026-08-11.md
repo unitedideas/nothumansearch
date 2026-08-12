@@ -2,13 +2,13 @@
 
 **Scope:** Not Human Search only
 
-**Production revision checked:** `56e0acbb1c480390f61e835eb658daab0b1441b7`
+**Production revision checked:** `e2c89020b52ef0f12d408bd776e628d81fa26d22`
 
-**Production OCI digest checked:** `sha256:92cf7c3a75afb7684d11ddda74d1a7a02dc3ddaf273df6b27037416c811385ef`
+**Production OCI digest checked:** `sha256:0b1af2944bdc656f2c6c7f89688daaaec5887da92a479fba50fa8d318cb60c25`
 
 **Production mode checked:** `disabled`
 
-**Public smoke:** 54/54 pass on 2026-08-11
+**Public smoke:** 54/54 pass on 2026-08-12 UTC
 
 **Commercial proof:** not created
 
@@ -21,7 +21,7 @@ or a winning mechanism.
 | --- | --- | --- | --- |
 | Organic REST/MCP discovery remains free | Live search response says `access=free`; provider sidecar cannot affect organic rank | Exact-revision disabled smoke passes free REST and MCP checks | Proved current |
 | Neutrality and privacy | Explicit false assertions for sold rank, queries, prompts, agent identity, and principal identity; no prohibited fields in the proof projection | Production projection and selector fail closed on missing or true assertions | Implemented, no commercial cohort |
-| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The sealed `2026-08-11T23:52:31Z` checkpoint contains 148 meaningful searches, including 13 developer-tools searches, but 0 selections and 0 genuine action-interest receipts | Discovery demand observed; action intent unmet |
+| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The post-correction baseline at `2026-08-12T00:19:26Z` contains 152 meaningful searches, including 13 developer-tools searches, but 0 selections and 0 genuine action-interest receipts | Discovery demand observed; action intent unmet |
 | Consent before handoff | Immutable ticket authority plus separate handoff consent | Rail and rejection tests exist; no real pilot ticket | Implemented, unobserved |
 | Attribution | One randomly assigned offer arm, immutable terms, exact ticket-to-outcome binding | Database and proof-verifier gates exist; no real pilot outcome | Implemented, unobserved |
 | Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcome and available processor net; no real provider evidence | Rail proved, business proof unmet |
@@ -59,6 +59,33 @@ opportunities, explicitly not unique agents.
 
 No provider was contacted, invited, enrolled, activated, or charged while
 producing this matrix. Production provider exchange remains disabled.
+
+## Receipt-bound MCP action correction
+
+Production now returns one exact machine-readable `get_site_details` action for
+every eligible result from a scoped MCP discovery call. Each action carries the
+result domain and the originating `search_id`, states that following it records
+a result selection, and explicitly states that action interest is not inferred,
+no provider is contacted, and organic rank is unaffected. Unscoped browsing
+returns no receipt-bound actions.
+
+The exact archive gate passed against two disposable PostgreSQL instances. The
+OCI was built from that archive and pushed at the digest above. A traffic-held
+256 MB canary reached exact-revision health in disabled mode and was removed.
+The two production machines were then updated by digest. The final topology is
+one healthy serving machine (`e2869124a74686`) and one stopped, non-autostart
+standby (`e2869126f75686`). Public smoke passed 54/54, and a synthetic MCP
+search returned three results and three exact receipt-bound detail actions.
+
+The new sealed comparison baseline is
+`NHS_POST_MCP_ACTION_BASELINE_2026-08-12_001926Z_e2c8902.json`, checked at
+`2026-08-12T00:19:26.546019Z` with report SHA-256
+`bbf932e9af28e73b834b42627f621c0526c3d39489e5028f93cfba301f819f10`.
+It contains 152 meaningful eligible searches: 19 MCP, 133 REST, and 13 in the
+developer-tools topic. It still contains zero result selections, explicit
+action-interest receipts, provider activations, handoffs, outcomes, payments,
+or settlements. This is the correct zero baseline for measuring whether the
+machine-readable action changes agent behavior; it is not a monetization win.
 
 ## Sealed post-selection checkpoint
 
