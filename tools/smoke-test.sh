@@ -210,17 +210,18 @@ check_mcp_free_synthetic_search() {
         --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_agents","arguments":{"query":"payment","limit":1}}}' \
         "$BASE/mcp")
     if printf '%s' "$body" | /usr/bin/jq -e '
-        .jsonrpc == "2.0" and .id == 3 and
-        .result.structuredContent.access == "free" and
-        .result.structuredContent.receipt_recorded == true and
-        (.result.structuredContent.search_id | startswith("nhs_sr_")) and
-        .result.structuredContent.paid_offers_available == false and
-        (.result.structuredContent.paid_offers | type == "array" and length == 0) and
-        .result.structuredContent.action_interest.available == false and
-        (.result.structuredContent.results | type == "array" and length > 0) and
-        (.result.structuredContent.detail_actions | type == "array" and length == (.result.structuredContent.results | length)) and
-        .result.structuredContent as $discovery |
-        (.result.content[0].text | contains(
+        . as $response |
+        $response.result.structuredContent as $discovery |
+        $response.jsonrpc == "2.0" and $response.id == 3 and
+        $discovery.access == "free" and
+        $discovery.receipt_recorded == true and
+        ($discovery.search_id | startswith("nhs_sr_")) and
+        $discovery.paid_offers_available == false and
+        ($discovery.paid_offers | type == "array" and length == 0) and
+        $discovery.action_interest.available == false and
+        ($discovery.results | type == "array" and length > 0) and
+        ($discovery.detail_actions | type == "array" and length == ($discovery.results | length)) and
+        ($response.result.content[0].text | contains(
             "get_site_details {\"domain\":\"" +
             ($discovery.results[0].domain | ascii_downcase) +
             "\",\"search_id\":\"" + $discovery.search_id + "\"}"
