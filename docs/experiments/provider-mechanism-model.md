@@ -101,6 +101,24 @@ and retained-value floors are business constraints, not facts NHS should infer
 from outcome receipts. Processor fee and available net are evidence, not
 policy.
 
+Policy v4's minimum sample is a proof-ingestion floor, not a statistical power
+claim. The executable design audit shows that its 20 returns per arm cannot
+separate mechanisms at the smallest declared decisive lead. With the current
+20,000-cent support bound and simultaneous 95% empirical-Bernstein intervals,
+the zero-variance necessary floor is 446,360 returns per arm; nonzero variance
+requires more. Run:
+
+```sh
+python3 tools/provider-mechanism-design-audit.py \
+  --policy docs/experiments/provider-mechanism-policy-v4.json
+```
+
+Consequently the bounded 3/5/2/1 cohort is only a real revenue-rail proof. It
+must leave `selected_event` empty. Before any later winner-selection cohort,
+version a new policy with an ex ante traffic-feasible minimum effect, exact
+maximum bounty support, and sufficient variance or stopping design. Never tune
+those values from the selection cohort's observed outcomes.
+
 The private proof endpoint now reports only the extra aggregates required by the
 comparison: verified observed-handoff count, positive-event latency sample
 counts, and median seconds from observed handoff to each authenticated outcome.

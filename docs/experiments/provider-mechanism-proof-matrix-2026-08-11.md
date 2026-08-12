@@ -30,6 +30,7 @@ or a winning mechanism.
 | Billing and settlement | Signed paid webhook bound to the exact charged outcome, matching Stripe balance transaction, and a later availability receipt | All three arms traverse exact settlement-order and available processor-net aggregation in isolated PostgreSQL; production remains disabled and no provider has been charged | Rail proved, unobserved commercially |
 | Bounded 3/5/2/1 revenue milestone | 3 verified providers, 5 accepted handoffs, 2 activations, 1 genuine renewal, and available settlement receipts | Provider activation is owner-gated and has not been authorized | Owner-gated, unmet |
 | Strongest mechanism selection | Closed mature three-arm cohort; every arm independently meets provider, offer-return, charged-event, paid-settlement, reversal, time-to-cash, margin, retained-value, economic-lead, and simultaneous-confidence gates | Selector contract v5 consumes actual available processor fee/net plus privacy-safe dispersion aggregates and leaves overlapping intervals empty; no real cohort exists | Correctly empty |
+| Selection-design feasibility | Preregistered cohort can satisfy both the per-arm evidence floors and a sufficient confidence/power design at plausible eligible traffic | Executable audit proves the 3/5/2/1 milestone cannot satisfy the three-arm floors; policy v4's zero-variance necessary confidence floor at its smallest decisive lead is 446,360 returns per arm | Revenue-proof pilot is bounded; winner-selection design is not ready |
 
 ## What can be extracted
 

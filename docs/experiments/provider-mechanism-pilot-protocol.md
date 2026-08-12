@@ -132,6 +132,34 @@ mechanism. Selection remains empty until every candidate arm independently
 meets `min_charged_provider_companies_per_mechanism`, `min_charged_events`, and
 `min_offer_returns_per_mechanism`, plus the paid-settlement minimum.
 
+Run the executable design audit before describing any cohort as a
+winner-selection experiment:
+
+```sh
+python3 tools/provider-mechanism-design-audit.py \
+  --policy docs/experiments/provider-mechanism-policy-v4.json
+```
+
+Under policy v4, the three-arm deterministic floor is 60 returned offers, 15
+charged events, 15 accepted outcomes, 10 activated outcomes, five conversions,
+three charged provider companies in every arm, and at least three paid
+settlements. The 3/5/2/1 milestone cannot reach that floor.
+
+The confidence design is stricter still. At the declared 95% simultaneous
+confidence level, 20,000-cent per-offer bound, and 1,146-cent decisive lead per
+1,000 returns, even a zero-variance best case needs at least 446,360 returned
+offers per arm for non-overlapping intervals. Real variance can only increase
+that requirement. This is a necessary bound, not a sufficient power analysis.
+Therefore policy v4 is a fail-closed analysis contract, but its current sample
+floor is not a traffic-feasible winner-selection design for NHS.
+
+Do not weaken confidence after seeing outcomes. After an authorized revenue-
+proof milestone, a separate selection cohort requires a new versioned policy
+that preregisters a genuinely decision-relevant effect size, an ex ante bounty
+bound no larger than the offers can actually pay, and a sufficient variance or
+stopping model against measured eligible traffic. Until that design exists,
+report real revenue proof and leave the mechanism winner empty.
+
 ## Decision rule
 
 Keep `activated` for the next cohort only when all of the following hold:
