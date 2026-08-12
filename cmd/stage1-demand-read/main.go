@@ -6,12 +6,15 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,8 +23,10 @@ import (
 )
 
 const (
-	stage1ReadContract = "nhs-stage1-demand-read-v1"
-	stage1ReadTimeout  = 30 * time.Second
+	stage1ReadContract          = "nhs-stage1-demand-read-v1"
+	stage1CheckpointContract    = "nhs-stage1-demand-checkpoint-comparison-v1"
+	stage1ReadTimeout           = 30 * time.Second
+	stage1CheckpointMaximumSize = 128 * 1024
 )
 
 var releaseRevision = "development"
@@ -62,6 +67,7 @@ type stage1ReadReceipt struct {
 	BinaryRevision                 string                              `json:"binary_revision"`
 	Stage1Demand                   *models.Stage1DemandProof           `json:"stage1_demand"`
 	ActionInterestAttemptFunnel    *models.ActionInterestAttemptFunnel `json:"action_interest_attempt_funnel"`
+	CheckpointComparison           *stage1CheckpointComparison         `json:"checkpoint_comparison,omitempty"`
 	IndependentReadOnlySnapshots   bool                                `json:"independent_read_only_snapshots"`
 	SearchesAreNotLeads            bool                                `json:"searches_are_not_leads"`
 	ReadinessDoesNotAuthorizePilot bool                                `json:"readiness_does_not_authorize_stage2"`
@@ -74,9 +80,61 @@ type stage1ReadReceipt struct {
 	OperatorAffectedOrganicRank    bool                                `json:"operator_affected_organic_rank"`
 }
 
+type stage1CheckpointReceipt struct {
+	Contract                    string                              `json:"contract"`
+	Stage1ReportSHA256          string                              `json:"stage1_report_sha256"`
+	AttemptFunnelSHA256         string                              `json:"attempt_funnel_sha256"`
+	CandidateRevision           string                              `json:"candidate_revision"`
+	BinaryRevision              string                              `json:"binary_revision"`
+	Stage1Demand                *models.Stage1DemandProof           `json:"stage1_demand"`
+	ActionInterestAttemptFunnel *models.ActionInterestAttemptFunnel `json:"action_interest_attempt_funnel"`
+}
+
+type attemptBucketNetChange struct {
+	Surface   string `json:"surface"`
+	Outcome   string `json:"outcome"`
+	NetChange int64  `json:"net_change"`
+}
+
+type stage1CheckpointComparison struct {
+	Contract                             string                   `json:"contract"`
+	CheckpointStage1ReportSHA256         string                   `json:"checkpoint_stage1_report_sha256"`
+	CheckpointAttemptFunnelSHA256        string                   `json:"checkpoint_attempt_funnel_sha256"`
+	CheckpointRevision                   string                   `json:"checkpoint_revision"`
+	CheckpointStage1AsOf                 time.Time                `json:"checkpoint_stage1_as_of"`
+	CurrentStage1AsOf                    time.Time                `json:"current_stage1_as_of"`
+	CheckpointAttemptFunnelAsOf          time.Time                `json:"checkpoint_attempt_funnel_as_of"`
+	CurrentAttemptFunnelAsOf             time.Time                `json:"current_attempt_funnel_as_of"`
+	MeaningfulSearchReceiptsNetChange    int                      `json:"meaningful_search_receipts_net_change"`
+	ResultSelectionsNetChange            int                      `json:"result_selections_net_change"`
+	SearchReceiptsWithSelectionNetChange int                      `json:"search_receipts_with_selection_net_change"`
+	ActionInterestReceiptsNetChange      int                      `json:"action_interest_receipts_net_change"`
+	SearchesWithActionInterestNetChange  int                      `json:"search_receipts_with_action_interest_net_change"`
+	DistinctInterestDomainsNetChange     int                      `json:"distinct_interest_domains_net_change"`
+	ObservationSpanSecondsNetChange      int64                    `json:"observation_span_seconds_net_change"`
+	AttemptBucketNetChanges              []attemptBucketNetChange `json:"attempt_bucket_net_changes"`
+	CountsAreRollingWindowNetChanges     bool                     `json:"counts_are_rolling_window_net_changes"`
+	NetChangesAreNotCreatedEventCounts   bool                     `json:"net_changes_are_not_created_event_counts"`
+	SearchesAreNotLeads                  bool                     `json:"searches_are_not_leads"`
+	DiscoveryReceiptNetIncrease          bool                     `json:"discovery_receipt_net_increase"`
+	SelectionReceiptNetIncrease          bool                     `json:"selection_receipt_net_increase"`
+	ExplicitInterestReceiptNetIncrease   bool                     `json:"explicit_interest_receipt_net_increase"`
+	MCPInvalidAttemptNetIncrease         bool                     `json:"mcp_invalid_attempt_net_increase"`
+	Stage1BecameReady                    bool                     `json:"stage1_became_ready"`
+	ReadinessDoesNotAuthorizePilot       bool                     `json:"readiness_does_not_authorize_stage2"`
+	StrongestMechanismSelected           bool                     `json:"strongest_mechanism_selected"`
+	CommercialProof                      bool                     `json:"commercial_proof"`
+	ContainsIdentifiers                  bool                     `json:"contains_identifiers"`
+	ContainsQueriesOrPrompts             bool                     `json:"contains_queries_or_prompts"`
+	ContainsContactData                  bool                     `json:"contains_contact_data"`
+	ContainsRequestCoordinates           bool                     `json:"contains_request_coordinates"`
+}
+
 func main() {
 	revision := flag.String("revision", "", "exact 40-character deployed commit")
 	days := flag.Int("days", models.ActionInterestRetentionDays, "Stage 1 window in days")
+	checkpointPath := flag.String("checkpoint", "", "optional prior Stage 1 receipt or evidence envelope")
+	checkpointEnv := flag.String("checkpoint-base64-env", "", "optional environment name containing a base64 prior Stage 1 receipt")
 	flag.Parse()
 
 	candidate := strings.ToLower(strings.TrimSpace(*revision))
@@ -86,6 +144,19 @@ func main() {
 	}
 	if *days < models.Stage1ReportMinimumDays || *days > models.ActionInterestRetentionDays {
 		fail("invalid_stage1_window")
+	}
+	if strings.TrimSpace(*checkpointPath) != "" && strings.TrimSpace(*checkpointEnv) != "" {
+		fail("multiple_checkpoints")
+	}
+	var checkpoint *stage1CheckpointReceipt
+	var err error
+	if strings.TrimSpace(*checkpointPath) != "" {
+		checkpoint, err = loadStage1Checkpoint(strings.TrimSpace(*checkpointPath))
+	} else if strings.TrimSpace(*checkpointEnv) != "" {
+		checkpoint, err = loadStage1CheckpointEnvironment(strings.TrimSpace(*checkpointEnv))
+	}
+	if err != nil {
+		fail("invalid_checkpoint")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), stage1ReadTimeout)
@@ -114,6 +185,13 @@ func main() {
 	if err := validateAttemptFunnel(funnel, *days); err != nil {
 		fail("attempt_funnel_invalid")
 	}
+	var comparison *stage1CheckpointComparison
+	if checkpoint != nil {
+		comparison, err = compareStage1Checkpoint(checkpoint, proof, funnel)
+		if err != nil {
+			fail("checkpoint_comparison_failed")
+		}
+	}
 
 	proofJSON, err := json.Marshal(proof)
 	if err != nil {
@@ -133,6 +211,7 @@ func main() {
 		BinaryRevision:                 compiled,
 		Stage1Demand:                   proof,
 		ActionInterestAttemptFunnel:    funnel,
+		CheckpointComparison:           comparison,
 		IndependentReadOnlySnapshots:   true,
 		SearchesAreNotLeads:            true,
 		ReadinessDoesNotAuthorizePilot: true,
@@ -147,6 +226,171 @@ func main() {
 	if err := json.NewEncoder(os.Stdout).Encode(receipt); err != nil {
 		os.Exit(1)
 	}
+}
+
+func loadStage1Checkpoint(path string) (*stage1CheckpointReceipt, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, stage1CheckpointMaximumSize+1))
+	if err != nil || len(raw) == 0 || len(raw) > stage1CheckpointMaximumSize {
+		return nil, fmt.Errorf("checkpoint size invalid")
+	}
+	return parseStage1Checkpoint(raw)
+}
+
+func loadStage1CheckpointEnvironment(name string) (*stage1CheckpointReceipt, error) {
+	if name != "NHS_STAGE1_CHECKPOINT_B64" {
+		return nil, fmt.Errorf("checkpoint environment name invalid")
+	}
+	encoded := strings.TrimSpace(os.Getenv(name))
+	if encoded == "" || len(encoded) > base64.StdEncoding.EncodedLen(stage1CheckpointMaximumSize) {
+		return nil, fmt.Errorf("checkpoint environment size invalid")
+	}
+	raw, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(raw) == 0 || len(raw) > stage1CheckpointMaximumSize {
+		return nil, fmt.Errorf("checkpoint environment encoding invalid")
+	}
+	return parseStage1Checkpoint(raw)
+}
+
+func parseStage1Checkpoint(raw []byte) (*stage1CheckpointReceipt, error) {
+	var envelope struct {
+		ReaderReceipt json.RawMessage `json:"reader_receipt"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return nil, err
+	}
+	receiptRaw := raw
+	if len(envelope.ReaderReceipt) > 0 && string(envelope.ReaderReceipt) != "null" {
+		receiptRaw = envelope.ReaderReceipt
+	}
+	var receipt stage1CheckpointReceipt
+	if err := json.Unmarshal(receiptRaw, &receipt); err != nil {
+		return nil, err
+	}
+	if receipt.Contract != stage1ReadContract || receipt.Stage1Demand == nil ||
+		receipt.ActionInterestAttemptFunnel == nil || !validRevision(receipt.CandidateRevision) ||
+		receipt.BinaryRevision != receipt.CandidateRevision ||
+		len(receipt.Stage1ReportSHA256) != sha256.Size*2 ||
+		len(receipt.AttemptFunnelSHA256) != sha256.Size*2 ||
+		receipt.Stage1Demand.Days != receipt.ActionInterestAttemptFunnel.Days {
+		return nil, fmt.Errorf("checkpoint contract invalid")
+	}
+	if err := validateStage1Proof(receipt.Stage1Demand, receipt.Stage1Demand.Days); err != nil {
+		return nil, err
+	}
+	if err := validateAttemptFunnel(receipt.ActionInterestAttemptFunnel, receipt.Stage1Demand.Days); err != nil {
+		return nil, err
+	}
+	proofJSON, err := json.Marshal(receipt.Stage1Demand)
+	if err != nil {
+		return nil, err
+	}
+	funnelJSON, err := json.Marshal(receipt.ActionInterestAttemptFunnel)
+	if err != nil {
+		return nil, err
+	}
+	proofDigest := sha256.Sum256(proofJSON)
+	funnelDigest := sha256.Sum256(funnelJSON)
+	if receipt.Stage1ReportSHA256 != hex.EncodeToString(proofDigest[:]) ||
+		receipt.AttemptFunnelSHA256 != hex.EncodeToString(funnelDigest[:]) {
+		return nil, fmt.Errorf("checkpoint digest invalid")
+	}
+	return &receipt, nil
+}
+
+func compareStage1Checkpoint(
+	checkpoint *stage1CheckpointReceipt,
+	currentProof *models.Stage1DemandProof,
+	currentFunnel *models.ActionInterestAttemptFunnel,
+) (*stage1CheckpointComparison, error) {
+	if checkpoint == nil || checkpoint.Stage1Demand == nil ||
+		checkpoint.ActionInterestAttemptFunnel == nil || currentProof == nil || currentFunnel == nil ||
+		checkpoint.Stage1Demand.Days != currentProof.Days ||
+		checkpoint.ActionInterestAttemptFunnel.Days != currentFunnel.Days ||
+		!checkpoint.Stage1Demand.Stage1StartedAt.Equal(currentProof.Stage1StartedAt) ||
+		!checkpoint.Stage1Demand.AsOf.Before(currentProof.AsOf) ||
+		!checkpoint.ActionInterestAttemptFunnel.AsOf.Before(currentFunnel.AsOf) {
+		return nil, fmt.Errorf("checkpoint window invalid")
+	}
+	if err := validateStage1Proof(currentProof, currentProof.Days); err != nil {
+		return nil, err
+	}
+	if err := validateAttemptFunnel(currentFunnel, currentFunnel.Days); err != nil {
+		return nil, err
+	}
+
+	checkpointAttempts := make(map[string]int64, len(checkpoint.ActionInterestAttemptFunnel.Outcomes))
+	currentAttempts := make(map[string]int64, len(currentFunnel.Outcomes))
+	keys := make(map[string]struct{})
+	for _, bucket := range checkpoint.ActionInterestAttemptFunnel.Outcomes {
+		key := bucket.Surface + ":" + bucket.Outcome
+		checkpointAttempts[key] = bucket.AttemptCount
+		keys[key] = struct{}{}
+	}
+	for _, bucket := range currentFunnel.Outcomes {
+		key := bucket.Surface + ":" + bucket.Outcome
+		currentAttempts[key] = bucket.AttemptCount
+		keys[key] = struct{}{}
+	}
+	orderedKeys := make([]string, 0, len(keys))
+	for key := range keys {
+		orderedKeys = append(orderedKeys, key)
+	}
+	sort.Strings(orderedKeys)
+	attemptChanges := make([]attemptBucketNetChange, 0, len(orderedKeys))
+	var mcpInvalidNet int64
+	for _, key := range orderedKeys {
+		surface, outcome, ok := strings.Cut(key, ":")
+		if !ok {
+			return nil, fmt.Errorf("attempt key invalid")
+		}
+		netChange := currentAttempts[key] - checkpointAttempts[key]
+		attemptChanges = append(attemptChanges, attemptBucketNetChange{
+			Surface: surface, Outcome: outcome, NetChange: netChange,
+		})
+		if surface == "mcp" && outcome == "invalid_request" {
+			mcpInvalidNet = netChange
+		}
+	}
+
+	comparison := &stage1CheckpointComparison{
+		Contract:                             stage1CheckpointContract,
+		CheckpointStage1ReportSHA256:         checkpoint.Stage1ReportSHA256,
+		CheckpointAttemptFunnelSHA256:        checkpoint.AttemptFunnelSHA256,
+		CheckpointRevision:                   checkpoint.CandidateRevision,
+		CheckpointStage1AsOf:                 checkpoint.Stage1Demand.AsOf,
+		CurrentStage1AsOf:                    currentProof.AsOf,
+		CheckpointAttemptFunnelAsOf:          checkpoint.ActionInterestAttemptFunnel.AsOf,
+		CurrentAttemptFunnelAsOf:             currentFunnel.AsOf,
+		MeaningfulSearchReceiptsNetChange:    currentProof.MeaningfulSearchReceipts - checkpoint.Stage1Demand.MeaningfulSearchReceipts,
+		ResultSelectionsNetChange:            currentProof.ResultSelections - checkpoint.Stage1Demand.ResultSelections,
+		SearchReceiptsWithSelectionNetChange: currentProof.SearchReceiptsWithSelection - checkpoint.Stage1Demand.SearchReceiptsWithSelection,
+		ActionInterestReceiptsNetChange:      currentProof.ActionInterestReceipts - checkpoint.Stage1Demand.ActionInterestReceipts,
+		SearchesWithActionInterestNetChange:  currentProof.SearchReceiptsWithActionInterest - checkpoint.Stage1Demand.SearchReceiptsWithActionInterest,
+		DistinctInterestDomainsNetChange:     currentProof.DistinctInterestDomains - checkpoint.Stage1Demand.DistinctInterestDomains,
+		ObservationSpanSecondsNetChange:      currentProof.ObservationSpanSeconds - checkpoint.Stage1Demand.ObservationSpanSeconds,
+		AttemptBucketNetChanges:              attemptChanges,
+		CountsAreRollingWindowNetChanges:     true,
+		NetChangesAreNotCreatedEventCounts:   true,
+		SearchesAreNotLeads:                  true,
+		Stage1BecameReady:                    !checkpoint.Stage1Demand.Stage1Ready && currentProof.Stage1Ready,
+		ReadinessDoesNotAuthorizePilot:       true,
+		StrongestMechanismSelected:           false,
+		CommercialProof:                      false,
+		ContainsIdentifiers:                  false,
+		ContainsQueriesOrPrompts:             false,
+		ContainsContactData:                  false,
+		ContainsRequestCoordinates:           false,
+	}
+	comparison.DiscoveryReceiptNetIncrease = comparison.MeaningfulSearchReceiptsNetChange > 0
+	comparison.SelectionReceiptNetIncrease = comparison.SearchReceiptsWithSelectionNetChange > 0
+	comparison.ExplicitInterestReceiptNetIncrease = comparison.SearchesWithActionInterestNetChange > 0
+	comparison.MCPInvalidAttemptNetIncrease = mcpInvalidNet > 0
+	return comparison, nil
 }
 
 func validateStage1Proof(proof *models.Stage1DemandProof, days int) error {

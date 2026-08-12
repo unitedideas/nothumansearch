@@ -1,7 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -54,6 +58,44 @@ func cloneIntMap(input map[string]int) map[string]int {
 		output[key] = value
 	}
 	return output
+}
+
+func validAttemptFixture(asOf time.Time) *models.ActionInterestAttemptFunnel {
+	return &models.ActionInterestAttemptFunnel{
+		Days:                             30,
+		AsOf:                             asOf,
+		CountsAreAttemptsNotUniqueAgents: true,
+		ContainsRequestCoordinates:       false,
+		CommercialProof:                  false,
+		TotalAttempts:                    31,
+		Outcomes: []models.ActionInterestAttemptBucket{
+			{Surface: "mcp", Outcome: "invalid_request", AttemptCount: 1},
+			{Surface: "rest", Outcome: "unavailable", AttemptCount: 30},
+		},
+	}
+}
+
+func checkpointReceipt(t *testing.T, proof *models.Stage1DemandProof, funnel *models.ActionInterestAttemptFunnel) *stage1CheckpointReceipt {
+	t.Helper()
+	proofJSON, err := json.Marshal(proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	funnelJSON, err := json.Marshal(funnel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proofDigest := sha256.Sum256(proofJSON)
+	funnelDigest := sha256.Sum256(funnelJSON)
+	return &stage1CheckpointReceipt{
+		Contract:                    stage1ReadContract,
+		Stage1ReportSHA256:          hex.EncodeToString(proofDigest[:]),
+		AttemptFunnelSHA256:         hex.EncodeToString(funnelDigest[:]),
+		CandidateRevision:           "0123456789abcdef0123456789abcdef01234567",
+		BinaryRevision:              "0123456789abcdef0123456789abcdef01234567",
+		Stage1Demand:                proof,
+		ActionInterestAttemptFunnel: funnel,
+	}
 }
 
 func TestValidateStage1Proof(t *testing.T) {
@@ -112,17 +154,7 @@ func TestValidateStage1Proof(t *testing.T) {
 }
 
 func TestValidateAttemptFunnel(t *testing.T) {
-	funnel := &models.ActionInterestAttemptFunnel{
-		Days:                             30,
-		AsOf:                             time.Date(2026, 8, 12, 1, 30, 1, 0, time.UTC),
-		CountsAreAttemptsNotUniqueAgents: true,
-		ContainsRequestCoordinates:       false,
-		CommercialProof:                  false,
-		TotalAttempts:                    2,
-		Outcomes: []models.ActionInterestAttemptBucket{
-			{Surface: "mcp", Outcome: "unavailable", AttemptCount: 2},
-		},
-	}
+	funnel := validAttemptFixture(time.Date(2026, 8, 12, 1, 30, 1, 0, time.UTC))
 	if err := validateAttemptFunnel(funnel, 30); err != nil {
 		t.Fatalf("valid attempt funnel rejected: %v", err)
 	}
@@ -132,13 +164,174 @@ func TestValidateAttemptFunnel(t *testing.T) {
 		t.Fatal("attempt funnel accepted inconsistent total")
 	}
 	invalid = *funnel
-	invalid.Outcomes = []models.ActionInterestAttemptBucket{{Surface: "mcp", Outcome: "lead", AttemptCount: 2}}
+	invalid.Outcomes = []models.ActionInterestAttemptBucket{{Surface: "mcp", Outcome: "lead", AttemptCount: 31}}
 	if err := validateAttemptFunnel(&invalid, 30); err == nil {
 		t.Fatal("attempt funnel accepted forbidden outcome")
 	}
 }
 
+func TestParseStage1CheckpointEnvelopeAndDigest(t *testing.T) {
+	proof := validStage1Fixture()
+	funnel := validAttemptFixture(proof.AsOf.Add(time.Second))
+	receipt := checkpointReceipt(t, proof, funnel)
+	envelope := map[string]any{
+		"contract":       "nhs-stage1-demand-evidence-v1",
+		"reader_receipt": receipt,
+	}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parseStage1Checkpoint(raw)
+	if err != nil {
+		t.Fatalf("valid evidence envelope rejected: %v", err)
+	}
+	if parsed.Stage1ReportSHA256 != receipt.Stage1ReportSHA256 ||
+		parsed.AttemptFunnelSHA256 != receipt.AttemptFunnelSHA256 {
+		t.Fatalf("parsed checkpoint drifted: %#v", parsed)
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(raw)
+	t.Setenv("NHS_STAGE1_CHECKPOINT_B64", encoded)
+	fromEnvironment, err := loadStage1CheckpointEnvironment("NHS_STAGE1_CHECKPOINT_B64")
+	if err != nil || fromEnvironment.Stage1ReportSHA256 != receipt.Stage1ReportSHA256 {
+		t.Fatalf("environment checkpoint = %#v, %v", fromEnvironment, err)
+	}
+	if _, err := loadStage1CheckpointEnvironment("OTHER_CHECKPOINT"); err == nil {
+		t.Fatal("arbitrary checkpoint environment accepted")
+	}
+
+	proof.MeaningfulSearchReceipts++
+	tampered, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseStage1Checkpoint(tampered); err == nil {
+		t.Fatal("tampered checkpoint digest accepted")
+	}
+	os.Unsetenv("NHS_STAGE1_CHECKPOINT_B64")
+}
+
+func TestCompareStage1CheckpointUsesRollingNetChanges(t *testing.T) {
+	checkpointProof := validStage1Fixture()
+	checkpointProof.ResultSelections = 19
+	checkpointProof.SearchReceiptsWithSelection = 19
+	checkpointProof.ActionInterestReceipts = 9
+	checkpointProof.SearchReceiptsWithActionInterest = 9
+	checkpointProof.DistinctInterestDomains = 2
+	checkpointProof.Stage1Ready = false
+	checkpointProof.TargetsMet["search_receipts_with_selection"] = false
+	checkpointProof.TargetsMet["search_receipts_with_action_interest"] = false
+	checkpointFunnel := validAttemptFixture(checkpointProof.AsOf.Add(time.Second))
+	checkpoint := checkpointReceipt(t, checkpointProof, checkpointFunnel)
+
+	currentProof := validStage1Fixture()
+	currentProof.AsOf = checkpointProof.AsOf.Add(time.Hour)
+	currentProof.MeaningfulSearchReceipts = 125
+	currentProof.ObservationSpanSeconds += 3600
+	currentFunnel := validAttemptFixture(checkpointFunnel.AsOf.Add(time.Hour))
+	currentFunnel.Outcomes[0].AttemptCount = 3
+	currentFunnel.Outcomes[1].AttemptCount = 29
+	currentFunnel.TotalAttempts = 32
+
+	comparison, err := compareStage1Checkpoint(checkpoint, currentProof, currentFunnel)
+	if err != nil {
+		t.Fatalf("compare checkpoint: %v", err)
+	}
+	if comparison.MeaningfulSearchReceiptsNetChange != 5 ||
+		comparison.SearchReceiptsWithSelectionNetChange != 1 ||
+		comparison.SearchesWithActionInterestNetChange != 1 ||
+		!comparison.DiscoveryReceiptNetIncrease || !comparison.SelectionReceiptNetIncrease ||
+		!comparison.ExplicitInterestReceiptNetIncrease || !comparison.MCPInvalidAttemptNetIncrease ||
+		!comparison.Stage1BecameReady || !comparison.CountsAreRollingWindowNetChanges ||
+		!comparison.NetChangesAreNotCreatedEventCounts || !comparison.SearchesAreNotLeads ||
+		comparison.StrongestMechanismSelected || comparison.CommercialProof ||
+		comparison.ContainsIdentifiers || comparison.ContainsQueriesOrPrompts ||
+		comparison.ContainsContactData || comparison.ContainsRequestCoordinates {
+		t.Fatalf("checkpoint comparison = %#v", comparison)
+	}
+	if !reflect.DeepEqual(comparison.AttemptBucketNetChanges, []attemptBucketNetChange{
+		{Surface: "mcp", Outcome: "invalid_request", NetChange: 2},
+		{Surface: "rest", Outcome: "unavailable", NetChange: -1},
+	}) {
+		t.Fatalf("attempt net changes = %#v", comparison.AttemptBucketNetChanges)
+	}
+
+	expiredProof := *currentProof
+	expiredProof.AsOf = currentProof.AsOf.Add(time.Hour)
+	expiredProof.ResultSelections = 19
+	expiredProof.SearchReceiptsWithSelection = 19
+	expiredProof.ActionInterestReceipts = 9
+	expiredProof.SearchReceiptsWithActionInterest = 9
+	expiredProof.DistinctInterestDomains = 2
+	expiredProof.Stage1Ready = false
+	expiredProof.TargetsMet = map[string]bool{
+		"meaningful_search_receipts":           true,
+		"search_receipts_with_selection":       false,
+		"search_receipts_with_action_interest": false,
+		"pilot_candidate_topic_receipts":       true,
+		"observation_window_days":              true,
+	}
+	expiredFunnel := *currentFunnel
+	expiredFunnel.AsOf = currentFunnel.AsOf.Add(time.Hour)
+	currentCheckpoint := checkpointReceipt(t, currentProof, currentFunnel)
+	expiredComparison, err := compareStage1Checkpoint(currentCheckpoint, &expiredProof, &expiredFunnel)
+	if err != nil {
+		t.Fatalf("rolling-window expiration rejected: %v", err)
+	}
+	if expiredComparison.SearchReceiptsWithSelectionNetChange != -1 ||
+		expiredComparison.SearchesWithActionInterestNetChange != -1 ||
+		expiredComparison.SelectionReceiptNetIncrease ||
+		expiredComparison.ExplicitInterestReceiptNetIncrease {
+		t.Fatalf("expired comparison = %#v", expiredComparison)
+	}
+}
+
+func TestCompareStage1CheckpointRejectsIncompatibleWindows(t *testing.T) {
+	checkpointProof := validStage1Fixture()
+	checkpointFunnel := validAttemptFixture(checkpointProof.AsOf.Add(time.Second))
+	checkpoint := checkpointReceipt(t, checkpointProof, checkpointFunnel)
+
+	tests := map[string]func(*models.Stage1DemandProof, *models.ActionInterestAttemptFunnel){
+		"different Stage 1 epoch": func(proof *models.Stage1DemandProof, _ *models.ActionInterestAttemptFunnel) {
+			proof.Stage1StartedAt = proof.Stage1StartedAt.Add(time.Second)
+		},
+		"non-increasing proof timestamp": func(proof *models.Stage1DemandProof, _ *models.ActionInterestAttemptFunnel) {
+			proof.AsOf = checkpointProof.AsOf
+		},
+		"non-increasing funnel timestamp": func(_ *models.Stage1DemandProof, funnel *models.ActionInterestAttemptFunnel) {
+			funnel.AsOf = checkpointFunnel.AsOf
+		},
+		"different rolling window": func(proof *models.Stage1DemandProof, funnel *models.ActionInterestAttemptFunnel) {
+			proof.Days = 29
+			funnel.Days = 29
+		},
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			proof := validStage1Fixture()
+			proof.AsOf = checkpointProof.AsOf.Add(time.Hour)
+			funnel := validAttemptFixture(checkpointFunnel.AsOf.Add(time.Hour))
+			mutate(proof, funnel)
+			if _, err := compareStage1Checkpoint(checkpoint, proof, funnel); err == nil {
+				t.Fatal("incompatible checkpoint window accepted")
+			}
+		})
+	}
+}
+
 func TestStage1ReceiptContainsNoPrivateCoordinates(t *testing.T) {
+	checkpointProof := validStage1Fixture()
+	checkpointProof.AsOf = checkpointProof.AsOf.Add(-time.Hour)
+	checkpointFunnel := validAttemptFixture(checkpointProof.AsOf.Add(time.Second))
+	comparison, err := compareStage1Checkpoint(
+		checkpointReceipt(t, checkpointProof, checkpointFunnel),
+		validStage1Fixture(),
+		validAttemptFixture(checkpointFunnel.AsOf.Add(time.Hour)),
+	)
+	if err != nil {
+		t.Fatalf("build privacy fixture comparison: %v", err)
+	}
 	receipt := stage1ReadReceipt{
 		Contract:                       stage1ReadContract,
 		Stage1ReportSHA256:             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -146,6 +339,7 @@ func TestStage1ReceiptContainsNoPrivateCoordinates(t *testing.T) {
 		CandidateRevision:              "0123456789abcdef0123456789abcdef01234567",
 		BinaryRevision:                 "0123456789abcdef0123456789abcdef01234567",
 		Stage1Demand:                   validStage1Fixture(),
+		CheckpointComparison:           comparison,
 		IndependentReadOnlySnapshots:   true,
 		SearchesAreNotLeads:            true,
 		ReadinessDoesNotAuthorizePilot: true,
