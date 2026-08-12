@@ -2,9 +2,9 @@
 
 **Scope:** Not Human Search only
 
-**Production revision checked:** `e2c89020b52ef0f12d408bd776e628d81fa26d22`
+**Production revision checked:** `7ad7cbfde04b239b6e12a563e05f765de9701df8`
 
-**Production OCI digest checked:** `sha256:0b1af2944bdc656f2c6c7f89688daaaec5887da92a479fba50fa8d318cb60c25`
+**Production OCI digest checked:** `sha256:df56436486523a17575f629430cece0c3efffb34bc99bc0efae9b491baffd6b1`
 
 **Production mode checked:** `disabled`
 
@@ -21,7 +21,7 @@ or a winning mechanism.
 | --- | --- | --- | --- |
 | Organic REST/MCP discovery remains free | Live search response says `access=free`; provider sidecar cannot affect organic rank | Exact-revision disabled smoke passes free REST and MCP checks | Proved current |
 | Neutrality and privacy | Explicit false assertions for sold rank, queries, prompts, agent identity, and principal identity; no prohibited fields in the proof projection | Production projection and selector fail closed on missing or true assertions | Implemented, no commercial cohort |
-| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The post-correction baseline at `2026-08-12T00:19:26Z` contains 152 meaningful searches, including 13 developer-tools searches, but 0 selections and 0 genuine action-interest receipts | Discovery demand observed; action intent unmet |
+| Explicit principal action interest | Genuine non-synthetic agent-surface receipt backed by a returned organic result | The post-text-action baseline at `2026-08-12T00:41:26Z` contains 158 meaningful searches, including 15 developer-tools searches, but 0 selections and 0 genuine action-interest receipts | Discovery demand observed; action intent unmet |
 | Consent before handoff | Immutable ticket authority plus separate handoff consent | Rail and rejection tests exist; no real pilot ticket | Implemented, unobserved |
 | Attribution | One randomly assigned offer arm, immutable terms, exact ticket-to-outcome binding | Database and proof-verifier gates exist; no real pilot outcome | Implemented, unobserved |
 | Accepted-handoff mechanism | Authenticated accepted outcome and exact available processor-net settlement for its own arm | Disposable PostgreSQL regression now drives the arm from consent-bound handoff through authentic outcome and available processor net; no real provider evidence | Rail proved, business proof unmet |
@@ -69,6 +69,12 @@ a result selection, and explicitly states that action interest is not inferred,
 no provider is contacted, and organic rank is unaffected. Unscoped browsing
 returns no receipt-bound actions.
 
+The same exact call is now rendered beside every result in the MCP text content
+for clients that do not expose `structuredContent` to their model. The text
+states that the call records selection only and does not infer interest or
+contact a provider. The public smoke fails unless the text action's domain and
+`search_id` match the structured discovery receipt.
+
 The exact archive gate passed against two disposable PostgreSQL instances. The
 OCI was built from that archive and pushed at the digest above. A traffic-held
 256 MB canary reached exact-revision health in disabled mode and was removed.
@@ -80,14 +86,15 @@ passed 54/54, and a synthetic MCP search returned three results and three exact
 receipt-bound detail actions.
 
 The new sealed comparison baseline is
-`NHS_POST_MCP_ACTION_BASELINE_2026-08-12_001926Z_e2c8902.json`, checked at
-`2026-08-12T00:19:26.546019Z` with report SHA-256
-`bbf932e9af28e73b834b42627f621c0526c3d39489e5028f93cfba301f819f10`.
-It contains 152 meaningful eligible searches: 19 MCP, 133 REST, and 13 in the
+`NHS_POST_TEXT_ACTION_BASELINE_2026-08-12_004126Z_7ad7cbf.json`, checked at
+`2026-08-12T00:41:26.157992Z` with report SHA-256
+`8bd891aa6bfac6f6fa12cb1832eb22a720b4017a1a82484c6fd1db98548bb03e`.
+It contains 158 meaningful eligible searches: 25 MCP, 133 REST, and 15 in the
 developer-tools topic. It still contains zero result selections, explicit
 action-interest receipts, provider activations, handoffs, outcomes, payments,
-or settlements. This is the correct zero baseline for measuring whether the
-machine-readable action changes agent behavior; it is not a monetization win.
+or settlements. This is the correct zero baseline for measuring whether text-
+only and structured clients follow the exact action; it is not a monetization
+win.
 
 ## Sealed post-selection checkpoint
 
