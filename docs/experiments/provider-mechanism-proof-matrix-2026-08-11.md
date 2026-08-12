@@ -73,9 +73,11 @@ The exact archive gate passed against two disposable PostgreSQL instances. The
 OCI was built from that archive and pushed at the digest above. A traffic-held
 256 MB canary reached exact-revision health in disabled mode and was removed.
 The two production machines were then updated by digest. The final topology is
-one healthy serving machine (`e2869124a74686`) and one stopped, non-autostart
-standby (`e2869126f75686`). Public smoke passed 54/54, and a synthetic MCP
-search returned three results and three exact receipt-bound detail actions.
+one healthy started machine and one stopped machine, both pinned to the exact
+digest; Fly autostop may rotate their IDs. At `2026-08-12T00:22:25Z`,
+`e2869126f75686` was started and `e2869124a74686` was stopped. Public smoke
+passed 54/54, and a synthetic MCP search returned three results and three exact
+receipt-bound detail actions.
 
 The new sealed comparison baseline is
 `NHS_POST_MCP_ACTION_BASELINE_2026-08-12_001926Z_e2c8902.json`, checked at
