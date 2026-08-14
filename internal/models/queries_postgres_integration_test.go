@@ -53,6 +53,7 @@ func TestMCPAnalyticsDetailFollowthroughPostgres(t *testing.T) {
 	}
 	for key, want := range map[string]int{
 		"detail_calls":                  3,
+		"instrumented_detail_calls":     2,
 		"search_receipt_supplied_calls": 2,
 		"selection_recorded_calls":      1,
 	} {

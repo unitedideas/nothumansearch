@@ -590,10 +590,14 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	}
 	result["demand_topics"] = topics
 
-	var detailCalls, receiptBoundDetailCalls, recordedDetailSelections int
+	var detailCalls, instrumentedDetailCalls, receiptBoundDetailCalls, recordedDetailSelections int
 	if err := db.QueryRow(`
 		SELECT
 			COUNT(*) FILTER (WHERE tool_name = 'get_site_details')::int,
+			COUNT(*) FILTER (
+				WHERE tool_name = 'get_site_details'
+				  AND arguments ? 'search_receipt_supplied'
+			)::int,
 			COUNT(*) FILTER (
 				WHERE tool_name = 'get_site_details'
 				  AND COALESCE((arguments->>'search_receipt_supplied')::boolean, false)
@@ -606,6 +610,7 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 		WHERE created_at > NOW() - make_interval(days => $1)
 		  AND NOT COALESCE((arguments->>'synthetic_test')::boolean, false)`, days).Scan(
 		&detailCalls,
+		&instrumentedDetailCalls,
 		&receiptBoundDetailCalls,
 		&recordedDetailSelections,
 	); err != nil {
@@ -613,6 +618,7 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	}
 	result["detail_followthrough"] = map[string]any{
 		"detail_calls":                  detailCalls,
+		"instrumented_detail_calls":     instrumentedDetailCalls,
 		"search_receipt_supplied_calls": receiptBoundDetailCalls,
 		"selection_recorded_calls":      recordedDetailSelections,
 	}

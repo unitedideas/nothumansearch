@@ -63,6 +63,7 @@ func TestMCPAnalyticsReportsReceiptBoundDetailFollowthroughWithoutReceipts(t *te
 	text = text[start:]
 	for _, required := range []string{
 		"detail_followthrough",
+		"instrumented_detail_calls",
 		"search_receipt_supplied",
 		"selection_recorded",
 		"synthetic_test",
