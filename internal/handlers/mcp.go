@@ -772,6 +772,16 @@ func (h *MCPHandler) handleToolCall(w http.ResponseWriter, r *http.Request, req 
 	}
 
 	safeArgs := mcpAnalyticsArguments(analyticsToolName, params.Arguments)
+	if analyticsToolName == "get_site_details" {
+		// Retain only coarse booleans needed to distinguish direct profile reads
+		// from receipt-bound discovery follow-through. Never retain the receipt.
+		safeArgs["search_receipt_supplied"] = strings.TrimSpace(asString(params.Arguments["search_id"])) != ""
+		safeArgs["selection_recorded"] = strings.EqualFold(toolResponse.header.Get("NHS-Selection-Recorded"), "true")
+	}
+	// Deploy smoke is intentionally observable as synthetic without retaining
+	// any marker value. This prevents operator verification from being counted
+	// as client follow-through in the aggregate diagnostic.
+	safeArgs["synthetic_test"] = demandRequestIsSynthetic(r)
 	argsJSON, _ := json.Marshal(safeArgs)
 	go models.LogMCPRequest(h.DB, "tools/call", analyticsToolName, argsJSON, -1, ua, ipHash, int(time.Since(start).Milliseconds()))
 	go models.LogIntentEvent(h.DB, models.IntentEvent{

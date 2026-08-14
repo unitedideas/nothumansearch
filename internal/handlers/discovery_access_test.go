@@ -401,6 +401,27 @@ func TestMCPAnalyticsCanonicalizeUnknownToolNames(t *testing.T) {
 	}
 }
 
+func TestMCPDetailAnalyticsRetainsOnlyFollowthroughBooleans(t *testing.T) {
+	args := map[string]any{
+		"domain":    "example.dev",
+		"search_id": "nhs_sr_private_receipt",
+	}
+	safe := mcpAnalyticsArguments("get_site_details", args)
+	safe["search_receipt_supplied"] = strings.TrimSpace(asString(args["search_id"])) != ""
+	safe["selection_recorded"] = true
+	safe["synthetic_test"] = false
+
+	if _, retained := safe["search_id"]; retained {
+		t.Fatalf("detail analytics retained a search receipt: %#v", safe)
+	}
+	if safe["search_receipt_supplied"] != true || safe["selection_recorded"] != true {
+		t.Fatalf("detail followthrough booleans unavailable: %#v", safe)
+	}
+	if safe["synthetic_test"] != false {
+		t.Fatalf("ordinary detail call marked synthetic: %#v", safe)
+	}
+}
+
 func TestActiveProbeToolsUseTheStrictBucket(t *testing.T) {
 	for _, tool := range []string{"check_url", "verify_mcp", "submit_site", "register_monitor"} {
 		if !isNHSActiveProbeTool(tool) {

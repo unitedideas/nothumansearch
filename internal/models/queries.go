@@ -590,6 +590,33 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	}
 	result["demand_topics"] = topics
 
+	var detailCalls, receiptBoundDetailCalls, recordedDetailSelections int
+	if err := db.QueryRow(`
+		SELECT
+			COUNT(*) FILTER (WHERE tool_name = 'get_site_details')::int,
+			COUNT(*) FILTER (
+				WHERE tool_name = 'get_site_details'
+				  AND COALESCE((arguments->>'search_receipt_supplied')::boolean, false)
+			)::int,
+			COUNT(*) FILTER (
+				WHERE tool_name = 'get_site_details'
+				  AND COALESCE((arguments->>'selection_recorded')::boolean, false)
+			)::int
+		FROM mcp_requests
+		WHERE created_at > NOW() - make_interval(days => $1)
+		  AND NOT COALESCE((arguments->>'synthetic_test')::boolean, false)`, days).Scan(
+		&detailCalls,
+		&receiptBoundDetailCalls,
+		&recordedDetailSelections,
+	); err != nil {
+		return nil, err
+	}
+	result["detail_followthrough"] = map[string]any{
+		"detail_calls":                  detailCalls,
+		"search_receipt_supplied_calls": receiptBoundDetailCalls,
+		"selection_recorded_calls":      recordedDetailSelections,
+	}
+
 	var totalReqs, distinctClientBuckets int
 	db.QueryRow(`SELECT COUNT(*) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&totalReqs)
 	db.QueryRow(`SELECT COUNT(DISTINCT ip_hash) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&distinctClientBuckets)

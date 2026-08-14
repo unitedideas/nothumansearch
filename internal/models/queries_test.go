@@ -50,6 +50,32 @@ func TestMCPAnalyticsUsesControlledDemandAndClientBucketTerms(t *testing.T) {
 	}
 }
 
+func TestMCPAnalyticsReportsReceiptBoundDetailFollowthroughWithoutReceipts(t *testing.T) {
+	data, err := os.ReadFile("queries.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	start := strings.Index(text, "func GetMCPAnalytics")
+	if start < 0 {
+		t.Fatal("could not isolate GetMCPAnalytics source")
+	}
+	text = text[start:]
+	for _, required := range []string{
+		"detail_followthrough",
+		"search_receipt_supplied",
+		"selection_recorded",
+		"synthetic_test",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("GetMCPAnalytics missing %q", required)
+		}
+	}
+	if strings.Contains(text, "arguments->>'search_id'") {
+		t.Fatal("GetMCPAnalytics must not read or expose raw search receipts")
+	}
+}
+
 func TestMCPAnalyticsToolNameStorageIsAllowlisted(t *testing.T) {
 	if got := normalizeMCPAnalyticsToolName("search_agents"); got != "search_agents" {
 		t.Fatalf("known tool normalized to %q", got)
