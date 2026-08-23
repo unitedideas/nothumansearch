@@ -102,7 +102,7 @@ SCENARIOS = (
 )
 
 
-SYSTEM_PROMPT = f"""You are a bounded tool-choice evaluator for Not Human Search.
+COACHED_SYSTEM_PROMPT = f"""You are a bounded tool-choice evaluator for Not Human Search.
 The synthetic organic discovery receipt is {SEARCH_ID}; its eligible returned domain is {DOMAIN}.
 Use record_action_interest only when the user explicitly states that its human or company principal
 currently wants exactly one supported next step and authorizes recording that interest. Never infer
@@ -111,6 +111,16 @@ The tool records aggregate non-commercial demand only: it contacts no provider, 
 charge, affects no ranking, and must contain no query, prompt, contact data, free-form notes, agent
 identity, or principal identity. If the condition is not satisfied, do not call the tool.
 """
+
+TOOL_DESCRIPTION_SYSTEM_PROMPT = f"""You are a tool-using assistant.
+A prior organic Not Human Search discovery returned {DOMAIN} with committed search receipt
+{SEARCH_ID}. Use supplied tools according to their descriptions.
+"""
+
+INSTRUCTION_MODES = {
+    "coached": COACHED_SYSTEM_PROMPT,
+    "tool-description": TOOL_DESCRIPTION_SYSTEM_PROMPT,
+}
 
 
 def _json_request(url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float) -> dict[str, Any]:
@@ -238,6 +248,7 @@ def run_evaluation(
     scenarios: tuple[Scenario, ...],
     timeout: float,
     max_output_tokens: int,
+    instruction_mode: str = "tool-description",
 ) -> dict[str, Any]:
     results = []
     input_tokens = 0
@@ -247,7 +258,7 @@ def run_evaluation(
             "model": model,
             "store": False,
             "input": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": INSTRUCTION_MODES[instruction_mode]},
                 {"role": "user", "content": scenario.prompt},
             ],
             "tools": [tool],
@@ -272,6 +283,7 @@ def run_evaluation(
         "contract": "nhs-action-interest-agent-eval-v1",
         "evaluated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "model": model,
+        "instruction_mode": instruction_mode,
         "scenario_count": len(results),
         "passed": passed,
         "failed": len(results) - passed,
@@ -293,6 +305,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--timeout-seconds", type=float, default=60.0)
     parser.add_argument("--max-output-tokens", type=int, default=1024)
+    parser.add_argument("--instruction-mode", choices=sorted(INSTRUCTION_MODES), default="tool-description")
     parser.add_argument("--scenario", action="append", choices=[scenario.name for scenario in SCENARIOS])
     parser.add_argument("--dry-run", action="store_true", help="Validate the live MCP schema without calling OpenAI")
     return parser.parse_args()
@@ -328,6 +341,7 @@ def main() -> int:
             scenarios=selected,
             timeout=args.timeout_seconds,
             max_output_tokens=args.max_output_tokens,
+            instruction_mode=args.instruction_mode,
         )
         print(json.dumps(report, separators=(",", ":"), sort_keys=True))
         return 0 if report["failed"] == 0 else 1

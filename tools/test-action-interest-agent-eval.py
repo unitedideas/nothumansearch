@@ -60,6 +60,7 @@ class ActionInterestAgentEvalTest(unittest.TestCase):
             args = MODULE._parse_args()
             self.assertEqual(args.max_output_tokens, 1024)
             self.assertEqual(args.timeout_seconds, 60.0)
+            self.assertEqual(args.instruction_mode, "tool-description")
 
     def test_mcp_schema_converts_to_strict_responses_tool(self):
         tool = MODULE.normalize_openai_tool(mcp_tool())
@@ -132,6 +133,7 @@ class ActionInterestAgentEvalTest(unittest.TestCase):
         self.assertNotIn("raw model text must not escape", serialized)
         self.assertFalse(report["production_mutation_performed"])
         self.assertFalse(report["commercial_mode_required"])
+        self.assertEqual(report["instruction_mode"], "tool-description")
         self.assertEqual(report["usage"], {"input_tokens": 11, "output_tokens": 3})
 
 
