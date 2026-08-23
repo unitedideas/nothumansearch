@@ -57,7 +57,9 @@ def response_with_call(action_type="demo", extra=None):
 class ActionInterestAgentEvalTest(unittest.TestCase):
     def test_default_output_bound_allows_reasoning_before_tool_choice(self):
         with mock.patch.object(sys, "argv", ["action-interest-agent-eval.py"]):
-            self.assertEqual(MODULE._parse_args().max_output_tokens, 1024)
+            args = MODULE._parse_args()
+            self.assertEqual(args.max_output_tokens, 1024)
+            self.assertEqual(args.timeout_seconds, 60.0)
 
     def test_mcp_schema_converts_to_strict_responses_tool(self):
         tool = MODULE.normalize_openai_tool(mcp_tool())
