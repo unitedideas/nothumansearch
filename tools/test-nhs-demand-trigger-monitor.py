@@ -50,14 +50,33 @@ def funnel(selected: int = 0, interested: int = 0) -> dict:
     }
 
 
-def stage1(ready: bool = False) -> dict:
+def stage1(
+    ready: bool = False,
+    selected: int = 7,
+    interested: int = 0,
+    window_met: bool = False,
+) -> dict:
     report = {
         "as_of": "2026-08-12T03:00:00Z",
+        "stage1_started_at": "2026-07-29T03:00:00Z",
+        "observation_span_seconds": 1209600,
+        "observation_window_days": 14,
+        "observation_window_met": window_met,
         "stage1_ready": ready,
-        "search_receipts_with_selection": 7,
-        "search_receipts_with_action_interest": 0,
+        "search_receipts_with_selection": selected,
+        "search_receipts_with_action_interest": interested,
+        "targets": {
+            "search_receipts_with_selection": 20,
+            "search_receipts_with_action_interest": 10,
+        },
     }
-    attempts = {"total_attempts": 37}
+    attempts = {
+        "total_attempts": 37,
+        "outcomes": [
+            {"surface": "mcp", "outcome": "invalid_request", "attempt_count": 12},
+            {"surface": "rest", "outcome": "unavailable", "attempt_count": 25},
+        ],
+    }
     return {
         "contract": "nhs-stage1-demand-read-v1",
         "stage1_report_sha256": MODULE.report_digest(report),
@@ -118,8 +137,32 @@ class MonitorTest(unittest.TestCase):
             self.assertFalse(result["triggered"])
             self.assertEqual(result["exit_code"], 0)
             self.assertFalse(result["notification_emitted"])
-            self.assertFalse(Path(args.trigger).exists())
+            self.assertTrue(Path(args.trigger).exists())
+            self.assertEqual(result["diagnostic_action_interest_attempts_total"], 37)
+            self.assertFalse(result["diagnostic_attempts_are_monetizable_demand"])
             self.assertEqual(len(runner.commands), 3)
+
+    def test_selection_only_activity_does_not_trigger(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.setup_files(temporary)
+            runner = FakeRunner([inventory(), json.dumps(funnel(1, 0)), json.dumps(stage1())])
+            result = MODULE.monitor(args, runner)
+            self.assertEqual(result["status"], "quiet")
+            self.assertFalse(result["triggered"])
+            self.assertEqual(result["trigger_reasons"], [])
+
+    def test_mature_zero_interest_requires_review_without_triggering(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            args = self.setup_files(temporary)
+            runner = FakeRunner([
+                inventory(), json.dumps(funnel(20, 0)),
+                json.dumps(stage1(selected=20, interested=0, window_met=True)),
+            ])
+            result = MODULE.monitor(args, runner)
+            self.assertEqual(result["status"], "review_required")
+            self.assertFalse(result["triggered"])
+            self.assertEqual(result["review_reasons"], ["stage1_mature_without_required_interest"])
+            self.assertIn("independently observed explicit interest", result["next_safe_action_if_review_required"])
 
     def test_new_interest_writes_trigger_and_notifies_once(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

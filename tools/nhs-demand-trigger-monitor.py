@@ -191,6 +191,38 @@ def count(report: dict[str, Any], name: str) -> int:
     return value
 
 
+def boolean(report: dict[str, Any], name: str) -> bool:
+    value = report.get(name)
+    if not isinstance(value, bool):
+        raise MonitorError(f"invalid aggregate flag {name}")
+    return value
+
+
+def utc_timestamp(report: dict[str, Any], name: str) -> str:
+    value = report.get(name)
+    if not isinstance(value, str) or not value.endswith("Z"):
+        raise MonitorError(f"invalid aggregate timestamp {name}")
+    return value
+
+
+def attempt_outcome_count(
+    attempts: dict[str, Any], surface: str, outcome: str
+) -> int:
+    values = attempts.get("outcomes")
+    if not isinstance(values, list):
+        raise MonitorError("invalid action-interest attempt outcomes")
+    matches = [
+        item
+        for item in values
+        if isinstance(item, dict)
+        and item.get("surface") == surface
+        and item.get("outcome") == outcome
+    ]
+    if len(matches) != 1:
+        raise MonitorError(f"missing or duplicate {surface}/{outcome} attempt bucket")
+    return count(matches[0], "attempt_count")
+
+
 def notify(title: str, body: str, runner: Runner) -> None:
     script = (
         "on run argv\n"
@@ -263,6 +295,7 @@ def monitor(args: argparse.Namespace, runner: Runner = subprocess.run) -> dict[s
     )
     stage1_receipt = exact_receipt(stage1_raw, "nhs-stage1-demand-read-v1")
     stage1 = validate_stage1(stage1_receipt, revision)
+    attempts = stage1_receipt["action_interest_attempt_funnel"]
 
     fields = (
         "developer_tools_search_receipts",
@@ -278,23 +311,45 @@ def monitor(args: argparse.Namespace, runner: Runner = subprocess.run) -> dict[s
     deltas = {name: current[name] - initial[name] for name in fields}
     if any(value < 0 for value in deltas.values()):
         raise MonitorError("developer-tools aggregate regressed against the sealed baseline")
+    targets = stage1.get("targets")
+    if not isinstance(targets, dict):
+        raise MonitorError("Stage 1 targets are missing")
+    selected_receipts = count(stage1, "search_receipts_with_selection")
+    interest_receipts = count(stage1, "search_receipts_with_action_interest")
+    selected_target = count(targets, "search_receipts_with_selection")
+    interest_target = count(targets, "search_receipts_with_action_interest")
+    observation_window_met = boolean(stage1, "observation_window_met")
+    mature_without_required_interest = (
+        observation_window_met
+        and selected_receipts >= selected_target
+        and interest_receipts < interest_target
+    )
     trigger_reasons = []
-    if deltas["developer_tools_search_receipts_with_selection"] > 0:
-        trigger_reasons.append("new_developer_tools_selected_search_receipt")
+    # A result selection is discovery activity, not monetizable demand. Keep it
+    # in the receipt for diagnosis, but only wake the owner on explicit intent.
     if deltas["developer_tools_search_receipts_with_action_interest"] > 0:
         trigger_reasons.append("new_developer_tools_explicit_interest_receipt")
     if deltas["developer_tools_post_selection_search_receipts"] > 0:
         trigger_reasons.append("new_developer_tools_post_selection_interest")
     if stage1.get("stage1_ready") is True:
         trigger_reasons.append("stage1_ready")
+    review_reasons = []
+    if mature_without_required_interest:
+        review_reasons.append("stage1_mature_without_required_interest")
+
+    status = "triggered" if trigger_reasons else (
+        "review_required" if review_reasons else "quiet"
+    )
 
     trigger_payload = {
         "contract": "nhs-demand-evidence-trigger-v1",
-        "status": "triggered" if trigger_reasons else "quiet",
+        "status": status,
         "exit_code": 0,
         "checked_at": stamp(),
         "triggered": bool(trigger_reasons),
         "trigger_reasons": trigger_reasons,
+        "review_required": bool(review_reasons),
+        "review_reasons": review_reasons,
         "revision": revision,
         "image_digest": image_ref["digest"],
         "provider_exchange_mode": "disabled",
@@ -302,14 +357,36 @@ def monitor(args: argparse.Namespace, runner: Runner = subprocess.run) -> dict[s
         "developer_tools_current": current,
         "developer_tools_net_change_from_baseline": deltas,
         "stage1_as_of": stage1.get("as_of"),
-        "stage1_ready": stage1.get("stage1_ready") is True,
-        "stage1_selected_search_receipts": count(stage1, "search_receipts_with_selection"),
-        "stage1_interest_search_receipts": count(stage1, "search_receipts_with_action_interest"),
+        "stage1_started_at": utc_timestamp(stage1, "stage1_started_at"),
+        "stage1_observation_span_seconds": count(stage1, "observation_span_seconds"),
+        "stage1_observation_window_days": count(stage1, "observation_window_days"),
+        "stage1_observation_window_met": observation_window_met,
+        "stage1_ready": boolean(stage1, "stage1_ready"),
+        "stage1_selected_search_receipts": selected_receipts,
+        "stage1_selected_search_receipts_target": selected_target,
+        "stage1_interest_search_receipts": interest_receipts,
+        "stage1_interest_search_receipts_target": interest_target,
+        "stage1_mature_without_required_interest": mature_without_required_interest,
+        # Failed attempts are operational diagnostics, never demand. Persisting
+        # them closes the scheduler's visibility gap without changing triggers.
+        "diagnostic_action_interest_attempts_total": count(attempts, "total_attempts"),
+        "diagnostic_mcp_invalid_request_attempts": attempt_outcome_count(
+            attempts, "mcp", "invalid_request"
+        ),
+        "diagnostic_rest_unavailable_attempts": attempt_outcome_count(
+            attempts, "rest", "unavailable"
+        ),
+        "diagnostic_attempts_are_monetizable_demand": False,
         "commercial_proof": False,
         "authorizes_provider_contact_or_activation": False,
         "next_safe_action_if_triggered": (
             "Open the sealed aggregate receipt, re-evaluate Stage 1 and developer-tools intent, "
             "and request separate owner authorization before any provider contact or activation."
+        ),
+        "next_safe_action_if_review_required": (
+            "Treat Stage 1 as mature negative evidence, keep provider mode disabled, and wait for "
+            "independently observed explicit interest. Re-run the comprehension evaluation only "
+            "after the model or live tool contract changes."
         ),
     }
     fingerprint = hashlib.sha256(
@@ -340,8 +417,9 @@ def monitor(args: argparse.Namespace, runner: Runner = subprocess.run) -> dict[s
         )
         trigger_payload["notification_emitted"] = True
     atomic_json(state_path, trigger_payload)
-    if trigger_reasons:
-        atomic_json(Path(args.trigger), trigger_payload)
+    # This is the current aggregate receipt, so refresh it even when quiet;
+    # otherwise an old selection-only trigger can masquerade as live demand.
+    atomic_json(Path(args.trigger), trigger_payload)
     return trigger_payload
 
 
