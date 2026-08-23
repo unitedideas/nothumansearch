@@ -5,6 +5,7 @@ import json
 import pathlib
 import sys
 import unittest
+from unittest import mock
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name("action-interest-agent-eval.py")
@@ -54,6 +55,10 @@ def response_with_call(action_type="demo", extra=None):
 
 
 class ActionInterestAgentEvalTest(unittest.TestCase):
+    def test_default_output_bound_allows_reasoning_before_tool_choice(self):
+        with mock.patch.object(sys, "argv", ["action-interest-agent-eval.py"]):
+            self.assertEqual(MODULE._parse_args().max_output_tokens, 1024)
+
     def test_mcp_schema_converts_to_strict_responses_tool(self):
         tool = MODULE.normalize_openai_tool(mcp_tool())
         self.assertEqual(tool["type"], "function")

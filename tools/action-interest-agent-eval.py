@@ -292,7 +292,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--openai-url", default=DEFAULT_OPENAI_URL)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
-    parser.add_argument("--max-output-tokens", type=int, default=256)
+    parser.add_argument("--max-output-tokens", type=int, default=1024)
     parser.add_argument("--scenario", action="append", choices=[scenario.name for scenario in SCENARIOS])
     parser.add_argument("--dry-run", action="store_true", help="Validate the live MCP schema without calling OpenAI")
     return parser.parse_args()
