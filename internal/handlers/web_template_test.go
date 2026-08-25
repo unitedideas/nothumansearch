@@ -184,9 +184,9 @@ func TestScoreTemplateIncludesOwnerHandoffWithoutPaidRanking(t *testing.T) {
 	for _, want := range []string{
 		"Site owner next step",
 		"Monitor this score",
-		"Get implementation help",
+		"Fix this for me ($199)",
 		"Improve public signals",
-		"score < 70 && hasHardSignal",
+		"score < 90",
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("expected score template to contain %q", want)

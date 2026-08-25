@@ -19,14 +19,14 @@ func TestScoreFixEligibleRequiresHardSignal(t *testing.T) {
 	if scoreFixEligible(nil) {
 		t.Fatal("nil site should not be score-fix eligible")
 	}
-	if scoreFixEligible(&models.Site{HasLLMsTxt: true, HasRobotsAI: true, HasSchemaOrg: true}) {
-		t.Fatal("passive-only site should not be score-fix eligible")
+	if scoreFixEligible(&models.Site{AgenticScore: fixTargetScore}) {
+		t.Fatal("site already at the target score should not be score-fix eligible")
+	}
+	if !scoreFixEligible(&models.Site{AgenticScore: 55, HasLLMsTxt: true}) {
+		t.Fatal("low-scoring passive site should now be score-fix eligible (offer widened to all sub-90 sites)")
 	}
 	if !scoreFixEligible(&models.Site{HasOpenAPI: true}) {
 		t.Fatal("hard-signal site should be score-fix eligible")
-	}
-	if scoreFixEligible(&models.Site{AgenticScore: fixTargetScore, HasOpenAPI: true}) {
-		t.Fatal("site already at the target score should not be score-fix eligible")
 	}
 }
 

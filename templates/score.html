@@ -220,16 +220,18 @@
             const monitorURL = '/monitor?domain=' + encodedDomain;
             const guideURL = '/guide';
             const fixURL = '/fix/' + encodedDomain;
-            const needsRemediation = score < 70 && hasHardSignal;
-            const lead = needsRemediation
+            const needsRemediation = score < 90;
+            const lead = score < 70 && hasHardSignal
                 ? 'This site has at least one hard agent surface, but it is missing public signals agents use before calling or buying.'
-                : 'Keep this score under watch. NHS can alert you if an agent-facing signal disappears on a future crawl.';
+                : (score < 90
+                    ? 'This site is missing agent-facing signals that cost it discovery points with AI agents.'
+                    : 'Keep this score under watch. NHS can alert you if an agent-facing signal disappears on a future crawl.');
             const actions = [
                 '<a href="' + monitorURL + '">Monitor this score</a>',
                 '<a href="' + guideURL + '">Improve public signals</a>'
             ];
             if (needsRemediation) {
-                actions.splice(1, 0, '<a href="' + fixURL + '">Get implementation help</a>');
+                actions.splice(1, 0, '<a href="' + fixURL + '">Fix this for me ($199)</a>');
             }
             // Inline email capture (posts to the existing /api/v1/monitor/register endpoint).
             // Banks the free-scorer's intent here instead of leaking it behind a /monitor click-through.

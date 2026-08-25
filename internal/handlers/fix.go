@@ -449,7 +449,7 @@ func apiPlanFromProductID(productID string) (models.APIPlan, bool) {
 }
 
 func scoreFixEligible(site *models.Site) bool {
-	return site != nil && site.HasHardAgentSignal() && site.AgenticScore < fixTargetScore
+	return site != nil && site.AgenticScore < fixTargetScore
 }
 
 func (h *FixHandler) CommerceCatalog(w http.ResponseWriter, r *http.Request) {
