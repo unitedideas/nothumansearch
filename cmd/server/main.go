@@ -2,12 +2,17 @@ package main
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,7 +22,85 @@ import (
 
 	"github.com/unitedideas/nothumansearch/internal/database"
 	"github.com/unitedideas/nothumansearch/internal/handlers"
+	"github.com/unitedideas/nothumansearch/internal/models"
 )
+
+var releaseRevision = "development"
+
+const (
+	providerExchangeModeEnv      = "NHS_PROVIDER_EXCHANGE_MODE"
+	providerExchangeModePilot    = "pilot"
+	providerExchangeModeDisabled = "disabled"
+)
+
+func configuredProviderExchangeMode() (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(os.Getenv(providerExchangeModeEnv)))
+	if mode == "" {
+		return "", fmt.Errorf("%s must be explicitly set to %q or %q", providerExchangeModeEnv, providerExchangeModePilot, providerExchangeModeDisabled)
+	}
+	switch mode {
+	case providerExchangeModePilot, providerExchangeModeDisabled:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("%s must be %q or %q", providerExchangeModeEnv, providerExchangeModePilot, providerExchangeModeDisabled)
+	}
+}
+
+func configuredListenAddress(port string) (string, error) {
+	host := strings.TrimSpace(os.Getenv("NHS_LISTEN_HOST"))
+	if host == "" {
+		return ":" + port, nil
+	}
+	if net.ParseIP(host) == nil {
+		return "", errors.New("NHS_LISTEN_HOST must be an IP address")
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+func providerExchangeDisabledHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Retry-After", "3600")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error": "provider exchange writes are disabled; free discovery and action-interest observation remain available",
+	})
+}
+
+type healthPayload struct {
+	Status           string `json:"status"`
+	Database         string `json:"db"`
+	ReleaseRevision  string `json:"release_revision"`
+	ProviderExchange string `json:"provider_exchange"`
+}
+
+func healthHandler(db *sql.DB, configuredMode ...string) http.Handler {
+	mode := providerExchangeModeDisabled
+	if len(configuredMode) > 0 && configuredMode[0] != "" {
+		mode = configuredMode[0]
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		response := healthPayload{
+			Status: "ok", Database: "ok", ReleaseRevision: releaseRevision,
+			ProviderExchange: mode,
+		}
+		var readOnly bool
+		if db == nil || db.QueryRowContext(r.Context(),
+			`SELECT current_setting('transaction_read_only')::boolean OR pg_is_in_recovery()`).Scan(&readOnly) != nil {
+			response.Database = "unreachable"
+		} else if readOnly {
+			response.Database = "read_only"
+		}
+		if response.Database != "ok" {
+			response.Status = "degraded"
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		_ = json.NewEncoder(w).Encode(response)
+	})
+}
 
 func main() {
 	port := flag.String("port", "8091", "server port")
@@ -36,14 +119,31 @@ func main() {
 			projectRoot = "."
 		}
 	}
+	providerExchangeMode, err := configuredProviderExchangeMode()
+	if err != nil {
+		log.Fatalf("provider exchange mode: %v", err)
+	}
+	// Fail before touching the database when the dedicated exchange signer is
+	// absent or malformed. NewProviderExchangeHandler later verifies retained
+	// persisted proof material after migrations are known current.
+	if providerExchangeMode == providerExchangeModePilot {
+		if err := handlers.ValidateProviderExchangeSigningConfiguration(); err != nil {
+			log.Fatalf("provider exchange signing preflight: %v", err)
+		}
+	}
 
-	if err := database.Connect(); err != nil {
+	connectContext, cancelConnect := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := database.ConnectWithReleaseRevisionContext(connectContext, releaseRevision); err != nil {
+		cancelConnect()
 		log.Fatalf("database: %v", err)
 	}
+	cancelConnect()
 	log.Println("connected to database")
-
-	if err := database.RunMigrations(filepath.Join(projectRoot, "migrations")); err != nil {
-		log.Printf("WARNING: migration: %v", err)
+	if err := database.RunMigrationsWithPreflight(
+		filepath.Join(projectRoot, "migrations"), releaseRevision,
+		handlers.ProviderExchangeProtectedMigrationPreflight,
+	); err != nil {
+		log.Fatalf("migration: %v", err)
 	}
 
 	// Retention prune for page_views + mcp_requests. Runs hourly, deletes rows
@@ -69,16 +169,74 @@ func main() {
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("intent_events prune: deleted %d rows", n)
 			}
+			// Legacy search_queries contains raw query text plus IP/UA fields. New
+			// discovery telemetry never writes this table, but historical rows must
+			// still obey the same bounded retention promise.
+			if res, err := database.DB.Exec(`DELETE FROM search_queries WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("search_queries prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("search_queries prune: deleted %d rows", n)
+			}
+			// Usage events support calendar-month quota accounting. Keep 35 days so
+			// day-one usage remains available through a 31-day month, then delete the
+			// event (including its legacy anonymous hash and user agent).
+			if res, err := database.DB.Exec(`DELETE FROM usage_events WHERE created_at < now() - interval '35 days'`); err != nil {
+				log.Printf("usage_events prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("usage_events prune: deleted %d rows", n)
+			}
+			// Redact controlled action-ticket intent before deleting search receipts.
+			// Commercial IDs, consent attestations, terms snapshots, and signed
+			// accounting proof remain; the controlled discovery constraints do not.
+			if n, err := models.RedactExpiredActionTicketIntent(database.DB); err != nil {
+				log.Printf("action ticket intent redaction: %v", err)
+			} else if n > 0 {
+				log.Printf("action ticket intent redaction: redacted %d rows", n)
+			}
+			// Provider-independent action interests become ineligible for replay and
+			// reporting at their explicit expiry. This hourly prune performs the
+			// subsequent physical deletion before the source-receipt cascade runs.
+			if res, err := database.DB.Exec(`DELETE FROM action_interest_receipts WHERE expires_at <= now()`); err != nil {
+				log.Printf("action_interest_receipts prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("action_interest_receipts prune: deleted %d rows", n)
+			}
+			// Search receipts cascade-delete returned-result and selection rows.
+			// Provider products use thresholded controlled-topic aggregates rather
+			// than exporting individual searches.
+			if res, err := database.DB.Exec(`DELETE FROM search_receipts WHERE created_at < now() - interval '30 days'`); err != nil {
+				log.Printf("search_receipts prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("search_receipts prune: deleted %d rows", n)
+			}
 			if res, err := database.DB.Exec(`DELETE FROM submissions WHERE status IN ('failed','rejected','duplicate') AND created_at < now() - interval '30 days'`); err != nil {
 				log.Printf("submissions prune: %v", err)
 			} else if n, _ := res.RowsAffected(); n > 0 {
 				log.Printf("submissions prune: deleted %d rows", n)
 			}
+			// Magic links are single-use credentials, not an analytics record. Remove
+			// consumed or expired rows promptly so provider onboarding cannot create
+			// an unbounded token table even under bounded email abuse.
+			if res, err := database.DB.Exec(`DELETE FROM magic_links WHERE used_at IS NOT NULL OR expires_at <= NOW()`); err != nil {
+				log.Printf("magic_links prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("magic_links prune: deleted %d rows", n)
+			}
+			// Sessions are bearer credentials. Remove expired rows on the same hourly
+			// retention pass so stale credentials do not accumulate indefinitely.
+			if res, err := database.DB.Exec(`DELETE FROM sessions WHERE expires_at <= NOW()`); err != nil {
+				log.Printf("sessions prune: %v", err)
+			} else if n, _ := res.RowsAffected(); n > 0 {
+				log.Printf("sessions prune: deleted %d rows", n)
+			}
 		}
-		// Run once on boot after a short delay, then hourly
-		time.Sleep(2 * time.Minute)
+		// Redact/delete already-expired privacy data as soon as the current schema
+		// is available, then retry hourly. Read paths enforce their own time bounds;
+		// this task performs the separately disclosed physical cleanup.
 		prune()
-		for range time.Tick(1 * time.Hour) {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
 			prune()
 		}
 	}()
@@ -101,9 +259,12 @@ func main() {
 		log.Fatalf("templates: %v", err)
 	}
 	apiHandler := handlers.NewAPIHandler(database.DB)
+	apiHandler.BaseURL = baseURL
 	seoHandler := handlers.NewSEOHandler(database.DB, baseURL)
 	monitorHandler := handlers.NewMonitorHandler(database.DB, baseURL)
 	mcpHandler := handlers.NewMCPHandler(database.DB, baseURL)
+	actionInterestHandler := handlers.NewActionInterestHandler(database.DB, baseURL)
+	mcpHandler.ActionInterests = actionInterestHandler
 	checkHandler := handlers.NewCheckHandler(database.DB)
 	badgeHandler := handlers.NewBadgeHandler(database.DB)
 	digestHandler, err := handlers.NewDigestHandler(database.DB, baseURL, templatesDir)
@@ -112,7 +273,57 @@ func main() {
 	}
 	fixHandler := handlers.NewFixHandler(database.DB, baseURL)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database.DB, baseURL)
-	usageGate := handlers.NewUsageGate(database.DB, baseURL)
+
+	// Legacy account/API-key support remains for existing customers and future
+	// high-throughput plans. Core website, REST, and MCP discovery is free.
+	authSvc := handlers.NewAuthService(database.DB, baseURL)
+	apiHandler.Auth = authSvc
+	apiKeyHandler.Auth = authSvc
+	webHandler.Auth = authSvc
+	var providerExchangeHandler *handlers.ProviderExchangeHandler
+	var providerSettlementHandler *handlers.ProviderSettlementHandler
+	if providerExchangeMode == providerExchangeModePilot {
+		providerExchangeHandler, err = handlers.NewProviderExchangeHandler(database.DB, baseURL, authSvc, templatesDir)
+		providerSettlementHandler = handlers.NewProviderSettlementHandler(database.DB, baseURL, fixHandler.WebhookSecret)
+		fixHandler.ProviderSettlement = providerSettlementHandler
+	} else {
+		providerExchangeHandler, err = handlers.NewProviderExchangePageHandler(database.DB, baseURL, authSvc, templatesDir)
+	}
+	if err != nil {
+		log.Fatalf("provider exchange init: %v", err)
+	}
+	apiHandler.ProviderExchangeEnabled = providerExchangeMode == providerExchangeModePilot
+	mcpHandler.ProviderExchangeEnabled = providerExchangeMode == providerExchangeModePilot
+	if providerExchangeMode == providerExchangeModePilot {
+		mcpHandler.ProviderExchange = providerExchangeHandler
+	}
+	// Provider DNS ownership is a renewable proof, not a one-time badge. Each
+	// instance may run this worker because PostgreSQL leases due rows with
+	// SKIP LOCKED and per-acquisition lease IDs.
+	if providerExchangeMode == providerExchangeModePilot {
+		go func() {
+			run := func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+				defer cancel()
+				stats, err := providerExchangeHandler.ReverifyDueProviderClaims(ctx, 10)
+				if err != nil {
+					log.Printf("provider DNS reverification: %v (leased=%d matched=%d failed=%d revoked=%d completion_errors=%d)",
+						err, stats.Leased, stats.Matched, stats.Failed, stats.Revoked, stats.CompletionErrors)
+					return
+				}
+				if stats.Leased > 0 {
+					log.Printf("provider DNS reverification: leased=%d matched=%d failed=%d revoked=%d",
+						stats.Leased, stats.Matched, stats.Failed, stats.Revoked)
+				}
+			}
+			run()
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for range ticker.C {
+				run()
+			}
+		}()
+	}
 
 	mux := http.NewServeMux()
 
@@ -152,20 +363,7 @@ func main() {
 	})
 
 	// SEO / GEO
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		// Simple DB-reachability check. Returns 200 + body "ok" if Postgres
-		// responds to a trivial ping within 2s, else 503. Used by Fly
-		// machine checks + external uptime monitors.
-		w.Header().Set("Cache-Control", "no-store")
-		if err := database.DB.Ping(); err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(503)
-			w.Write([]byte(`{"status":"degraded","db":"unreachable"}`))
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","db":"ok"}`))
-	})
+	mux.Handle("/health", healthHandler(database.DB, providerExchangeMode))
 	mux.HandleFunc("/robots.txt", seoHandler.Robots)
 	mux.HandleFunc("/llms.txt", seoHandler.LLMsTxt)
 	mux.HandleFunc("/llm.txt", seoHandler.LLMsTxt)
@@ -193,6 +391,7 @@ func main() {
 	// Web
 	mux.HandleFunc("/", webHandler.HomePage)
 	mux.HandleFunc("/about", webHandler.AboutPage)
+	mux.HandleFunc("/stats", webHandler.StatsPage)
 	mux.HandleFunc("/score", webHandler.ScorePage)
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		// Live status dashboard — polls /health on the main three Foundry
@@ -275,17 +474,82 @@ func main() {
 	mux.HandleFunc("/api/v1/checkout", fixHandler.AgenticCheckout)
 	mux.HandleFunc("/api/v1/api-keys/subscribe", apiKeyHandler.Subscribe)
 	mux.HandleFunc("/api/v1/api-keys/activate", apiKeyHandler.Activate)
-	mux.Handle("/api/v1/search", usageGate.Billable("rest", "/api/v1/search", http.HandlerFunc(apiHandler.Search)))
-	mux.Handle("/api/v1/site/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
-	mux.Handle("/api/v1/sites/", usageGate.Billable("rest", "/api/v1/site", http.HandlerFunc(apiHandler.GetSite)))
+	if providerExchangeMode == providerExchangeModePilot {
+		mux.HandleFunc("/api/v1/provider/claims", providerExchangeHandler.Claims)
+		mux.HandleFunc("/api/v1/provider/claims/", providerExchangeHandler.ClaimAction)
+		mux.HandleFunc("/api/v1/provider/offers", providerExchangeHandler.Offers)
+		mux.HandleFunc("/api/v1/provider/offers/", providerExchangeHandler.OfferAction)
+		mux.HandleFunc("/api/v1/provider/commercial-acceptances", providerExchangeHandler.ProviderCommercialAcceptances)
+		mux.HandleFunc("/api/v1/provider/pilot-status", providerExchangeHandler.ProviderPilotStatus)
+		mux.HandleFunc("/api/v1/provider/demand", providerExchangeHandler.ProviderDemand)
+		mux.HandleFunc("/api/v1/provider/action-tickets/resolve", providerExchangeHandler.ResolveProviderControlledIntent)
+		mux.HandleFunc("/api/v1/provider/outcomes", providerExchangeHandler.ProviderOutcomes)
+		mux.HandleFunc("/api/v1/provider/receipts/", providerExchangeHandler.ProviderReceipt)
+		mux.HandleFunc("/api/v1/action-tickets", providerExchangeHandler.ActionTickets)
+		mux.HandleFunc("/api/v1/action-tickets/handoff", providerExchangeHandler.ActionTicketHandoff)
+		mux.HandleFunc("/api/v1/action-receipts/verify", providerExchangeHandler.VerifyOutcomeReceipt)
+	} else {
+		for _, path := range []string{
+			"/api/v1/provider/claims", "/api/v1/provider/claims/",
+			"/api/v1/provider/offers", "/api/v1/provider/offers/",
+			"/api/v1/provider/commercial-acceptances", "/api/v1/provider/pilot-status",
+			"/api/v1/provider/demand", "/api/v1/provider/action-tickets/resolve",
+			"/api/v1/provider/outcomes",
+			"/api/v1/provider/receipts/", "/api/v1/action-tickets",
+			"/api/v1/action-tickets/handoff", "/api/v1/action-receipts/verify",
+		} {
+			mux.HandleFunc(path, providerExchangeDisabledHandler)
+		}
+	}
+	mux.HandleFunc("/api/v1/action-interests", actionInterestHandler.Record)
+	mux.HandleFunc("/providers", providerExchangeHandler.ProvidersPage)
+	mux.HandleFunc("/privacy", providerExchangeHandler.PrivacyPage)
+
+	// Human auth (magic-link login + session) and the subscribe entry point.
+	mux.HandleFunc("/login", authSvc.FailClosedLogin)
+	mux.HandleFunc("/auth/verify", authSvc.VerifyNoStore)
+	mux.HandleFunc("/logout", authSvc.Logout)
+	mux.HandleFunc("/subscribe", authSvc.SubscribePage)
+
+	// Cached discovery reads stay public. Search has an in-handler abuse throttle;
+	// indexed site details are free so agents can evaluate results without a key.
+	mux.HandleFunc("/api/v1/search", apiHandler.Search)
+	mux.HandleFunc("/api/v1/site/", apiHandler.GetSite)
+	mux.HandleFunc("/api/v1/sites/", apiHandler.GetSite)
 	mux.HandleFunc("/api/v1/submit", apiHandler.SubmitSite)
 	mux.HandleFunc("/api/v1/stats", apiHandler.Stats)
 	mux.HandleFunc("/api/v1/top", apiHandler.Top)
 	mux.HandleFunc("/api/v1/categories", apiHandler.Categories)
-	mux.Handle("/api/v1/verify-mcp", usageGate.Billable("rest", "/api/v1/verify-mcp", http.HandlerFunc(apiHandler.VerifyMCP)))
+	mux.HandleFunc("/api/v1/verify-mcp", apiHandler.VerifyMCP)
 	mux.HandleFunc("/api/v1/admin/traffic", apiHandler.TrafficAnalytics)
 	mux.HandleFunc("/api/v1/admin/mcp", apiHandler.MCPAnalytics)
 	mux.HandleFunc("/api/v1/admin/signals", apiHandler.SignalAnalytics)
+	mux.HandleFunc("/api/v1/admin/demand", apiHandler.ProviderDemandAnalytics)
+	mux.HandleFunc("/api/v1/admin/demand-stage1", actionInterestHandler.Stage1DemandProof)
+	if providerExchangeMode == providerExchangeModePilot {
+		mux.HandleFunc("/api/v1/admin/provider-pilot/action", providerExchangeHandler.AdminProviderPilotEpochAction)
+		mux.HandleFunc("/api/v1/admin/provider-pilot/epoch", providerExchangeHandler.AdminProviderPilotEpochStatus)
+		mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeHandler.AdminOfferAction)
+		mux.HandleFunc("/api/v1/admin/provider-commercial/action", providerExchangeHandler.AdminCommercialAction)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-queue", providerExchangeHandler.AdminProviderPilotQueue)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-review", providerExchangeHandler.AdminProviderPilotReview)
+		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeHandler.AdminProviderProofManifest)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/checkout", providerSettlementHandler.AdminCreateCheckout)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/status", providerSettlementHandler.AdminStatus)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/availability", providerSettlementHandler.AdminRecordAvailability)
+	} else {
+		mux.HandleFunc("/api/v1/admin/provider-pilot/action", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-pilot/epoch", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-offers/action", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-commercial/action", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-queue", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-pilot-review", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-proof-manifest", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/checkout", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/status", providerExchangeDisabledHandler)
+		mux.HandleFunc("/api/v1/admin/provider-settlements/availability", providerExchangeDisabledHandler)
+	}
+	mux.HandleFunc("/api/v1/admin/provider-proof", providerExchangeHandler.AdminProof)
 	mux.HandleFunc("/api/v1/admin/geo-jobs", fixHandler.AdminList)
 	mux.HandleFunc("/api/v1/admin/geo-jobs/action", fixHandler.AdminAction)
 
@@ -313,12 +577,18 @@ func main() {
 	mux.Handle("/mcp", mcpHandler)
 	mux.Handle("/mcp/", mcpHandler)
 
-	// Middleware chain: logging → domain redirect → security → CORS → gzip → handler
-	handler := loggingMiddleware(domainRedirectMiddleware(securityHeadersMiddleware(corsMiddleware(gzipMiddleware(mux)))))
+	// Middleware chain: logging → security → domain redirect → CORS → gzip → handler
+	// Security runs before canonical-host handling so even redirects and rejected
+	// noncanonical capability URLs receive the response-hardening contract.
+	handler := loggingMiddleware(securityHeadersMiddleware(domainRedirectMiddleware(corsMiddleware(gzipMiddleware(mux)))))
 
-	log.Printf("Not Human Search starting on :%s", *port)
+	listenAddress, err := configuredListenAddress(*port)
+	if err != nil {
+		log.Fatalf("listen address: %v", err)
+	}
+	log.Printf("Not Human Search starting on %s", listenAddress)
 	srv := &http.Server{
-		Addr:         ":" + *port,
+		Addr:         listenAddress,
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
@@ -359,7 +629,10 @@ var botPatterns = []string{
 // /mcp gets its own table (mcp_requests). /health is internal infra noise.
 // These exclusions keep page_views focused on human/organic traffic.
 var noLogPathPrefixes = []string{
-	"/mcp",            // JSON-RPC endpoint — logged to mcp_requests table
+	"/mcp",                     // JSON-RPC endpoint — logged to mcp_requests table, except privacy-bypassed tools
+	"/api/v1/action-interests", // receipt table only; never bind interest invocation to IP/UA telemetry
+	"/api/v1/action-tickets",   // ticket/handoff tables only; do not timestamp-correlate principal or agent network telemetry
+	"/api/v1/provider/action-tickets/resolve", // free read-only resolver; its contract forbids analytics and identity/network collection
 	"/health",         // internal Consul/Fly health checks
 	"/metrics",        // Prometheus scrapers
 	"/webhook/stripe", // Stripe retries/probes are monitored separately
@@ -373,6 +646,27 @@ func shouldLogPageView(p string) bool {
 		}
 	}
 	return true
+}
+
+// pageViewReferer intentionally drops the caller-controlled Referer value.
+// It can contain query text, credentials, or private capability URLs, while
+// ordinary discovery analytics need only the bounded route and status fields.
+func pageViewReferer(_ *http.Request) string {
+	return ""
+}
+
+func suppressRequestLineIdentityTelemetry(p string) bool {
+	for _, prefix := range []string{
+		"/api/v1/action-interests",
+		"/api/v1/action-tickets",
+		"/api/v1/provider/action-tickets/resolve",
+		"/mcp",
+	} {
+		if p == prefix || strings.HasPrefix(p, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func isBotUA(ua string) bool {
@@ -466,7 +760,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 				h := sha256.Sum256([]byte(ip))
 				ipHash := hex.EncodeToString(h[:16])
 				ua := r.UserAgent()
-				ref := r.Referer()
+				ref := pageViewReferer(r)
 				go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 					r.URL.Path, r.Method, http.StatusGone, ipHash, ua, ref, dur.Milliseconds(), true)
 			}
@@ -477,7 +771,9 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		sw := &statusWriter{ResponseWriter: w, status: 200}
 		next.ServeHTTP(sw, r)
 		dur := time.Since(start)
-		log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.status, r.UserAgent(), dur.Round(time.Millisecond))
+		if !suppressRequestLineIdentityTelemetry(r.URL.Path) {
+			log.Printf("%s %s %d %s %s", r.Method, r.URL.Path, sw.status, r.UserAgent(), dur.Round(time.Millisecond))
+		}
 
 		if database.DB != nil && shouldLogPageView(r.URL.Path) {
 			ip := r.RemoteAddr
@@ -488,7 +784,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			h := sha256.Sum256([]byte(ip))
 			ipHash := hex.EncodeToString(h[:16])
 			ua := r.UserAgent()
-			ref := r.Referer()
+			ref := pageViewReferer(r)
 			bot := isBotUA(ua) || isScannerPath(r.URL.Path)
 			go database.DB.Exec(`INSERT INTO page_views (path, method, status, ip_hash, user_agent, referer, duration_ms, is_bot) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 				r.URL.Path, r.Method, sw.status, ipHash, ua, ref, dur.Milliseconds(), bot)
@@ -504,20 +800,57 @@ func domainRedirectMiddleware(next http.Handler) http.Handler {
 		if idx := strings.LastIndex(host, ":"); idx != -1 {
 			host = host[:idx]
 		}
-		// Redirect nothumansearch.com → nothumansearch.ai (canonical)
-		// Redirect www variants → apex
+		// Redirect nothumansearch.com → nothumansearch.ai (canonical) and www
+		// variants → apex. Capability-bearing URLs fail closed instead of copying
+		// their token into a Location header or permanent redirect cache.
 		switch host {
 		case "nothumansearch.com", "www.nothumansearch.com":
-			target := "https://nothumansearch.ai" + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
-			return
 		case "www.nothumansearch.ai":
-			target := "https://nothumansearch.ai" + r.URL.RequestURI()
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
+		default:
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r)
+		if redirectRequestCarriesCapability(r) {
+			setPrivateRedirectHeaders(w)
+			http.Error(w, "use the canonical nothumansearch.ai host for this private link", http.StatusMisdirectedRequest)
+			return
+		}
+		target := "https://nothumansearch.ai" + r.URL.RequestURI()
+		status := http.StatusPermanentRedirect
+		if r.URL.RawQuery != "" || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+			setPrivateRedirectHeaders(w)
+			status = http.StatusTemporaryRedirect
+		}
+		http.Redirect(w, r, target, status)
 	})
+}
+
+func redirectRequestCarriesCapability(r *http.Request) bool {
+	if r == nil {
+		return true
+	}
+	path := r.URL.Path
+	if path == "/auth/verify" || strings.HasPrefix(path, "/monitor/unsubscribe/") ||
+		path == "/fix/success" {
+		return true
+	}
+	if r.URL.RawQuery != "" && (strings.HasPrefix(path, "/site/") ||
+		strings.HasPrefix(path, "/api/v1/site/")) {
+		return true
+	}
+	query := r.URL.Query()
+	for _, key := range []string{"token", "search_id", "session_id", "nhs_attribution"} {
+		if query.Has(key) {
+			return true
+		}
+	}
+	return false
+}
+
+func setPrivateRedirectHeaders(w http.ResponseWriter) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Referrer-Policy", "no-referrer")
 }
 
 const statusHTML = `<!DOCTYPE html>
@@ -666,8 +999,8 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Idempotency-Key, X-NHS-Provider-Key, X-API-Key")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(204)
 			return
@@ -684,9 +1017,10 @@ const installScript = `#!/bin/sh
 # copy-paste snippets for Cursor, Cline, and Continue.
 #
 # NHS endpoint: https://nothumansearch.ai/mcp (streamable-http, no auth)
-# 11 tools: search_agents, get_site_details, get_stats, list_categories,
+# 14 tools: search_agents, get_site_details, get_stats, list_categories,
 # get_top_sites, submit_site, register_monitor, verify_mcp,
-# check_url, find_mcp_servers, recent_additions
+# check_url, find_mcp_servers, recent_additions, record_action_interest,
+# prepare_provider_action, handoff_provider_action
 
 set -eu
 ENDPOINT="https://nothumansearch.ai/mcp"

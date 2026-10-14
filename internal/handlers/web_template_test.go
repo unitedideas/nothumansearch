@@ -25,10 +25,12 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 			Category:         "developer",
 			HasLLMsTxt:       true,
 			HasStructuredAPI: true,
+			IsFeatured:       true,
 		}},
 		"Total":      1,
 		"TotalSites": 1,
 		"AvgScore":   45,
+		"SearchID":   "nhs_sr_example",
 	}
 
 	var out bytes.Buffer
@@ -43,6 +45,12 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Fatalf("expected %q in rendered home template", want)
 		}
+	}
+	if !strings.Contains(html, `/site/example.com?search_id=nhs_sr_example`) {
+		t.Fatalf("expected result detail link to carry the search receipt")
+	}
+	if strings.Contains(html, "FEATURED") {
+		t.Fatalf("organic result rendered a legacy commercial label")
 	}
 
 	var siteOut bytes.Buffer
@@ -80,6 +88,32 @@ func TestHomeTemplateDisplaysScoreReasonsAndDecodedText(t *testing.T) {
 	}
 	if strings.Contains(highScoreOut.String(), "Fix this for $199") {
 		t.Fatalf("expected high-score hard-signal site to omit score-fix CTA")
+	}
+}
+
+func TestHomeTemplateNeverPaywallsSearchResults(t *testing.T) {
+	h, err := NewWebHandler(nil, "../../templates")
+	if err != nil {
+		t.Fatalf("parse templates: %v", err)
+	}
+	data := map[string]interface{}{
+		"Sites":      []models.Site{},
+		"Total":      23,
+		"TotalSites": 100,
+		"AvgScore":   40,
+		"Query":      "payment api",
+		"Locked":     true, // stale callers must not be able to revive the old wall
+	}
+
+	var out bytes.Buffer
+	if err := h.tmpl.ExecuteTemplate(&out, "home.html", data); err != nil {
+		t.Fatalf("execute home template: %v", err)
+	}
+	html := out.String()
+	for _, forbidden := range []string{"subscription-only", "Unlock every result", "Subscribe $9.99/mo", "results match \"payment api\" — preview"} {
+		if strings.Contains(html, forbidden) {
+			t.Fatalf("free search template rendered obsolete paywall text %q", forbidden)
+		}
 	}
 }
 
@@ -150,9 +184,9 @@ func TestScoreTemplateIncludesOwnerHandoffWithoutPaidRanking(t *testing.T) {
 	for _, want := range []string{
 		"Site owner next step",
 		"Monitor this score",
-		"Get implementation help",
+		"Fix this for me ($199)",
 		"Improve public signals",
-		"score < 70 && hasHardSignal",
+		"score < 90",
 	} {
 		if !strings.Contains(html, want) {
 			t.Fatalf("expected score template to contain %q", want)

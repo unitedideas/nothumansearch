@@ -30,6 +30,9 @@ type Site struct {
 	Tags         pq.StringArray `json:"tags"`
 
 	IsVerified bool `json:"is_verified"`
+	// IsFeatured is legacy response-shape metadata only. It is deprecated and
+	// never participates in organic scoring or ordering, but remains serialized
+	// so existing v1 API clients do not break when discovery becomes neutral.
 	IsFeatured bool `json:"is_featured"`
 
 	HasFavicon bool   `json:"has_favicon"`

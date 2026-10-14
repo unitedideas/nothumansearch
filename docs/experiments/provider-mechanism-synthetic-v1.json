@@ -1,0 +1,18 @@
+{
+  "name": "synthetic-developer-tools-v1",
+  "evidence_kind": "synthetic",
+  "mature_cohort": true,
+  "handoffs": 50,
+  "accepted": 30,
+  "activated": 12,
+  "converted": 3,
+  "max_cost_per_activation_cents": 10000,
+  "max_median_days_to_charge": 14,
+  "min_charged_events": 5,
+  "bounty_points_cents": [2500, 7500, 20000],
+  "charge_events": [
+    {"name": "accepted", "median_days_to_charge": 1},
+    {"name": "activated", "median_days_to_charge": 7},
+    {"name": "converted", "median_days_to_charge": 30}
+  ]
+}

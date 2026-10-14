@@ -1,0 +1,233 @@
+[
+  {
+    "domain": "po6.com",
+    "name": "PO6 \u2014 The Shortest Email Address on the Internet",
+    "description": "Get a memorable you@po6.com address \u2014 just 3 characters after the @. The first email service with native AI agent support via MCP. Forward to your existing inbox instantly.",
+    "agentic_score": 50,
+    "vector": "'3':16B 'address':5A,14B 'agent':27B 'ai':26B,38C,42C,45C 'ai-friend':41C 'ai-tool':37C 'api':40C 'charact':17B 'email':4A,22B,44C 'exist':34B 'first':21B 'forward':31B 'friend':43C 'get':10B 'inbox':35B 'instant':36B 'internet':8A 'llms':47C 'llms-txt':46C 'mcp':30B 'memor':12B 'nativ':25B 'po6':1A 'po6.com':9A 'servic':23B 'shortest':3A 'support':28B 'tool':39C 'txt':48C 'via':29B 'you@po6.com':13B"
+  },
+  {
+    "domain": "primitive.dev",
+    "name": "primitive.dev: email for AI agents",
+    "description": "Primitive is email infrastructure for AI agents: universal email addresses, hosted functions, and transactional email over the protocol every business already uses. It also ships a ChatGPT app \u2014 an in-agent MCP App UI built on the OpenAI Apps SDK that renders your inbox inside the agent host.",
+    "agentic_score": 100,
+    "vector": "'address':16B 'agent':5A,13B,38B,54B 'ai':4A,12B,61C,64C,66C 'ai-friend':63C 'ai-plugin':60C 'alreadi':27B 'also':30B 'api':70C 'app':34B,40B,46B 'built':42B 'busi':26B 'chatgpt':33B 'develop':56C 'devtool':68C 'email':2A,9B,15B,21B,72C 'everi':25B 'friend':65C 'function':18B 'host':17B,55B 'in-ag':36B 'inbox':51B 'infrastructur':10B 'insid':52B 'llms':58C 'llms-txt':57C 'mcp':39B,71C 'messag':67C 'openai':45B 'openapi':69C 'plugin':62C 'primit':7B 'primitive.dev':1A,6A 'protocol':24B 'render':49B 'sdk':47B 'ship':31B 'transact':20B 'txt':59C 'ui':41B 'univers':14B 'use':28B"
+  },
+  {
+    "domain": "clawaimail.com",
+    "name": "ClawAIMail - Email Infrastructure for AI Agents | Send & Receive Real Emails",
+    "description": "Give your AI agents real email addresses. Send, receive, and manage emails via REST API or MCP server. Works with Claude, Cursor, and any AI tool. $20 lifetime access.",
+    "agentic_score": 90,
+    "vector": "'20':38B 'access':40B 'address':18B 'agent':6A,15B 'ai':5A,14B,36B,43C,48C,52C 'ai-friend':47C 'ai-plugin':42C 'api':26B,46C 'claud':32B 'clawaimail':1A 'clawaimail.com':11A 'cursor':33B 'develop':41C 'email':2A,10A,17B,23B,51C 'friend':49C 'give':12B 'host':50C 'infrastructur':3A 'lifetim':39B 'llms':54C 'llms-txt':53C 'manag':22B 'mcp':28B 'openapi':45C 'plugin':44C 'real':9A,16B 'receiv':8A,20B 'rest':25B 'send':7A,19B 'server':29B 'tool':37B 'txt':55C 'via':24B 'work':30B"
+  },
+  {
+    "domain": "docs.ideal-postcodes.co.uk",
+    "name": "Address Validation API Documentation - Ideal Postcodes | Ideal Postcodes",
+    "description": "Set up Postcode Lookup or Address Finder with our simple integration guides, references and API libraries ",
+    "agentic_score": 40,
+    "vector": "'address':1A,15B 'api':3A,24B,27C 'autom':28C 'develop':26C 'docs.ideal-postcodes.co.uk':9A 'document':4A 'finder':16B 'guid':21B 'ideal':5A,7A 'integr':20B 'librari':25B 'llms':30C 'llms-txt':29C 'lookup':13B 'postcod':6A,8A,12B 'refer':22B 'set':10B 'simpl':19B 'txt':31C 'valid':2A"
+  },
+  {
+    "domain": "mailboxvalidator.com",
+    "name": "Email Validation API - Verify Email Address | MailboxValidator",
+    "description": "MailboxValidator email validation clean email lists and reduces bounce. It connects to the mail server and checks whether the mailbox exists or not.",
+    "agentic_score": 20,
+    "vector": "'address':6A 'api':3A,31C 'bounc':17B 'check':25B 'clean':12B 'communic':30C 'connect':19B 'email':1A,5A,10B,13B,32C 'exist':29B 'host':33C 'list':14B 'mail':22B 'mailbox':28B 'mailboxvalid':7A,9B 'mailboxvalidator.com':8A 'reduc':16B 'server':23B 'valid':2A,11B 'verifi':4A 'whether':26B"
+  },
+  {
+    "domain": "campaignkit.cc",
+    "name": "Email Validation Service, Email List Cleaning<!-- --> | CampaignKit",
+    "description": "Email validation service. Clean your email lists to reduce bounces. Email List cleaning doesn&#x27;t have to be expensive. Start your free trial today.",
+    "agentic_score": 20,
+    "vector": "'api':34C 'bounc':18B 'campaignkit':7A 'campaignkit.cc':8A 'clean':6A,12B,21B 'communic':33C 'doesn':22B 'email':1A,4A,9B,14B,19B,35C 'expens':27B 'free':30B 'list':5A,15B,20B 'reduc':17B 'servic':3A,11B 'start':28B 'today':32B 'trial':31B 'valid':2A,10B"
+  },
+  {
+    "domain": "hunter.io",
+    "name": "Find email addresses and send cold emails \u2022 Hunter",
+    "description": "Hunter is the leading solution to find and verify professional email addresses. Start using Hunter and connect with the people that matter for your business.",
+    "agentic_score": 20,
+    "vector": "'address':3A,21B 'api':36C 'busi':34B 'cold':6A 'communic':35C 'connect':26B 'email':2A,7A,20B,37C 'find':1A,16B 'hunter':8A,10B,24B 'hunter.io':9A 'lead':13B 'matter':31B 'peopl':29B 'profession':19B 'send':5A 'solut':14B 'start':22B 'use':23B 'verifi':18B"
+  },
+  {
+    "domain": "pinecone.io",
+    "name": "The vector database to build knowledgeable AI | Pinecone",
+    "description": "Search through billions of items for similar matches to any object, in milliseconds. It\u2019s the next generation of search, an API call away.",
+    "agentic_score": 85,
+    "vector": "'ai':7A,35C,46C,50C 'ai-plugin':45C 'ai-tool':34C 'api':31B,48C 'away':33B 'billion':12B 'build':5A 'call':32B 'databas':3A,49C 'db':41C 'generat':27B 'item':14B 'knowledg':6A 'llms':43C 'llms-txt':42C 'match':17B 'millisecond':22B 'next':26B 'object':20B 'openapi':38C 'pinecon':8A 'pinecone.io':9A 'plugin':47C 'search':10B,29B,37C 'similar':16B 'tool':36C 'txt':44C 'vector':2A,40C 'vector-db':39C"
+  },
+  {
+    "domain": "upstash.com",
+    "name": "Upstash: Serverless Data Platform - Redis, Vector, Search",
+    "description": "Serverless Redis, Vector and Search databases with low latency and pay-as-you-go pricing. Upstash is the data platform for modern and AI applications \u2014 create a Redis database in seconds.",
+    "agentic_score": 45,
+    "vector": "'ai':33B,52C 'api':49C 'applic':34B 'creat':35B 'data':3A,28B,41C 'databas':14B,38B,50C 'db':44C 'go':23B 'host':51C 'latenc':17B 'llms':47C 'llms-txt':46C 'low':16B 'modern':31B 'pay':20B 'pay-as-you-go':19B 'platform':4A,29B 'price':24B 'redi':5A,10B,37B 'search':7A,13B,45C 'second':40B 'serverless':2A,9B 'txt':48C 'upstash':1A,25B 'upstash.com':8A 'vector':6A,11B,43C 'vector-db':42C"
+  },
+  {
+    "domain": "paradedb.com",
+    "name": "ParadeDB \u2014 Search without a second system",
+    "description": "One Postgres for your application data, full-text search, vector retrieval, and aggregations. Home of the pg_search extension.",
+    "agentic_score": 45,
+    "vector": "'aggreg':21B 'ai':30C 'ai-friend':29C 'applic':12B 'data':13B,28C 'databas':36C 'db':35C 'extens':27B 'friend':31C 'full':15B 'full-text':14B 'home':22B 'llms':38C 'llms-txt':37C 'mcp':40C 'one':8B 'paradedb':1A 'paradedb.com':7A 'pg':25B 'postgr':9B 'retriev':19B 'search':2A,17B,26B,32C 'second':5A 'system':6A 'text':16B 'txt':39C 'vector':18B,34C 'vector-db':33C 'without':3A"
+  },
+  {
+    "domain": "memestack.ai",
+    "name": "MemeStack \u2014 Find Memes, Infographics &amp; Charts by Meaning",
+    "description": "Search memes, infographics, charts &amp; screenshots by meaning, text inside the image, or visual similarity. Free visual search engine, public API, MCP.",
+    "agentic_score": 90,
+    "vector": "'ai':31C,37C,42C 'ai-friend':41C 'ai-plugin':36C 'ai-tool':30C 'api':28B,40C 'chart':5A,12B 'db':47C 'engin':26B 'find':2A 'free':23B 'friend':43C 'imag':19B 'infograph':4A,11B 'insid':17B 'llms':34C 'llms-txt':33C 'mcp':29B 'mean':7A,15B 'meme':3A,10B 'memestack':1A 'memestack.ai':8A 'openapi':39C 'plugin':38C 'public':27B 'screenshot':13B 'search':9B,25B,44C 'similar':22B 'text':16B 'tool':32C 'txt':35C 'vector':46C 'vector-db':45C 'visual':21B,24B"
+  },
+  {
+    "domain": "turbopuffer.com",
+    "name": "turbopuffer - fast search engine built on object storage",
+    "description": "vector and full-text search built on object storage: fast, 10x cheaper, and extremely scalable",
+    "agentic_score": 45,
+    "vector": "'10x':21B 'api':30C 'built':5A,16B 'cheaper':22B 'data':26C 'db':35C 'engin':4A 'extrem':24B 'fast':2A,20B 'full':13B 'full-text':12B 'llms':28C 'llms-txt':27C 'object':7A,18B 'scalabl':25B 'search':3A,15B,32C 'storag':8A,19B,31C 'text':14B 'turbopuff':1A 'turbopuffer.com':9A 'txt':29C 'vector':10B,34C 'vector-db':33C"
+  },
+  {
+    "domain": "zilliz.com",
+    "name": "Zilliz Vector Lakebase for Enterprise AI, Powered by Milvus",
+    "description": "Zilliz offers a fully managed Vector Lakebase powered by Milvus, unifying real-time vector search, lake-scale discovery, and AI data operations.",
+    "agentic_score": 50,
+    "vector": "'ai':6A,32B,41C,43C 'ai-friend':40C 'api':39C 'data':33B,35C 'db':47C 'discoveri':30B 'enterpris':5A 'friend':42C 'fulli':14B 'lake':28B 'lake-scal':27B 'lakebas':3A,17B 'llms':37C 'llms-txt':36C 'manag':15B 'milvus':9A,20B 'offer':12B 'oper':34B 'power':7A,18B 'real':23B 'real-tim':22B 'scale':29B 'search':26B,44C 'time':24B 'txt':38C 'unifi':21B 'vector':2A,16B,25B,46C 'vector-db':45C 'zilliz':1A,11B 'zilliz.com':10A"
+  },
+  {
+    "domain": "apixu.com",
+    "name": "Best Free Weather API for Accurate Global Weather Data",
+    "description": "Discover weatherstack, the best free weather API providing real-time, historical, and forecast weather data worldwide. Start using our weather REST API today.",
+    "agentic_score": 45,
+    "vector": "'accur':6A 'api':4A,17B,33B,39C 'apixu.com':10A 'best':1A,14B 'data':9A,26B,35C 'discov':11B 'forecast':24B 'free':2A,15B 'global':7A 'histor':22B 'llms':37C 'llms-txt':36C 'provid':18B 'real':20B 'real-tim':19B 'rest':32B 'start':28B 'time':21B 'today':34B 'txt':38C 'use':29B 'weather':3A,8A,16B,25B,31B 'weatherstack':12B 'worldwid':27B"
+  },
+  {
+    "domain": "exchange-rate.nimbus-api.com",
+    "name": "Exchange Rate API \u2014 Real-time & Historical Currency Data",
+    "description": "Free exchange rate API with 160 fiat, crypto + precious metals. Historical data back to 1999, batch conversion, time-series. No paywall on features competitors charge for.",
+    "agentic_score": 50,
+    "vector": "'160':16B '1999':25B 'api':3A,14B,39C 'back':23B 'batch':26B 'charg':36B 'competitor':35B 'convers':27B 'crypto':18B 'currenc':8A 'data':9A,22B 'develop':37C 'exchang':1A,12B 'exchange-rate.nimbus-api.com':10A 'featur':34B 'fiat':17B 'free':11B 'histor':7A,21B 'mcp':40C 'metal':20B 'openapi':38C 'paywal':32B 'precious':19B 'rate':2A,13B 'real':5A 'real-tim':4A 'seri':30B 'time':6A,29B 'time-seri':28B"
+  },
+  {
+    "domain": "weatherstack.com",
+    "name": "Best Free Weather API for Accurate Global Weather Data",
+    "description": "Discover weatherstack, the best free weather API providing real-time, historical, and forecast weather data worldwide. Start using our weather REST API today.",
+    "agentic_score": 20,
+    "vector": "'accur':6A 'api':4A,17B,33B,36C 'best':1A,14B 'data':9A,26B,35C 'discov':11B 'forecast':24B 'free':2A,15B 'global':7A 'histor':22B 'provid':18B 'real':20B 'real-tim':19B 'rest':32B 'start':28B 'time':21B 'today':34B 'use':29B 'weather':3A,8A,16B,25B,31B 'weatherstack':12B 'weatherstack.com':10A 'worldwid':27B"
+  },
+  {
+    "domain": "meteosource.com",
+    "name": "Meteosource - The Global Weather API &amp; Mapping Platform - current weather and forecast data",
+    "description": "Weather API for the most accurate weather \u2600\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f\ufe0f data: minute-by-minute, hourly, daily forecasts up to 30-days. Hyperlocal weather forecast API for any place in the world.",
+    "agentic_score": 40,
+    "vector": "'30':31B 'accur':19B 'ai':45C 'ai-plugin':44C 'api':5A,15B,36B,47C 'current':8A 'daili':27B 'data':12A,21B,43C 'day':32B 'forecast':11A,28B,35B 'global':3A 'hour':26B 'hyperloc':33B 'map':6A 'meteosourc':1A 'meteosource.com':13A 'minut':23B,25B 'minute-by-minut':22B 'place':39B 'platform':7A 'plugin':46C 'weather':4A,9A,14B,20B,34B 'world':42B"
+  },
+  {
+    "domain": "weatherbit.io",
+    "name": "Weather API | Weatherbit",
+    "description": "Access accurate weather data with the Weather API by Weatherbit. Get real-time, historical, and forecast weather data for any location worldwide",
+    "agentic_score": 15,
+    "vector": "'access':5B 'accur':6B 'api':2A,12B,29C 'data':8B,23B,28C 'forecast':21B 'get':15B 'histor':19B 'locat':26B 'real':17B 'real-tim':16B 'time':18B 'weather':1A,7B,11B,22B 'weatherbit':3A,14B 'weatherbit.io':4A 'worldwid':27B"
+  },
+  {
+    "domain": "weatherapi.com",
+    "name": "Free Weather API - WeatherAPI.com",
+    "description": "WeatherAPI.com free weather API and weather data and Geolocation API (JSON and XML) for hourly, daily and 15 min interval weather, historical data, bulk request, astronomy, sports and much more.",
+    "agentic_score": 15,
+    "vector": "'15':23B 'api':3A,9B,15B,36C 'astronomi':31B 'bulk':29B 'daili':21B 'data':12B,28B,35C 'free':1A,7B 'geoloc':14B 'histor':27B 'hour':20B 'interv':25B 'json':16B 'min':24B 'much':34B 'request':30B 'sport':32B 'weather':2A,8B,11B,26B 'weatherapi.com':4A,5A,6B 'xml':18B"
+  },
+  {
+    "domain": "xquik.com",
+    "name": "Xquik: X (Twitter) Scraper API, MCP &amp; Automation Tools",
+    "description": "Extract tweets, replies, profiles, followers, and trends with the Xquik X scraper API and MCP. Monitor accounts and export data. Not affiliated with X Corp.",
+    "agentic_score": 100,
+    "vector": "'account':26B 'affili':31B 'ai':38C,46C 'ai-friend':37C 'ai-plugin':45C 'api':5A,22B,35C 'autom':7A,41C 'corp':34B 'data':29B 'export':28B 'extract':10B 'follow':14B 'friend':39C 'llms':43C 'llms-txt':42C 'mcp':6A,24B,36C 'monitor':25B 'openapi':48C 'plugin':47C 'profil':13B 'repli':12B 'scraper':4A,21B 'storag':40C 'tool':8A 'trend':16B 'tweet':11B 'twitter':3A 'txt':44C 'x':2A,20B,33B 'xquik':1A,19B 'xquik.com':9A"
+  },
+  {
+    "domain": "sudomock.com",
+    "name": "SudoMock | PSD Mockup API &amp; Product Image Automation",
+    "description": "Render PSD templates into product images via REST API, no-code workflows, native Shopify/WooCommerce apps, or MCP. Start with 500 one-time credits.",
+    "agentic_score": 70,
+    "vector": "'500':29B 'ai':38C 'ai-friend':37C 'api':4A,17B,36C 'app':24B 'autom':7A,40C 'code':20B 'credit':33B 'ecommerc':41C 'friend':39C 'imag':6A,14B 'llms':43C 'llms-txt':42C 'mcp':26B 'mockup':3A 'nativ':22B 'no-cod':18B 'one':31B 'one-tim':30B 'openapi':35C 'product':5A,13B,34C 'psd':2A,10B 'render':9B 'rest':16B 'shopify/woocommerce':23B 'start':27B 'sudomock':1A 'sudomock.com':8A 'templat':11B 'time':32B 'txt':44C 'via':15B 'workflow':21B"
+  },
+  {
+    "domain": "scrapfly.io",
+    "name": "Scrapfly - Web Scraping API, Cloud Browser, Screenshot API",
+    "description": "Power web scrapers and AI agents with Scrapfly&amp;#039;s web data platform. One API key for anti-bot bypass, stealth Chromium over CDP, residential proxies, screenshots, and structured extraction.",
+    "agentic_score": 60,
+    "vector": "'039':18B 'agent':15B 'ai':14B,42C,50C,52C 'ai-friend':49C 'ai-tool':41C 'anti':28B 'anti-bot':27B 'api':4A,8A,24B,47C 'bot':29B 'browser':6A 'bypass':30B 'cdp':34B 'chromium':32B 'cloud':5A 'data':21B 'extract':40B 'friend':51C 'host':53C 'key':25B 'llms':45C 'llms-txt':44C 'mcp':48C 'one':23B 'platform':22B 'power':10B 'proxi':36B 'residenti':35B 'scrape':3A 'scraper':12B 'scrapfli':1A,17B 'scrapfly.io':9A 'screenshot':7A,37B 'stealth':31B 'structur':39B 'tool':43C 'txt':46C 'web':2A,11B,20B"
+  },
+  {
+    "domain": "roveapi.com",
+    "name": "Rove \u2014 Browser Automation API for AI Agents | Playwright-as-a-Service",
+    "description": "A hosted Playwright API that returns accessibility trees instead of screenshots. 77% fewer tokens. MCP-native. Zero infrastructure. Start free.",
+    "agentic_score": 45,
+    "vector": "'77':25B 'access':20B 'agent':7A 'ai':6A,38C 'api':4A,17B,36C 'autom':3A,37C 'browser':2A 'develop':35C 'fewer':26B 'free':34B 'host':15B 'infrastructur':32B 'instead':22B 'llms':40C 'llms-txt':39C 'mcp':29B 'mcp-nativ':28B 'nativ':30B 'playwright':9A,16B 'playwright-as-a-servic':8A 'return':19B 'rove':1A 'roveapi.com':13A 'screenshot':24B 'servic':12A 'start':33B 'token':27B 'tree':21B 'txt':41C 'zero':31B"
+  },
+  {
+    "domain": "api2convert.com",
+    "name": "REST API to convert and edit files automatically",
+    "description": "REST API to convert and edit files online in the cloud",
+    "agentic_score": 45,
+    "vector": "'api':2A,11B,25C 'api2convert.com':9A 'automat':8A 'cloud':20B 'convert':4A,13B 'develop':21C 'edit':6A,15B 'file':7A,16B 'host':26C 'llms':23C 'llms-txt':22C 'onlin':17B 'rest':1A,10B 'storag':27C 'txt':24C"
+  },
+  {
+    "domain": "api.autodealerdata.com",
+    "name": "CIS Automotive API",
+    "description": "The CIS Automotive API provides daily sales, supply, pricing and listing data from\n              our database of ~40k dealers and over 725M vehicles across the US.",
+    "agentic_score": 20,
+    "vector": "'40k':21B '725m':25B 'across':27B 'api':3A,8B,33C 'api.autodealerdata.com':4A 'automot':2A,7B 'cis':1A,6B 'daili':10B 'data':16B,30C 'databas':19B,31C 'dealer':22B 'list':15B 'openapi':32C 'price':13B 'provid':9B 'sale':11B 'suppli':12B 'us':29B 'vehicl':26B"
+  },
+  {
+    "domain": "developer.paddle.com",
+    "name": "Paddle Developer Docs",
+    "description": "Build and integrate with the Paddle Billing API. Guides, API reference, and changelog for subscriptions, checkout, payments, and webhooks.",
+    "agentic_score": 45,
+    "vector": "'api':12B,14B,30C 'bill':11B 'build':5B 'changelog':17B 'checkout':20B 'develop':2A 'developer.paddle.com':4A 'doc':3A 'ecommerc':24C 'guid':13B 'integr':7B 'llms':28C 'llms-txt':27C 'notif':26C 'paddl':1A,10B 'payment':21B,25C 'refer':15B 'subscript':19B 'txt':29C 'webhook':23B"
+  },
+  {
+    "domain": "zlurp.ai",
+    "name": "zlurp \u2014 Web Scraping API for AI Agents",
+    "description": "Any URL to clean markdown. Web scraping API for AI agents. Pay $0.005 per scrape via USDC on Base. No accounts, no API keys, no subscriptions.",
+    "agentic_score": 90,
+    "vector": "'0.005':21B 'account':29B 'agent':7A,19B 'ai':6A,18B,36C,38C,43C,48C 'ai-friend':47C 'ai-plugin':42C 'ai-tool':35C 'api':4A,16B,31B,46C 'base':27B 'clean':12B 'friend':49C 'key':32B 'llms':40C 'llms-txt':39C 'markdown':13B 'openapi':45C 'pay':20B 'payment':50C 'per':22B 'plugin':44C 'scrape':3A,15B,23B 'subscript':34B 'tool':37C 'txt':41C 'url':10B 'usdc':25B 'via':24B 'web':2A,14B 'zlurp':1A 'zlurp.ai':8A"
+  },
+  {
+    "domain": "socialdata.tools",
+    "name": "Twitter&#x2F;X API for Public Data \u2014 Pay Per Result | SocialData",
+    "description": "Read public Twitter/X data \u2014 tweets, profiles, followers, search \u2014 through a simple REST API. No developer account, no subscription. $0.20 per 1,000 results.",
+    "agentic_score": 100,
+    "vector": "'0.20':30B '000':33B '1':32B 'account':27B 'ai':43C,48C 'ai-friend':47C 'ai-plugin':42C 'api':3A,24B,46C 'data':6A,15B 'develop':26B 'financ':35C 'follow':18B 'friend':49C 'llms':40C 'llms-txt':39C 'mcp':36C 'openapi':45C 'pay':7A 'payment':38C 'per':8A,31B 'plugin':44C 'profil':17B 'public':5A,13B 'read':12B 'rest':23B 'result':9A,34B 'search':19B,50C 'simpl':22B 'socialdata':10A 'socialdata.tools':11A 'storag':37C 'subscript':29B 'tweet':16B 'twitter':1A 'twitter/x':14B 'txt':41C 'x':2A"
+  },
+  {
+    "domain": "weftly.ai",
+    "name": "Weftly \u2014 MCP Server for Video. Transcribe, Summarize &amp; Clip from Claude",
+    "description": "The MCP server for video editing. Let Claude and other AI agents transcribe, summarize, and clip your videos in minutes. $0.50\u2013$2.00 per job. No subscription, no API keys, no infrastructure to run.",
+    "agentic_score": 90,
+    "vector": "'0.50':32B '2.00':33B 'agent':23B 'ai':22B,49C,53C,58C 'ai-friend':48C 'ai-plugin':57C 'api':39B,47C 'claud':10A,19B 'clip':8A,27B 'develop':45C 'devtool':52C 'edit':17B 'friend':50C 'host':51C 'infrastructur':42B 'job':35B 'key':40B 'let':18B 'llms':55C 'llms-txt':54C 'mcp':2A,13B 'minut':31B 'openapi':46C 'per':34B 'plugin':59C 'run':44B 'server':3A,14B 'subscript':37B 'summar':7A,25B 'transcrib':6A,24B 'txt':56C 'video':5A,16B,29B 'weft':1A 'weftly.ai':11A"
+  },
+  {
+    "domain": "api.stripe.com",
+    "name": "",
+    "description": "",
+    "agentic_score": 15,
+    "vector": "'api':3C 'api.stripe.com':1A 'bill':6C 'financ':2C 'fintech':5C 'payment':4C 'subscript':7C"
+  },
+  {
+    "domain": "polar.sh",
+    "name": "Polar \u2014 A billing platform for the intelligence era | Polar",
+    "description": "Polar is the Merchant of Record for developers building AI-era software: payments, subscriptions, and usage-based billing, with global tax handled for you.",
+    "agentic_score": 50,
+    "vector": "'ai':21B,41C 'ai-era':20B 'ai-friend':40C 'api':39C 'base':29B 'bill':3A,30B 'build':19B 'develop':18B 'era':8A,22B 'financ':35C 'friend':42C 'global':32B 'handl':34B 'intellig':7A 'llms':37C 'llms-txt':36C 'merchant':14B 'payment':24B,43C 'platform':4A 'polar':1A,9A,11B 'polar.sh':10A 'record':16B 'softwar':23B 'subscript':25B 'tax':33B 'txt':38C 'usag':28B 'usage-bas':27B"
+  },
+  {
+    "domain": "stripe.com",
+    "name": "Stripe | Financial Infrastructure to Grow Your Revenue",
+    "description": "Stripe is a financial services platform that helps all types of businesses accept payments, build flexible billing models, and manage money movement.",
+    "agentic_score": 45,
+    "vector": "'accept':21B 'api':36C 'bill':25B,40C 'build':23B 'busi':20B 'financ':31C 'financi':2A,12B 'fintech':39C 'flexibl':24B 'grow':5A 'help':16B 'infrastructur':3A 'llms':34C 'llms-txt':33C 'manag':28B 'ml':37C 'model':26B 'money':29B 'movement':30B 'payment':22B,38C 'platform':14B 'revenu':7A 'servic':13B 'stripe':1A,9B 'stripe.com':8A 'subscript':32C 'txt':35C 'type':18B"
+  },
+  {
+    "domain": "resmush.it",
+    "name": "Free Image Compressor WP Plugin and API",
+    "description": "26 billion images optimized and counting! reSmush.it is the only completely free wp smush image compressor. It was developed in 2015 and is used on hundreds of\u2026",
+    "agentic_score": 20,
+    "vector": "'2015':29B '26':9B 'api':7A,36C 'authent':37C 'billion':10B 'complet':19B 'compressor':3A,24B 'count':14B 'develop':27B 'free':1A,20B 'hundr':34B 'imag':2A,11B,23B 'optim':12B 'plugin':5A 'resmush.it':8A,15B 'secur':35C 'smush':22B 'use':32B 'wp':4A,21B"
+  }
+]

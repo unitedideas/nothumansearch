@@ -35,4 +35,11 @@ harness/*-latest.json
 # Discovery quarantine test/dev tools
 tools/discovery*.py
 tools/test-*.py
+!tools/test-adopt-provider-exchange-candidate.py
+!tools/test-build-exact-provider-image.py
+!tools/test-provider-cutover-verify.py
+!tools/test-provider-company-verify.py
+!tools/test-provider-pilot-client.py
+!tools/test-provider-pilot-operate.py
+!tools/test-provider-pilot-status.py
 .claude/settings.json

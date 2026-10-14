@@ -1,0 +1,35 @@
+{
+  "contract": "nhs-provider-processor-boundary-v1",
+  "scope": "not-human-search-only",
+  "captured_at": "2026-08-12T02:01:36Z",
+  "stripe_api_read": {
+    "credential_reference": "STRIPE_SECRET_KEY",
+    "credential_present": true,
+    "credential_source": "keychain",
+    "account_mode": "live",
+    "balance_metadata_readable": true,
+    "provider_settlement_payment_intent_search": {
+      "metadata_product": "nhs_provider_outcome_settlement",
+      "returned_count": 0,
+      "has_more": false,
+      "inferred_total_count": 0
+    }
+  },
+  "production_secret_metadata": {
+    "stripe_secret_key_name_present": true,
+    "stripe_webhook_secret_name_present": true,
+    "provider_signing_key_name_present": false,
+    "provider_signing_key_id_name_present": false
+  },
+  "production_provider_exchange_mode": "disabled",
+  "processor_write_drill_performed": false,
+  "processor_write_drill_reason": "fail_closed_live_mode_credential",
+  "contains_stripe_object_ids": false,
+  "contains_customer_data": false,
+  "contains_provider_data": false,
+  "providers_contacted": 0,
+  "providers_activated": 0,
+  "charges_created": 0,
+  "commercial_proof": false,
+  "mechanism_winner": null
+}

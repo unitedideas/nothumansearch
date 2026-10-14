@@ -159,7 +159,6 @@
             transition:border-color 0.2s; display:flex; gap:16px; align-items:flex-start;
         }
         .site-card:hover { border-color:var(--accent); }
-        .site-card.featured { border-left:3px solid var(--accent); }
 
         .site-favicon {
             width:32px; height:32px; border-radius:6px; flex-shrink:0;
@@ -269,6 +268,10 @@
 </head>
 <body>
     <div class="container">
+        <div class="authbar" style="display:flex;justify-content:flex-end;gap:14px;padding:10px 0;font-size:13px;">
+            {{if .AccountEmail}}<span style="color:var(--text-muted);">{{.AccountEmail}}</span><a href="/logout" style="color:var(--accent);text-decoration:none;">Log out</a>
+            {{else}}<a href="/login" style="color:var(--accent);text-decoration:none;">Account</a>{{end}}
+        </div>
         <header>
             <div class="logo"><img src="/static/img/logo.svg" width="38" height="38" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:10px"><a href="/" style="color:inherit;text-decoration:none;">Not Human Search</a></div>
             {{if .Heading}}
@@ -276,8 +279,8 @@
             <p class="tagline">{{.Subheading}}</p>
             {{if eq .Mode "mcp-servers"}}<p class="tagline" style="font-size:13px;">Wire any of these into your agent with <code style="color:var(--green);">claude mcp add --transport http &lt;name&gt; &lt;url&gt;/mcp</code>.</p>{{end}}
             {{else}}
-            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Can AI agents find your site?</h1>
-            <p class="tagline">Not Human Search ranks the agentic web — and scores any site for agent-readiness in seconds. The Google for AI agents: find any service, API, or tool by how well it serves non-human users.</p>
+            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Find services AI agents can actually use.</h1>
+            <p class="tagline">Search the agentic web for free. Compare services, APIs, and tools by machine-readable readiness. Organic rank is based on readiness, never payment.</p>
             {{end}}
         </header>
 
@@ -330,7 +333,7 @@
         <div class="results-header">{{.Total}} {{if .Heading}}entries in this directory{{else}}sites found{{if .Query}} for "{{.Query}}"{{end}}{{end}}</div>
 
         {{range .Sites}}
-        <div class="site-card {{if .IsFeatured}}featured{{end}}">
+		<div class="site-card">
             {{if .HasFavicon}}
             <img class="site-favicon" src="{{if .FaviconURL}}{{.FaviconURL}}{{else}}https://{{.Domain}}/favicon.ico{{end}}" alt="" loading="lazy"
                  onerror="this.outerHTML='<div class=\u0022site-favicon-fallback\u0022>{{initial .Domain}}</div>';">
@@ -338,8 +341,7 @@
             <div class="site-favicon-fallback">{{initial .Domain}}</div>
             {{end}}
             <div class="site-info">
-                <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
-                {{if .IsFeatured}} <span style="color:var(--accent);font-size:11px;font-weight:600;">FEATURED</span>{{end}}
+				<a href="/site/{{.Domain}}{{if $.SearchID}}?search_id={{$.SearchID}}{{end}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
                 <div class="site-domain">{{.Domain}}</div>
                 {{if .Description}}<div class="site-desc">{{displayText .Description}}</div>{{end}}
                 <div class="site-badges">

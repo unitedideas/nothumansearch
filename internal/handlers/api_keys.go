@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/unitedideas/nothumansearch/internal/models"
@@ -16,10 +18,63 @@ import (
 type APIKeyHandler struct {
 	DB      *sql.DB
 	BaseURL string
+	Auth    *AuthService
 }
 
 func NewAPIKeyHandler(db *sql.DB, baseURL string) *APIKeyHandler {
 	return &APIKeyHandler{DB: db, BaseURL: baseURL}
+}
+
+func apiSubscribeMetadataValue(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 500 {
+		return value[:500]
+	}
+	return value
+}
+
+func apiSubscribeAttributionFromRequest(r *http.Request) map[string]string {
+	values := map[string]string{}
+	for _, key := range []string{"qc", "utm_source", "utm_medium", "utm_campaign"} {
+		if value := apiSubscribeMetadataValue(r.FormValue(key)); value != "" {
+			values[key] = value
+		}
+	}
+	return values
+}
+
+func apiSubscribeMetadata(email string, plan models.APIPlan, attribution map[string]string) map[string]string {
+	metadata := map[string]string{
+		"tenant":        "nothumansearch",
+		"product":       "nhs_api_subscription",
+		"product_id":    "nhs_api_" + plan.Name,
+		"source":        "api_key_subscribe",
+		"plan":          plan.Name,
+		"monthly_limit": fmt.Sprintf("%d", plan.MonthlyLimit),
+		"email":         email,
+	}
+	for key, value := range attribution {
+		if clean := apiSubscribeMetadataValue(value); clean != "" {
+			metadata[key] = clean
+		}
+	}
+	return metadata
+}
+
+func (h *APIKeyHandler) subscribeCancelURL(email string, attribution map[string]string) string {
+	values := url.Values{}
+	if email = strings.TrimSpace(email); email != "" {
+		values.Set("email", email)
+	}
+	for _, key := range []string{"qc", "utm_source", "utm_medium", "utm_campaign"} {
+		if value := attribution[key]; value != "" {
+			values.Set(key, value)
+		}
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return h.BaseURL + "/subscribe?" + encoded
+	}
+	return h.BaseURL + "/subscribe"
 }
 
 func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
@@ -34,8 +89,12 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Email string `json:"email"`
-		Plan  string `json:"plan"`
+		Email       string `json:"email"`
+		Plan        string `json:"plan"`
+		QC          string `json:"qc"`
+		UTMSource   string `json:"utm_source"`
+		UTMMedium   string `json:"utm_medium"`
+		UTMCampaign string `json:"utm_campaign"`
 	}
 	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -55,19 +114,25 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metadata := map[string]string{
-		"product":       "nhs_api_subscription",
-		"plan":          plan.Name,
-		"monthly_limit": fmt.Sprintf("%d", plan.MonthlyLimit),
-		"email":         req.Email,
+	attribution := apiSubscribeAttributionFromRequest(r)
+	for key, value := range map[string]string{
+		"qc":           req.QC,
+		"utm_source":   req.UTMSource,
+		"utm_medium":   req.UTMMedium,
+		"utm_campaign": req.UTMCampaign,
+	} {
+		if clean := apiSubscribeMetadataValue(value); clean != "" {
+			attribution[key] = clean
+		}
 	}
+	metadata := apiSubscribeMetadata(req.Email, plan, attribution)
 	params := &gostripe.CheckoutSessionParams{
 		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: gostripe.String("usd"),
 				ProductData: &gostripe.CheckoutSessionLineItemPriceDataProductDataParams{
-					Name:        gostripe.String("Not Human Search API " + strings.Title(plan.Name)),
-					Description: gostripe.String(fmt.Sprintf("%d billable API/MCP calls per month", plan.MonthlyLimit)),
+					Name:        gostripe.String("Not Human Search Priority API"),
+					Description: gostripe.String(fmt.Sprintf("%d priority-throughput REST/MCP calls per month; baseline discovery remains free afterward", plan.MonthlyLimit)),
 				},
 				Recurring: &gostripe.CheckoutSessionLineItemPriceDataRecurringParams{
 					Interval: gostripe.String("month"),
@@ -78,7 +143,7 @@ func (h *APIKeyHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		}},
 		Mode:          gostripe.String(string(gostripe.CheckoutSessionModeSubscription)),
 		SuccessURL:    gostripe.String(h.BaseURL + "/api/v1/api-keys/activate?session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:     gostripe.String(h.BaseURL + "/"),
+		CancelURL:     gostripe.String(h.subscribeCancelURL(req.Email, attribution)),
 		CustomerEmail: gostripe.String(req.Email),
 		Metadata:      metadata,
 		SubscriptionData: &gostripe.CheckoutSessionSubscriptionDataParams{
@@ -105,29 +170,30 @@ func (h *APIKeyHandler) subscribeDocument(w http.ResponseWriter) {
 		plans = append(plans, map[string]any{
 			"id":            "nhs_api_" + plan.Name,
 			"plan":          plan.Name,
-			"name":          "Not Human Search API " + strings.Title(plan.Name),
+			"name":          "Not Human Search Priority API",
 			"monthly_limit": plan.MonthlyLimit,
+			"benefit":       "Higher hourly safety ceilings for REST, MCP tools, and live checks. Organic results and baseline discovery remain free and identical.",
 			"price": map[string]any{
 				"amount":   plan.PriceCents,
 				"currency": "USD",
-				"display":  fmt.Sprintf("$%d/mo", plan.PriceCents/100),
+				"display":  fmt.Sprintf("$%.2f/mo", float64(plan.PriceCents)/100),
 			},
 		})
 	}
 	writeFixJSON(w, http.StatusOK, map[string]any{
 		"seller":         "nothumansearch",
 		"product_family": "api_keys",
-		"description":    "Paid API keys for Not Human Search REST and MCP usage after the anonymous quota.",
+		"description":    "Optional priority-throughput API keys. Search, site details, organic rank, and baseline REST/MCP discovery remain free without a key; exhausted allocations fall back to free safety limits.",
 		"plans":          plans,
 		"subscribe": map[string]any{
 			"method":          "POST",
 			"endpoint":        h.BaseURL + "/api/v1/api-keys/subscribe",
 			"content_type":    "application/json",
 			"required_fields": []string{"email", "plan"},
-			"allowed_plans":   []string{"starter", "pro", "scale"},
+			"allowed_plans":   []string{"unlimited"},
 			"example_body": map[string]string{
 				"email": "buyer@example.com",
-				"plan":  "starter",
+				"plan":  "unlimited",
 			},
 			"response_fields": []string{"checkout_url", "plan", "monthly_limit", "amount_cents", "activation_url"},
 		},
@@ -174,6 +240,17 @@ func (h *APIKeyHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeFixJSON(w, http.StatusInternalServerError, map[string]any{"error": "api_key_create_failed"})
 		return
+	}
+
+	// Same subscription powers the human side: activate the account and sign the
+	// buyer in immediately (session cookie) so they can search the website now.
+	if _, aerr := models.SetAccountSubscription(h.DB, email, customerID, subscriptionID, s.Metadata["plan"], "active"); aerr != nil {
+		log.Printf("activate: account subscription update failed for %s: %v", email, aerr)
+	}
+	if h.Auth != nil && email != "" {
+		if serr := h.Auth.StartSession(w, r, email); serr != nil {
+			log.Printf("activate: instant sign-in failed for %s: %v", email, serr)
+		}
 	}
 	resp := map[string]any{
 		"plan":          key.Plan,

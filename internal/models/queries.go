@@ -213,20 +213,14 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 	offset := (p.Page - 1) * p.Limit
 	var orderBy string
 	if useFTS {
-		// Rank by: all-terms-match boost + OR-relevance * score-multiplier + additive
-		// score floor. The additive term (score/75) gives high-score sites a baseline
-		// advantage of up to ~1.33 even when ts_rank is weak — prevents score-20 sites
-		// with better text match from outranking score-100 agent-ready sites on common
-		// queries like "payment api", "cron monitor", "job board". Baseline captured at
-		// project_nhs_ranking_improvement.md (2026-04-15). Initial /150 floor was too
-		// weak for multi-term queries; bumped to /75 after A/B on 10 baseline queries.
+		// Readiness scales text relevance but cannot add relevance to a weak match.
 		orderBy = fmt.Sprintf(
-			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) + agentic_score::float/75 DESC, is_featured DESC, agentic_score DESC",
+			"ORDER BY ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) DESC, agentic_score DESC, lower(domain) ASC",
 			tsQueryArg+1, tsQueryArg)
 	} else if p.OrderNewest {
-		orderBy = "ORDER BY created_at DESC, agentic_score DESC"
+		orderBy = "ORDER BY created_at DESC, agentic_score DESC, lower(domain) ASC"
 	} else {
-		orderBy = "ORDER BY is_featured DESC, agentic_score DESC, updated_at DESC"
+		orderBy = "ORDER BY agentic_score DESC, updated_at DESC, lower(domain) ASC"
 	}
 
 	query := fmt.Sprintf(`
@@ -387,10 +381,11 @@ func GetTopSites(db *sql.DB, category string, limit int) ([]Site, error) {
 }
 
 // GetRecentSites returns the most recently added agent-first sites,
-// newest first by created_at. days is how far back to look (1..90, clamped).
-// limit is how many to return (1..50, clamped). Useful for agents asking
-// "what new agent-ready services have been indexed lately?"
-func GetRecentSites(db *sql.DB, days, limit int) ([]Site, error) {
+// newest first by created_at. days is how far back to look (1..90, clamped),
+// category optionally narrows the organic set, and limit is how many to return
+// (1..50, clamped). Useful for agents asking what new agent-ready services have
+// been indexed lately, including an explicitly selected public category.
+func GetRecentSites(db *sql.DB, days, limit int, category string) ([]Site, error) {
 	if days <= 0 {
 		days = 7
 	}
@@ -405,10 +400,15 @@ func GetRecentSites(db *sql.DB, days, limit int) ([]Site, error) {
 	             has_structured_api, has_mcp_server, has_schema_org,
 	             agentic_score, category, tags, created_at
 	      FROM sites WHERE ` + AgentFirstFilter + `
-	        AND created_at >= NOW() - make_interval(days => $1)
-	      ORDER BY created_at DESC, agentic_score DESC
+	        AND created_at >= NOW() - make_interval(days => $1)`
+	args := []any{days}
+	if category != "" {
+		q += ` AND category = $2`
+		args = append(args, category)
+	}
+	q += ` ORDER BY created_at DESC, agentic_score DESC, domain ASC
 	      LIMIT ` + fmt.Sprintf("%d", limit)
-	rows, err := db.Query(q, days)
+	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -469,6 +469,7 @@ func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, result
 	if db == nil {
 		return
 	}
+	toolName = normalizeMCPAnalyticsToolName(toolName)
 	var args *string
 	if len(arguments) > 0 {
 		s := string(arguments)
@@ -483,8 +484,20 @@ func LogMCPRequest(db *sql.DB, method, toolName string, arguments []byte, result
 		method, toolName, args, rc, userAgent, ipHash, durationMs)
 }
 
+func normalizeMCPAnalyticsToolName(name string) string {
+	switch name {
+	case "", "search_agents", "search", "get_site_details", "get_stats", "submit_site",
+		"register_monitor", "check_url", "verify_mcp", "list_categories", "get_top_sites",
+		"find_mcp_servers", "recent_additions", "unknown_tool":
+		return name
+	default:
+		return "unknown_tool"
+	}
+}
+
 // GetMCPAnalytics returns aggregated MCP request data: tool breakdown, method
-// breakdown, top agent user-agents, and top search queries.
+// breakdown, client-family user agents, and controlled demand topics. Raw
+// search text and alleged unique-agent counts are deliberately excluded.
 func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	result := map[string]any{}
 
@@ -544,32 +557,71 @@ func GetMCPAnalytics(db *sql.DB, days int) (map[string]any, error) {
 	}
 	result["agents"] = agentBreakdown
 
-	// Top search queries via MCP — include both the canonical tool name AND
-	// its aliases (see MCP tools/call switch in handlers/mcp.go).
+	// Controlled topics are written by mcpAnalyticsArguments; query text is
+	// intentionally absent from all new request rows.
 	rows4, err := db.Query(`
-		SELECT arguments->>'query' as q, COUNT(*) as cnt
-		FROM mcp_requests
-		WHERE tool_name IN ('search_agents', 'search') AND arguments->>'query' IS NOT NULL AND arguments->>'query' != ''
-			AND created_at > NOW() - make_interval(days => $1)
-		GROUP BY q ORDER BY cnt DESC LIMIT 30`, days)
+		SELECT expanded.topic, COUNT(*)::int AS receipt_count
+		FROM mcp_requests request
+		CROSS JOIN LATERAL jsonb_array_elements_text(
+			COALESCE(request.arguments->'demand_topics', '[]'::jsonb)
+		) AS expanded(topic)
+		WHERE request.tool_name IN (
+			'search_agents', 'search', 'find_mcp_servers',
+			'get_top_sites', 'recent_additions'
+		)
+		  AND request.created_at > NOW() - make_interval(days => $1)
+		GROUP BY expanded.topic ORDER BY receipt_count DESC, expanded.topic ASC LIMIT 30`, days)
 	if err != nil {
 		return nil, err
 	}
 	defer rows4.Close()
-	topQueries := []map[string]any{}
+	topics := []map[string]any{}
 	for rows4.Next() {
-		var q string
+		var topic string
 		var c int
-		rows4.Scan(&q, &c)
-		topQueries = append(topQueries, map[string]any{"query": q, "count": c})
+		rows4.Scan(&topic, &c)
+		topics = append(topics, map[string]any{"topic": topic, "request_receipts": c})
 	}
-	result["top_queries"] = topQueries
+	result["demand_topics"] = topics
 
-	var totalReqs, uniqueAgents int
+	var detailCalls, instrumentedDetailCalls, receiptBoundDetailCalls, recordedDetailSelections int
+	if err := db.QueryRow(`
+		SELECT
+			COUNT(*) FILTER (WHERE tool_name = 'get_site_details')::int,
+			COUNT(*) FILTER (
+				WHERE tool_name = 'get_site_details'
+				  AND arguments ? 'search_receipt_supplied'
+			)::int,
+			COUNT(*) FILTER (
+				WHERE tool_name = 'get_site_details'
+				  AND COALESCE((arguments->>'search_receipt_supplied')::boolean, false)
+			)::int,
+			COUNT(*) FILTER (
+				WHERE tool_name = 'get_site_details'
+				  AND COALESCE((arguments->>'selection_recorded')::boolean, false)
+			)::int
+		FROM mcp_requests
+		WHERE created_at > NOW() - make_interval(days => $1)
+		  AND NOT COALESCE((arguments->>'synthetic_test')::boolean, false)`, days).Scan(
+		&detailCalls,
+		&instrumentedDetailCalls,
+		&receiptBoundDetailCalls,
+		&recordedDetailSelections,
+	); err != nil {
+		return nil, err
+	}
+	result["detail_followthrough"] = map[string]any{
+		"detail_calls":                  detailCalls,
+		"instrumented_detail_calls":     instrumentedDetailCalls,
+		"search_receipt_supplied_calls": receiptBoundDetailCalls,
+		"selection_recorded_calls":      recordedDetailSelections,
+	}
+
+	var totalReqs, distinctClientBuckets int
 	db.QueryRow(`SELECT COUNT(*) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&totalReqs)
-	db.QueryRow(`SELECT COUNT(DISTINCT ip_hash) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&uniqueAgents)
+	db.QueryRow(`SELECT COUNT(DISTINCT ip_hash) FROM mcp_requests WHERE created_at > NOW() - make_interval(days => $1)`, days).Scan(&distinctClientBuckets)
 	result["total_requests"] = totalReqs
-	result["unique_agents"] = uniqueAgents
+	result["distinct_client_buckets"] = distinctClientBuckets
 
 	return result, nil
 }
