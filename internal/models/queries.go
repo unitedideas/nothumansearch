@@ -219,11 +219,12 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 		nameArg := argN
 		args = append(args, pq.Array(queryNames))
 		argN++
+		// An exact hostname is an explicit lookup; other matches retain text relevance.
 		// A provider name must agree with its own domain, not a hosted page or generic protocol label.
 		// Readiness scales text relevance but cannot add relevance to a weak match.
 		orderBy = fmt.Sprintf(
-			"ORDER BY COALESCE(lower(name) NOT IN ('api', 'mcp') AND lower(name) = split_part(lower(domain), '.', 1) AND lower(name) = ANY($%d::text[]), false) DESC, ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) DESC, agentic_score DESC, lower(domain) ASC",
-			nameArg, tsQueryArg+1, tsQueryArg)
+			"ORDER BY COALESCE(lower(domain) = ANY($%d::text[]), false) DESC, COALESCE(lower(name) NOT IN ('api', 'mcp') AND lower(name) = split_part(lower(domain), '.', 1) AND lower(name) = ANY($%d::text[]), false) DESC, ts_rank(search_vector, to_tsquery('english', $%d)) * 3 + ts_rank(search_vector, to_tsquery('english', $%d)) * (1 + agentic_score::float/100) DESC, agentic_score DESC, lower(domain) ASC",
+			nameArg, nameArg, tsQueryArg+1, tsQueryArg)
 	} else if p.OrderNewest {
 		orderBy = "ORDER BY created_at DESC, agentic_score DESC, lower(domain) ASC"
 	} else {

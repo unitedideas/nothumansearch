@@ -362,5 +362,19 @@
     "vector": "'ai':1A,24B,36C,42C 'ai-tool':35C 'api':41C 'avatar':7A,19B 'creat':13B 'creativ':28B 'custom':6A 'effortless':20B 'generat':3A,5A,9A,25B 'idea':32B 'imag':4A,16B 'llms':39C 'llms-txt':38C 'realiti':34B 'stun':14B 'tool':37C 'transform':30B 'txt':40C 'unleash':26B 'video':2A,15B 'voic':8A,17B 'zoic':11A,22B 'zoice.com':12A",
     "description": "Create stunning videos, images, voices, and avatars effortlessly with Zoice\u2019s AI generators. Unleash your creativity and transform your ideas into reality!",
     "agentic_score": 40
+  },
+  {
+    "domain": "api.notion.com",
+    "name": "The AI workspace that works for you. | Notion",
+    "description": "Build Custom Agents, search across all your apps, and automate busywork. The AI workspace where teams get more done, faster.",
+    "agentic_score": 15,
+    "vector": "'across':14B 'agent':12B 'ai':2A,22B,32C 'api':31C 'api.notion.com':9A 'app':17B 'autom':19B 'build':10B 'busywork':20B 'custom':11B 'done':28B 'faster':29B 'get':26B 'notion':8A 'product':30C 'search':13B,33C 'team':25B 'work':5A 'workspac':3A,23B"
+  },
+  {
+    "domain": "docs.plasmate.app",
+    "name": "Plasmate Documentation - Plasmate Docs | The Better Browser for AI Agents",
+    "description": "Plasmate Documentation - Plasmate documentation. The better browser for AI agents, built on the Semantic Object Model (SOM). W3C Community Group member.",
+    "agentic_score": 45,
+    "vector": "'agent':10A,21B 'ai':9A,20B,39C,41C 'ai-friend':38C 'api':37C 'better':6A,17B 'browser':7A,18B 'built':22B 'communiti':30B 'develop':33C 'doc':4A 'docs.plasmate.app':11A 'document':2A,13B,15B 'friend':40C 'group':31B 'llms':35C 'llms-txt':34C 'member':32B 'ml':42C 'model':27B 'object':26B 'plasmat':1A,3A,12B,14B 'semant':25B 'som':28B 'txt':36C 'w3c':29B"
   }
 ]

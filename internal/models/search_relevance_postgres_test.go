@@ -54,6 +54,10 @@ func TestSearchTextRelevancePostgres(t *testing.T) {
 		{"llms.txt generator", "llms-text.com", "", ""},
 		{"LLMS.TXT generator", "llms-text.com", "", ""},
 		{"llms.txt. generator", "llms-text.com", "", ""},
+		{"api.notion.com docs", "api.notion.com", "", ""},
+		{"API.NOTION.COM docs", "api.notion.com", "", ""},
+		{"api.notion.com.", "api.notion.com", "", ""},
+		{"Notion API", "api.notion.com", "", ""},
 		{"OpenRouter free models", "openrouter.ai", "", ""},
 		{"browser automation API", "roveapi.com", "", ""},
 		{"validate email address", "mailboxvalidator.com", "", ""},
@@ -83,6 +87,54 @@ func TestSearchTextRelevancePostgres(t *testing.T) {
 					t.Errorf("want %s before %s; positions=%v", tc.before, tc.after, positions)
 				}
 			}
+		})
+	}
+
+	assertExactHostAbsent := func(t *testing.T, params SearchParams) {
+		t.Helper()
+		params.Query = "api.notion.com docs"
+		params.Limit = 100
+		sites, total, err := SearchSites(db, params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != len(sites) {
+			t.Fatalf("count and result rows differ: total=%d rows=%d", total, len(sites))
+		}
+		for _, site := range sites {
+			if site.Domain == "api.notion.com" {
+				t.Fatal("exact hostname bypassed a requested filter or eligibility")
+			}
+		}
+	}
+	t.Run("exact host respects requested filters", func(t *testing.T) {
+		var score int
+		if err := db.QueryRow(`SELECT agentic_score FROM sites WHERE domain='api.notion.com'`).Scan(&score); err != nil {
+			t.Fatal(err)
+		}
+		for _, params := range []SearchParams{
+			{MinScore: score + 1},
+			{Category: "finance"},
+			{HasMCP: true},
+			{HasOpenAPI: true},
+		} {
+			assertExactHostAbsent(t, params)
+		}
+	})
+	for _, tc := range []struct{ name, change, restore string }{
+		{"exact host requires successful crawl", `UPDATE sites SET crawl_status='failed' WHERE domain='api.notion.com'`, `UPDATE sites SET crawl_status='success' WHERE domain='api.notion.com'`},
+		{"exact host requires a hard agent signal", `UPDATE sites SET has_structured_api=false WHERE domain='api.notion.com'`, `UPDATE sites SET has_structured_api=true WHERE domain='api.notion.com'`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := db.Exec(tc.change); err != nil {
+				t.Fatal(err)
+			}
+			defer func() {
+				if _, err := db.Exec(tc.restore); err != nil {
+					t.Error(err)
+				}
+			}()
+			assertExactHostAbsent(t, SearchParams{})
 		})
 	}
 }
