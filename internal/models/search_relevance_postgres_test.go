@@ -51,6 +51,7 @@ func TestSearchTextRelevancePostgres(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ query, first, before, after string }{
+		{"OpenRouter free models", "openrouter.ai", "", ""},
 		{"browser automation API", "roveapi.com", "", ""},
 		{"validate email address", "mailboxvalidator.com", "", ""},
 		{"historical weather data", "", "weatherbit.io", "exchange-rate.nimbus-api.com"},

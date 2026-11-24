@@ -229,5 +229,68 @@
     "description": "26 billion images optimized and counting! reSmush.it is the only completely free wp smush image compressor. It was developed in 2015 and is used on hundreds of\u2026",
     "agentic_score": 20,
     "vector": "'2015':29B '26':9B 'api':7A,36C 'authent':37C 'billion':10B 'complet':19B 'compressor':3A,24B 'count':14B 'develop':27B 'free':1A,20B 'hundr':34B 'imag':2A,11B,23B 'optim':12B 'plugin':5A 'resmush.it':8A,15B 'secur':35C 'smush':22B 'use':32B 'wp':4A,21B"
+  },
+  {
+    "domain": "3dmodelgenerator.app",
+    "name": "AI 3D Model Generator: Image to 3D Model, Free to Try",
+    "description": "Turn an image or a text idea into a textured 3D model in minutes. Pick TRELLIS.2 or Tripo H3.1, then export GLB, STL, 3MF or OBJ. First model free.",
+    "agentic_score": 45,
+    "vector": "'3d':2A,7A,23B '3dmodelgenerator.app':12A '3mf':36B 'ai':1A,43C,47C 'ai-tool':42C 'api':45C 'export':33B 'first':39B 'free':9A,41B 'generat':4A 'glb':34B 'h3.1':31B 'idea':19B 'imag':5A,15B 'llms':49C 'llms-txt':48C 'minut':26B 'ml':46C 'model':3A,8A,24B,40B 'obj':38B 'pick':27B 'stl':35B 'text':18B 'textur':22B 'tool':44C 'trellis.2':28B 'tri':11A 'tripo':30B 'turn':13B 'txt':50C"
+  },
+  {
+    "domain": "aifashmodel.com",
+    "name": "AI Fashion Model Generator - Free to Start | AIFashModel",
+    "description": "AI fashion model generator for apparel brands. Turn one clothing photo into AI model photos, product shots, and fabric close-ups in minutes \u2014 no photoshoots.",
+    "agentic_score": 50,
+    "vector": "'ai':1A,10B,22B,37C,44C,47C 'ai-friend':43C 'ai-tool':36C 'aifashmodel':8A 'aifashmodel.com':9A 'api':42C 'apparel':15B 'brand':16B 'close':30B 'close-up':29B 'cloth':19B 'fabric':28B 'fashion':2A,11B 'free':5A 'friend':45C 'generat':4A,13B 'llms':40C 'llms-txt':39C 'minut':33B 'ml':46C 'model':3A,12B,23B 'one':18B 'photo':20B,24B 'photoshoot':35B 'product':25B 'shot':26B 'start':7A 'tool':38C 'turn':17B 'txt':41C 'up':31B"
+  },
+  {
+    "domain": "jevaimodel.net",
+    "name": "Jev AI Model | Free Online Playground &amp; Paid API",
+    "description": "Try Jev AI Model online for free after sign in. Classify, score, and route text with structured results. Buy credits for API access.",
+    "agentic_score": 40,
+    "vector": "'access':32B 'ai':2A,12B,34C,41C 'ai-tool':33C 'api':8A,31B,39C 'buy':28B 'classifi':20B 'credit':29B 'free':4A,16B 'jev':1A,11B 'jevaimodel.net':9A 'llms':37C 'llms-txt':36C 'ml':40C 'model':3A,13B 'onlin':5A,14B 'paid':7A 'playground':6A 'result':27B 'rout':23B 'score':21B 'sign':18B 'structur':26B 'text':24B 'tool':35C 'tri':10B 'txt':38C"
+  },
+  {
+    "domain": "jevmodel.net",
+    "name": "Jev Model \u2014 Free Unlimited Jev AI model Online",
+    "description": "Use Jev Model online for free with unlimited runs. Explore the new Jev New AI and connect structured AI decisions to your products with the Jev API.",
+    "agentic_score": 45,
+    "vector": "'ai':6A,24B,28B,38C,44C 'ai-tool':37C 'api':36B,43C 'connect':26B 'decis':29B 'explor':19B 'free':3A,15B 'jev':1A,5A,11B,22B,35B 'jevmodel.net':9A 'llms':41C 'llms-txt':40C 'ml':45C 'model':2A,7A,12B 'new':21B,23B 'onlin':8A,13B 'product':32B 'run':18B 'structur':27B 'tool':39C 'txt':42C 'unlimit':4A,17B 'use':10B"
+  },
+  {
+    "domain": "modly3d.app",
+    "name": "Modly \u2014 Free Local AI 3D Model Generator | Open Source, Offline",
+    "description": "Modly is a free local AI app that turns any photo or text prompt into a 3D model. Runs entirely on your GPU \u2014 no cloud, no account, no credits. Export as GLB, OBJ, STL or PLY. Open source.",
+    "agentic_score": 20,
+    "vector": "'3d':5A,28B 'account':38B 'ai':4A,17B,51C 'api':52C 'app':18B 'cloud':36B 'credit':40B 'develop':50C 'entir':31B 'export':41B 'free':2A,15B 'generat':7A 'glb':43B 'gpu':34B 'host':54C 'local':3A,16B 'ml':53C 'mod':1A,12B 'model':6A,29B 'modly3d.app':11A 'obj':44B 'offlin':10A 'open':8A,48B 'photo':22B 'pli':47B 'prompt':25B 'run':30B 'sourc':9A,49B 'stl':45B 'text':24B 'turn':20B"
+  },
+  {
+    "domain": "openrouter.ai",
+    "name": "OpenRouter",
+    "description": "The unified interface for LLMs. Find the best models &amp; prices for your prompts",
+    "agentic_score": 45,
+    "vector": "'ai':17C,20C 'ai-tool':16C 'api':19C 'best':10B 'find':8B 'interfac':5B 'llms':7B,23C 'llms-txt':22C 'ml':21C 'model':11B 'openrout':1A 'openrouter.ai':2A 'price':12B 'prompt':15B 'tool':18C 'txt':24C 'unifi':4B"
+  },
+  {
+    "domain": "thejevai.com",
+    "name": "Jev AI \u2014 Jev Model Online, Free, No Waitlist",
+    "description": "Try the Jev model online for free with Jev AI. Explore a fast AI model with no waitlist and turn real-world state into structured, probability-backed decisions.",
+    "agentic_score": 40,
+    "vector": "'ai':2A,19B,23B,41C,43C 'ai-tool':40C 'api':48C 'back':38B 'decis':39B 'explor':20B 'fast':22B 'free':6A,16B 'jev':1A,3A,12B,18B 'llms':46C 'llms-txt':45C 'ml':44C 'model':4A,13B,24B 'onlin':5A,14B 'probability-back':36B 'probabl':37B 'real':31B 'real-world':30B 'state':33B 'structur':35B 'thejevai.com':9A 'tool':42C 'tri':10B 'turn':29B 'txt':47C 'waitlist':8A,27B 'world':32B"
+  },
+  {
+    "domain": "triple3d.ai",
+    "name": "Free Image to 3D &amp; Text to 3D Model Generator | Game Assets &amp; 3D Printing",
+    "description": "Create 3D models from images or text for free. Generate props, low-poly assets, STL-ready concepts, and 3D printable models with clean shape, detailed texture, preview, and export options.",
+    "agentic_score": 15,
+    "vector": "'3d':4A,7A,12A,16B,35B 'ai':48C 'ai-tool':47C 'api':50C 'asset':11A,29B 'clean':39B 'concept':33B 'creat':15B 'detail':41B 'export':45B 'free':1A,23B 'game':10A 'generat':9A,24B 'imag':2A,19B 'low':27B 'low-poli':26B 'ml':51C 'model':8A,17B,37B 'option':46B 'poli':28B 'preview':43B 'print':13A 'printabl':36B 'prop':25B 'readi':32B 'shape':40B 'stl':31B 'stl-readi':30B 'text':5A,21B 'textur':42B 'tool':49C 'triple3d.ai':14A"
+  },
+  {
+    "domain": "xskill.ai",
+    "name": "apiz.ai | AI Model API, MCP and multimodal skills platform",
+    "description": "apiz.ai provides one API for AI model access, MCP tools, OpenRouter-compatible LLM routing, and multimodal image, video and audio generation skills for AI editors and developers.",
+    "agentic_score": 50,
+    "vector": "'access':18B 'ai':2A,16B,35B,40C,44C,50C 'ai-friend':49C 'ai-tool':39C 'api':4A,14B,48C 'apiz.ai':1A,11B 'audio':31B 'compat':23B 'develop':38B 'editor':36B 'friend':51C 'generat':32B 'imag':28B 'llm':24B 'llms':46C 'llms-txt':45C 'mcp':5A,19B 'ml':42C 'model':3A,17B 'multimod':7A,27B 'music':43C 'one':13B 'openrout':22B 'openrouter-compat':21B 'platform':9A 'provid':12B 'rout':25B 'skill':8A,33B 'tool':20B,41C 'txt':47C 'video':29B 'xskill.ai':10A"
   }
 ]
