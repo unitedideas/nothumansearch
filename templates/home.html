@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents? Agent-Readiness Search & Score{{end}}</title>
-    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Not Human Search scores any site 0–100 on 7 agentic signals — llms.txt, OpenAPI, MCP, Schema.org & more — and indexes 8,000+ agent-ready sites. Free instant score.{{end}}">
+    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check your site's agent-readiness score and search indexed services, APIs, and tools. Compare machine-readable signals before choosing a service.{{end}}">
     <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents? Agent-Readiness Search & Score{{end}}">
-    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Score any site 0–100 on 7 agentic signals (llms.txt, OpenAPI, MCP & more), and search 8,000+ agent-ready sites. Free instant score.{{end}}">
+    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check agent-readiness signals and discover indexed services, APIs, and tools for your agents.{{end}}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <meta property="og:site_name" content="Not Human Search">
@@ -16,7 +16,7 @@
     <meta property="og:image:alt" content="Not Human Search — Google for AI Agents.">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents?{{end}}">
-    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Free agent-readiness score (0–100, 7 signals), plus search across 8,000+ agent-ready sites.{{end}}">
+    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check your site's agent-readiness score and search indexed services, APIs, and tools.{{end}}">
     <meta name="twitter:image" content="https://nothumansearch.ai/static/img/{{if .OGImage}}{{.OGImage}}{{else}}og-default.png{{end}}">
     <link rel="canonical" href="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <link rel="alternate" type="application/rss+xml" title="NHS — New Agent-Ready Sites" href="https://nothumansearch.ai/feed.xml">
@@ -117,7 +117,7 @@
             outline:none; transition:border-color 0.2s;
         }
         .search-box input:focus { border-color:var(--accent); }
-        .search-box input::placeholder { color:#555; }
+        .search-box input::placeholder { color:var(--text-muted); }
         .search-box button {
             min-height:54px; padding:0 22px; background:var(--accent); color:var(--bg);
             border:none; border-radius:6px; font-weight:600; font-size:14px;
@@ -221,19 +221,21 @@
         /* Footer */
         footer { padding:40px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
         footer a { color:var(--accent); text-decoration:none; }
+        footer a:hover { text-decoration:underline; }
+        footer a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
         .footer-text { color:var(--text-muted); font-size:13px; }
 
         /* CTA */
         .cta-box {
             background:var(--surface); border:1px solid var(--border); border-radius:8px;
-            padding:24px; text-align:center; margin:32px 0;
+            padding:24px; text-align:center; margin:32px 0; overflow-wrap:anywhere;
         }
         .cta-box h3 { color:var(--accent); font-size:16px; margin-bottom:8px; }
         .cta-box p { color:var(--text-muted); font-size:14px; }
         .cta-box code {
             display:inline-block; background:var(--bg); padding:8px 16px;
             border-radius:4px; font-family:'IBM Plex Mono',monospace;
-            font-size:13px; color:var(--green); margin-top:12px;
+            font-size:13px; color:var(--green); margin-top:12px; max-width:100%; overflow-wrap:anywhere;
         }
         .primary-actions {
             max-width:640px; margin:-22px auto 32px; display:flex; justify-content:center;
@@ -402,11 +404,11 @@
             <h3>Use NHS via REST</h3>
             <p>Prefer plain HTTP? Hit the search endpoint directly.</p>
             <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:280px;">
+                <div style="flex:1;min-width:min(280px,100%);">
                     <div style="color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Search API</div>
                     <code style="display:block;background:var(--bg);padding:12px 16px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);line-height:1.6;white-space:pre-wrap;">curl "https://nothumansearch.ai/api/v1/search?q=payment+API"</code>
                 </div>
-                <div style="flex:1;min-width:280px;">
+                <div style="flex:1;min-width:min(280px,100%);">
                     <div style="color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Agent Docs</div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <a href="/llms.txt" style="display:inline-block;padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:13px;font-family:'IBM Plex Mono',monospace;">llms.txt</a>
@@ -505,7 +507,8 @@
             <a href="/submit">Submit a Site</a> &middot;
             <a href="/monitor">Monitor your site</a> &middot;
             <a href="/status">Status</a> &middot;
-            <a href="/about">About</a>
+            <a href="/about">About</a> &middot;
+            <a href="https://glama.ai/mcp/connectors/ai.nothumansearch/search">Glama connector listing</a>
         </p>
         <p class="footer-text" style="margin-top:14px;font-size:12px;">
             <strong style="color:var(--text);">Also from the Foundry:</strong>
@@ -525,7 +528,7 @@
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <a href="https://8bitconcepts.com/case-studies.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:transparent;color:#d97757;padding:8px 14px;border:1px solid rgba(217,119,87,0.35);border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Case studies</a>
-                <a href="https://8bitconcepts.com/work-with-us.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:#d97757;color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Work with us &rarr;</a>
+                <a href="https://8bitconcepts.com/work-with-us.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:#d97757;color:var(--bg);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Work with us &rarr;</a>
             </div>
         </div>
         <div class="footer-research" style="margin:16px 0;padding:12px 0;border-top:1px solid var(--border);font-size:13px;color:var(--text-muted);">
