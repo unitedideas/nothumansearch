@@ -7,12 +7,51 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/unitedideas/nothumansearch/internal/testpostgres"
 )
+
+func TestInstallerPrintsContinueJSONConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	call := filepath.Join(dir, "claude-call")
+	stub := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$NHS_INSTALL_TEST_CALL\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "claude"), []byte(stub), 0700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("/bin/sh")
+	cmd.Dir = dir
+	cmd.Env = []string{"PATH=" + dir + ":/usr/bin:/bin", "NHS_INSTALL_TEST_CALL=" + call}
+	cmd.Stdin = strings.NewReader(installScript)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("installer: %v: %s", err, output)
+	}
+	args, err := os.ReadFile(call)
+	if err != nil || string(args) != "mcp\nadd\n--transport\nhttp\nnothumansearch\nhttps://nothumansearch.ai/mcp\n" {
+		t.Fatalf("isolated client was not invoked as expected: %q, %v", args, err)
+	}
+	_, rest, found := strings.Cut(string(output), "Continue:   Add project .continue/mcpServers/nothumansearch.json\n")
+	if !found {
+		t.Fatal("installer did not print the Continue MCP configuration path")
+	}
+	line, _, _ := strings.Cut(rest, "\n")
+	var config struct {
+		Servers map[string]struct {
+			Type string `json:"type"`
+			URL  string `json:"url"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &config); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Servers) != 1 || config.Servers["nothumansearch"].URL != "https://nothumansearch.ai/mcp" || config.Servers["nothumansearch"].Type != "http" {
+		t.Fatalf("Continue configuration = %+v", config)
+	}
+}
 
 func TestHealthReportsCompiledReleaseRevision(t *testing.T) {
 	dsn := testpostgres.DSN(t, "NHS_HEALTH_TEST_POSTGRES_DSN")

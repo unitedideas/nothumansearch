@@ -1057,8 +1057,8 @@ Cursor:     Add to ~/.cursor/mcp.json or project .cursor/mcp.json
 Cline:      Settings -> MCP Servers -> Add:
             Name: $NAME   Transport: HTTP   URL: $ENDPOINT
 
-Continue:   Add to ~/.continue/config.json
-            "mcpServers": [ { "name": "$NAME", "url": "$ENDPOINT" } ]
+Continue:   Add project .continue/mcpServers/nothumansearch.json
+            { "mcpServers": { "$NAME": { "type": "http", "url": "$ENDPOINT" } } }
 
 Docs:       https://nothumansearch.ai/mcp-servers
 SNIPPETS
