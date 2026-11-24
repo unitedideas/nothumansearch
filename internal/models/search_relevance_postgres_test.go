@@ -29,7 +29,7 @@ func TestSearchTextRelevancePostgres(t *testing.T) {
 	if _, err = db.Exec(`ALTER TABLE sites ADD COLUMN search_vector tsvector, ADD COLUMN has_favicon boolean DEFAULT false, ADD COLUMN favicon_url text DEFAULT ''`); err != nil {
 		t.Fatal(err)
 	}
-	// Public catalog vectors preserve the lexical evidence from the October audit.
+	// Public catalog vectors preserve lexical evidence from the October and November audits.
 	data, err := os.ReadFile("testdata/ranking_catalog.json")
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +51,9 @@ func TestSearchTextRelevancePostgres(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ query, first, before, after string }{
+		{"llms.txt generator", "llms-text.com", "", ""},
+		{"LLMS.TXT generator", "llms-text.com", "", ""},
+		{"llms.txt. generator", "llms-text.com", "", ""},
 		{"OpenRouter free models", "openrouter.ai", "", ""},
 		{"browser automation API", "roveapi.com", "", ""},
 		{"validate email address", "mailboxvalidator.com", "", ""},

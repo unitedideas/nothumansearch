@@ -141,13 +141,14 @@ func SearchSites(db *sql.DB, p SearchParams) ([]Site, int, error) {
 			// Build tsquery: each word joined with & (AND), with :* prefix matching
 			var tsTerms []string
 			for _, w := range words {
-				// Sanitize: remove non-alphanumeric except hyphens
+				// Keep internal dots in file names and hostnames, but discard surrounding punctuation.
 				clean := strings.Map(func(r rune) rune {
-					if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' {
+					if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '.' {
 						return r
 					}
 					return -1
 				}, w)
+				clean = strings.Trim(clean, ".")
 				if clean != "" {
 					tsTerms = append(tsTerms, clean+":*")
 					queryNames = append(queryNames, strings.ToLower(clean))

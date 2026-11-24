@@ -292,5 +292,75 @@
     "description": "apiz.ai provides one API for AI model access, MCP tools, OpenRouter-compatible LLM routing, and multimodal image, video and audio generation skills for AI editors and developers.",
     "agentic_score": 50,
     "vector": "'access':18B 'ai':2A,16B,35B,40C,44C,50C 'ai-friend':49C 'ai-tool':39C 'api':4A,14B,48C 'apiz.ai':1A,11B 'audio':31B 'compat':23B 'develop':38B 'editor':36B 'friend':51C 'generat':32B 'imag':28B 'llm':24B 'llms':46C 'llms-txt':45C 'mcp':5A,19B 'ml':42C 'model':3A,17B 'multimod':7A,27B 'music':43C 'one':13B 'openrout':22B 'openrouter-compat':21B 'platform':9A 'provid':12B 'rout':25B 'skill':8A,33B 'tool':20B,41C 'txt':47C 'video':29B 'xskill.ai':10A"
+  },
+  {
+    "name": "llms.txt Generator: Free Industry Templates | Easyllmstxt",
+    "domain": "easyllmstxt.com",
+    "vector": "'25':13B 'accur':33B 'ai':35C,41C 'ai-tool':34C 'api':40C 'claud':27B 'creat':8B 'easyllmstxt':6A,19B 'easyllmstxt.com':7A 'free':3A,14B 'generat':2A 'gpt':26B 'help':25B 'industri':4A,16B 'industry-specif':15B 'llms':38C 'llms-txt':37C 'llms.txt':1A,9B 'open':22B 'open-sourc':21B 'perplex':29B 'second':11B 'servic':32B 'sourc':23B 'specif':17B 'templat':5A,18B 'tool':36C 'txt':39C 'understand':30B",
+    "description": "Create llms.txt in seconds with 25+ free industry-specific templates. Easyllmstxt is open-source and helps GPT, Claude, and Perplexity understand your services accurately.",
+    "agentic_score": 45
+  },
+  {
+    "name": "LLMGenerator - Generate llms.txt &amp; Markdown Files for AI Agents",
+    "domain": "llmgenerator.com",
+    "vector": "'50':35B 'agent':8A,23B 'ai':7A,22B,38C,45C,47C 'ai-friend':44C 'ai-tool':37C 'api':43C 'autom':27B,49C 'credit':36B 'document':24B 'easier':20B 'file':5A,15B 'free':32B 'friend':46C 'generat':2A,10B 'llmgener':1A 'llmgenerator.com':9A 'llms':41C 'llms-full.txt':12B 'llms-txt':40C 'llms.txt':3A,11B 'make':17B 'markdown':4A,14B 'read':30B 'start':31B 'storag':48C 'today':33B 'tool':25B,39C 'txt':42C 'websit':19B 'workflow':28B",
+    "description": "Generate llms.txt, llms-full.txt, and markdown files that make your website easier for AI agents, documentation tools, and automation workflows to read. Start free today with 50 credits.",
+    "agentic_score": 50
+  },
+  {
+    "name": "llms.txt Generator \u2014 Free AI SEO &amp; llms-full.txt Creator | llms-text.com",
+    "domain": "llms-text.com",
+    "vector": "'agent':22B 'ai':4A,19B,34C,42C 'ai-tool':33C 'api':40C 'cite':27B 'crawl':31B 'creator':7A 'engin':21B 'export':32B 'file':15B 'free':3A,17B 'generat':2A,10B 'help':18B 'index':25B 'instant':30B 'llms':24B,37C 'llms-full.txt':6A,14B 'llms-text.com':8A,9A 'llms-txt':36C 'llms.txt':1A,12B 'mcp':41C 'openapi':39C 'search':20B,44C 'seo':5A 'standard':11B 'storag':43C 'tool':35C 'txt':38C 'websit':29B",
+    "description": "Generate standardized llms.txt and llms-full.txt files for free. Help AI search engines, agents, and LLMs index and cite your website. Instant crawl &#38; export.",
+    "agentic_score": 75
+  },
+  {
+    "name": "llms.txt for Agent-Ready Docs \u2014 Generate, Validate &amp; Keep Current | llms-txt.io",
+    "domain": "llms-txt.io",
+    "vector": "'agent':4A,17B 'agent-readi':3A,16B 'ai':35B,45C,48C 'ai-tool':44C 'api':53C 'assist':37B 'automat':33B 'claud':40B 'code':36B,41B 'compliant':24B 'copilot':43B 'current':10A,32B 'cursor':39B 'doc':6A,15B 'file':25B,28B 'generat':7A,21B 'keep':9A,30B 'like':38B 'llms':50C 'llms-txt':49C 'llms-txt.io':11A,12A 'llms.txt':1A,20B 'make':13B 'openapi':52C 'readi':5A,18B 'spec':23B 'spec-compli':22B 'storag':47C 'tool':46C 'txt':51C 'valid':8A,26B",
+    "description": "Make your docs agent-ready with llms.txt: generate spec-compliant files, validate any file, and keep them current automatically for AI coding assistants like Cursor, Claude Code, and Copilot.",
+    "agentic_score": 65
+  },
+  {
+    "name": "LLMVO - Premier Directory of Generative Engine Optimization Companies",
+    "domain": "llmvo.com",
+    "vector": "'ai':15B,31B,41C,45C,47C 'ai-friend':44C 'ai-pow':30B 'ai-tool':40C 'api':54C 'chatgpt':36B 'claud':37B 'compani':8A,13B 'content':28B 'directori':3A 'discov':10B 'engin':6A,22B,34B 'find':18B 'friend':46C 'generat':5A,21B 'geo':12B 'like':35B 'llms':51C 'llms-txt':50C 'llmvo':1A 'llmvo.com':9A 'mcp':43C 'messag':48C 'openapi':53C 'optim':7A,16B,23B,26B 'perplex':39B 'power':32B 'premier':2A 'right':20B 'search':33B,49C 'servic':24B 'tool':17B,42C 'txt':52C 'verifi':11B",
+    "description": "Discover verified GEO companies and AI optimization tools. Find the right Generative Engine Optimization services to optimize your content for AI-powered search engines like ChatGPT, Claude, and Perplexity.",
+    "agentic_score": 80
+  },
+  {
+    "name": "AI Video Generator, Image Generator &amp; Editor - 100+ Free Online AI Tools | Magic Hour",
+    "domain": "magichour.ai",
+    "vector": "'100':7A,15B '3.7':53B 'ai':1A,10A,16B,57C,65C,67C 'ai-friend':64C 'ai-tool':56C 'api':50B,63C 'creator':55B 'credit':35B 'edit':34B 'editor':6A 'error':40B 'face':25B 'free':8A,42B 'friend':66C 'generat':3A,5A,32B 'hour':13A 'imag':4A,21B 'lip':27B 'llms':60C 'llms-txt':59C 'm':54B 'magic':12A 'magichour.ai':14A 'mobil':48B 'one':23B 'onlin':9A 'openapi':62C 'photo':30B 'place':24B 'refund':38B 'roll':36B 'sign':45B 'sign-up':44B 'swap':26B 'sync':28B 'talk':29B 'templat':31B 'tool':11A,17B,58C 'tri':41B 'trust':51B 'txt':61C 'video':2A,19B 'web':47B 'without':43B",
+    "description": "100+ AI tools for video and images in one place: face swap, lip sync, talking photos, templates, generation, and editing. Credits roll over; refunds on errors. Try free without sign-up. Web, mobile, and API. Trusted by 3.7M+ creators.",
+    "agentic_score": 70
+  },
+  {
+    "name": "Generative AI API Platform | Run FLUX, Kling &amp; Seedance | Muapi",
+    "domain": "muapi.ai",
+    "vector": "'100':32B 'ai':2A,22B,44C,50C,55C,57C 'ai-friend':54C 'ai-plugin':49C 'ai-tool':43C 'api':3A,42B,52C 'banana':28B 'cost':16B 'cost-effect':15B 'easiest':12B 'effect':17B 'flux':6A,24B 'friend':56C 'generat':1A,21B 'gpt':29B 'high':40B 'high-perform':39B 'imag':30B 'integr':23B 'kling':7A,25B 'llms':47C 'llms-txt':46C 'mcp':53C 'media':34B 'ml':58C 'model':35B 'muapi':9A,37B 'muapi.ai':10A 'nano':27B 'perform':41B 'platform':4A 'plugin':51C 'run':5A,20B 'seedanc':8A,26B 'tool':45C 'txt':48C 'way':18B",
+    "description": "The easiest and most cost-effective way to run generative AI. Integrate FLUX, Kling, Seedance, Nano Banana, GPT Image, and 100+ other media models with Muapi&#x27;s high-performance APIs.",
+    "agentic_score": 80
+  },
+  {
+    "name": "rendoc \u2014 Generate PDFs with code",
+    "domain": "rendoc.dev",
+    "vector": "'agent':36B 'ai':35B,47C,50C,54C 'ai-friend':53C 'ai-plugin':49C 'api':8B,30B,52C 'code':5A 'contract':18B 'convers':25B 'creat':15B 'develop':10B,40C 'free':37B 'friend':55C 'generat':2A,11B 'host':41C 'html':14B,22B 'includ':39B 'invoic':16B 'llms':43C 'llms-txt':42C 'mcp':32B,46C 'openapi':45C 'pdf':7B,12B,24B,48C 'pdfs':3A,17B 'plugin':51C 'programmat':21B 'rendoc':1A 'rendoc.dev':6A 'report':20B 'rest':29B 'server':33B 'simpl':28B 'tier':38B 'txt':44C",
+    "description": "PDF API for developers. Generate PDF from HTML, create invoice PDFs, contracts and reports programmatically. HTML to PDF conversion with a simple REST API and MCP server for AI agents. Free tier included.",
+    "agentic_score": 100
+  },
+  {
+    "name": "SWAGENT - API Documentation for the Agent Era",
+    "domain": "swagent.dev",
+    "vector": "'agent':6A 'ai':11B,34C 'ai-read':10B 'api':2A,33C 'command':26B 'develop':29C 'document':3A 'era':7A 'friend':16B 'generat':9B 'html':20B 'human':15B 'human-friend':14B 'llms':31C 'llms-txt':30C 'llms.txt':13B 'markdown':17B 'one':25B 'openapi':23B 'output':28B 'readabl':12B 'semant':19B 'spec':24B 'swagent':1A 'swagent.dev':8A 'three':27B 'txt':32C",
+    "description": "Generate AI-readable llms.txt, human-friendly markdown, and semantic HTML from your OpenAPI spec. One command, three outputs.",
+    "agentic_score": 45
+  },
+  {
+    "name": "AI Video Generator, Image Generator, Custom Avatar &amp; Voice Generator by Zoice",
+    "domain": "zoice.com",
+    "vector": "'ai':1A,24B,36C,42C 'ai-tool':35C 'api':41C 'avatar':7A,19B 'creat':13B 'creativ':28B 'custom':6A 'effortless':20B 'generat':3A,5A,9A,25B 'idea':32B 'imag':4A,16B 'llms':39C 'llms-txt':38C 'realiti':34B 'stun':14B 'tool':37C 'transform':30B 'txt':40C 'unleash':26B 'video':2A,15B 'voic':8A,17B 'zoic':11A,22B 'zoice.com':12A",
+    "description": "Create stunning videos, images, voices, and avatars effortlessly with Zoice\u2019s AI generators. Unleash your creativity and transform your ideas into reality!",
+    "agentic_score": 40
   }
 ]
