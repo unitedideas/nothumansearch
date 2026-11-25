@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26.11-alpine@sha256:ecb67f987aa1a57794c91d19ade7ae0209f2f0f5496aaef9e6ae85ddf92d02ab AS builder
 ARG RELEASE_REVISION
 ARG SOURCE_ARCHIVE_SHA256
 RUN printf '%s' "$RELEASE_REVISION" | grep -Eq '^[0-9a-f]{40}$'
