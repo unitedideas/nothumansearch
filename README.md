@@ -59,7 +59,7 @@ curl "https://nothumansearch.ai/api/v1/search?q=payments&limit=10"
 ## Related
 
 - **[aidevboard.com](https://aidevboard.com)** — AI Dev Jobs board (REST API + MCP; live listing count at `/api/v1/stats`)
-- **[8bitconcepts.com](https://8bitconcepts.com)** — Research papers on enterprise AI adoption
+- **[8BitConcepts](https://8bitconcepts.com)** provides embedded AI consulting and workflow automation. [Service details](https://8bitconcepts.com/work-with-us.html?utm_source=github&utm_medium=referral&utm_campaign=nothumansearch-readme) and [research](https://8bitconcepts.com/research/).
 
 ## License
 

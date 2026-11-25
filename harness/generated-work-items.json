@@ -1,50 +1,63 @@
 [
   {
-    "title": "Finish NHS API-key commerce browser handoff and traffic buckets",
+    "title": "Harden full-recrawl postflight health retries and failure propagation",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-06-03T03:08:40Z",
-    "source_ref": "Live planner probes on 2026-06-03T03:08Z: /api/v1/api-keys/subscribe GET works for JSON with starter/pro/scale plan ids, top-level response_fields is null, and nested subscribe.response_fields is a list. Accept:text/html returns HTTP 200 with content-type application/json and no html tag. Starter quote returns product_id=nhs_api_starter amount=1900 total=1900 payment_mode=stripe_checkout checkout_method=POST monthly_limit=1000. Admin traffic live keys are daily, days, errors, errors_last_hour, top_pages, top_referrers; route_buckets and scanner_pages remain absent; errors_last_hour=0.",
-    "priority": 94,
-    "public": true,
-    "human_gate_kind": "deploy_required",
+    "source_ref": "ops/ledgers/full-recrawl-closeout-2026-07-31.md; tools/recrawl-health.log shows the July 31 primary full recrawl closed green at 09:59:13 PT and seed refresh closed green at 11:40:05 PT, with no crawl or discovery lock remaining at 14:08 PT. The installed 12:30 launchd window is a retry wake-up and the sync definition uses cadence_seconds=82800 anchored to the 06:00 claim, so no second wrapper start after a green primary run is expected. The July 30 full recrawl recorded completion with api_status=000 api_ok=0. Current tools/recrawl-common.sh finish_wrapper still performs one postflight probe, records completion regardless of api_ok, and returns success. Bounded live proof: health status=ok db=ok, total_sites=4343 avg_score=38, developer=1320, other=850, spam=1.",
+    "priority": 100,
+    "public": false,
+    "human_gate_kind": "automation_harness_repair",
     "acceptance_criteria": [
-      "Preserve working JSON subscribe/catalog/commerce/agent/quote surfaces while adding browser-readable HTML GET handoff for /api/v1/api-keys/subscribe.",
-      "Keep subscribe JSON response_fields populated consistently without returning raw checkout URLs in planner evidence.",
-      "Repair or deploy aggregate admin traffic route_buckets and scanner_pages without raw identifiers, private query logs, buyer emails, payment ids, IPs, user agents, or referers.",
-      "Verify subscribe JSON and HTML, commerce.json, agent.json, catalog, starter quote, and admin traffic keys after deploy."
-    ]
+      "Preserve the July 31 aggregate closeout and do not start another full recrawl to reproduce the July 30 postflight failure.",
+      "Add bounded postflight health retries with logged attempt counts, backoff, final HTTP status, and final api_ok state.",
+      "Return nonzero when postflight health remains unhealthy after retries so the installed launchd and sync-state retry path can act.",
+      "Run IndexNow only after a healthy postflight and log an explicit skip reason otherwise.",
+      "Release the local run lock on success, remote-command failure, postflight failure, interruption, and dry-run paths.",
+      "Add fixture tests for immediate success, transient 000 then 200, persistent failure, remote-command failure, exit status, IndexNow gating, and lock release.",
+      "Verify the installed recurring path on a later scheduled bounded run records either healthy completion or explicit failed/retry state; preserve the primary-plus-retry wake-up design and do not use a manual broad recrawl as the acceptance test."
+    ],
+    "created_at": "2026-07-31T17:09:08Z",
+    "last_verified_at": "2026-07-31T21:09:02Z"
   },
   {
-    "title": "Review NHS monitor first-check zero-score quarantines from credential-capable executor",
+    "title": "Make MCP monitor registration consent-aware and redact PII telemetry",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-06-03T03:08:40Z",
-    "source_ref": "Aggregate-safe monitor proof on 2026-06-03T03:08Z: active=3; quarantined bounded rerun still zero score=1; quarantined first monitor check returned zero agentic score=2. Action aggregates over 30 days remain 2026-05-13 keep_quarantined=1 and request_score_rerun=1. Prior executor proof failed closed before row-level monitor fetch because allowed NHS admin Keychain aliases were unavailable in that executor; no row-level data was read and no admin action was applied.",
-    "priority": 90,
+    "source_ref": "marketing/mcp-register-monitor-consent-privacy-handoff-2026-07-31.md plus 2026-07-31T21:09Z bounded proof: live /monitor returns 200 while /privacy and /terms remain 404. Source proof still shows register_monitor requires email and domain without a consent field or side-effect annotations, immediately calls models.RegisterMonitor, returns an unsubscribe management token, and stores full arguments in both mcp_requests.arguments and intent_events.metadata.arguments. Fresh redacted aggregates are active=5 and quarantined=3. No crawl lock remains.",
+    "priority": 99,
     "public": false,
-    "human_gate_kind": "credential_required",
+    "human_gate_kind": "privacy_and_product_repair_required",
     "acceptance_criteria": [
-      "Run only where tools/monitor-status-redacted-read.sh, tools/monitor-actions-redacted-read.sh, and python3 tools/monitor-quarantine-rerun.py can read nhs-admin-api-key or nothumansearch-admin-key from Keychain without printing secrets.",
-      "Use the private monitor-admin workflow to review the two first-check zero-score quarantines and record keep_quarantined, request_score_rerun, approve_monitoring, or another supported action as appropriate.",
-      "Do not commit raw monitor domains, URLs, row ids, emails, tokens, review notes, payment identifiers, or customer identifiers.",
-      "After action, refresh aggregate status/reason/count and day/action/count proof only."
-    ]
+      "Do not register a monitor or use a third-party email while implementing or testing this repair.",
+      "Add a pending-confirmation state and one-time confirmation flow; only confirmed rows are eligible for scheduled checks and alerts, while shared-host quarantine remains intact.",
+      "Require an explicit consent or inbox-ownership assertion and advertise the email side effect through the MCP tool description and side-effect annotations.",
+      "Redact at the shared MCP logging boundary so raw emails, confirmation tokens, and unsubscribe tokens cannot enter mcp_requests.arguments or intent_events.metadata; retain only allowlisted aggregate fields.",
+      "Return stable status and confirmation-delivery fields, avoid exposing an unsubscribe token before confirmation, keep duplicates idempotent, and replace raw internal error propagation with bounded public error classes.",
+      "Add tests for missing consent, pending registration, confirmation, expired and replayed tokens, duplicates, delivery failure, legacy active rows, quarantine, rate limits, analytics redaction, token non-disclosure, and REST/MCP parity.",
+      "After a later product-worker deploy, verify the MCP schema, confirmation delivery, activation, unsubscribe, redacted analytics, REST parity, and monitor-worker eligibility with a Foundry-owned test inbox."
+    ],
+    "created_at": "2026-07-31T13:10:06Z",
+    "last_verified_at": "2026-07-31T21:09:02Z"
   },
   {
-    "title": "Run NHS score-fix private cleanup from credential-capable executor",
+    "title": "Make check_url mutation and telemetry explicit before promotion",
     "source_family": "ops",
     "source_agent": "business-planner-not-human-search",
-    "last_verified_at": "2026-06-03T03:08:40Z",
-    "source_ref": "Planner redacted helper succeeded on 2026-06-03T03:08Z with aggregate count=12: real_candidate pending=3 dot_com split age 30d_plus=2 and 7_29d=1; test_like pending=4 dot_com split age 30d_plus=3 and 7_29d=1; test_like lead=1 dot_com age 30d_plus; test_like paid=2 dot_com age 30d_plus; test_like internal_test=2 foundry_owned split age 30d_plus=1 and 7_29d=1. Executor proof harness/work_machine_8103c7137af8d820.md failed closed on missing NHS admin Keychain aliases in that executor runtime; no raw rows fetched, no mutation, no customer-visible email, no public-action lock. Customer-visible score-fix follow-up due now remains 0 unless a future duplicate check and fresh public-action lock prove otherwise.",
-    "priority": 88,
+    "source_ref": "marketing/mcp-check-url-mutation-contract-handoff-2026-07-31.md plus 2026-07-31T21:09Z bounded proof: live MCP tools/list describes check_url as a verify-before-use check without the submissions-table side effect and returns annotations=null; live GET /api/v1/check documents an on-demand score but not an index refresh. Source inspection shows MCP check_url and REST POST /api/v1/check asynchronously call models.UpsertSite, which rewrites the indexed site record, while the shared MCP boundary logs the full URL argument into mcp_requests.arguments and intent_events.metadata.arguments. Live health, MCP, check docs, llms.txt, OpenAPI, /api/v1, and mcp.json are 200; Agent Card remains 404. Fresh redacted proof has monitor active=5 quarantined=3 and score-fix real-candidate pending=10 with no real paid or lead rows.",
+    "priority": 98,
     "public": false,
-    "human_gate_kind": "credential_required",
+    "human_gate_kind": "product_contract_and_privacy_repair",
     "acceptance_criteria": [
-      "Run only where tools/geo-jobs-redacted-read.sh can read NHS admin Keychain aliases without printing secrets in the executor runtime.",
-      "Before any private score-fix mutation, re-read tools/geo-jobs-redacted-read.sh, ops/ledgers/score-fix-pending-followup-2026-05-12.md, ops/ledgers/score-fix-internal-test-cleanup-2026-05-12.md, and harness/work_machine_8103c7137af8d820.md.",
-      "Classify or clean up only test_like pending rows through the private admin workflow.",
-      "Keep committed proof aggregate-only and do not send customer-visible follow-up without duplicate check plus fresh public-action lock."
-    ]
+      "Choose and document one parity contract for MCP check_url and REST /api/v1/check: read-only live check or explicitly mutating refresh-and-check.",
+      "If read-only, remove UpsertSite and prove a bounded successful check changes neither existing site state nor index membership.",
+      "If mutating, add accurate MCP annotations and descriptions, REST/OpenAPI and /api/v1 disclosure, a persistence outcome field, and bounded public error classes; do not report write success before the outcome is known.",
+      "Normalize input to scheme plus hostname before logging, reject userinfo, and strip query strings and fragments from both analytics stores; retain only allowlisted aggregate result status and coarse score-band fields.",
+      "Add tests for existing and new domains, persistence failure, duplicate checks, timeouts, userinfo, signed query strings, fragments, private-host rejection, analytics redaction, REST/MCP parity, rate limits, and annotation accuracy.",
+      "After a later product-worker deploy, verify live tools/list, MCP and REST responses, GET /api/v1/check, /api/v1, /openapi.yaml, /llms.txt, /.well-known/mcp.json, aggregate-only analytics, and the chosen persistence behavior using a Foundry-owned fixture.",
+      "Keep register_monitor out of the next-action response until its separate consent, confirmation, token, and telemetry repair is complete.",
+      "Do not revive older public check_url conversion drafts until this repair passes and any later external action has identity verification, duplicate-ledger checks, a sync-state public-action lock, and delivery proof."
+    ],
+    "created_at": "2026-07-31T21:09:02Z",
+    "last_verified_at": "2026-07-31T21:09:02Z"
   }
 ]

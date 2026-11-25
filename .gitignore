@@ -35,6 +35,8 @@ harness/*-latest.json
 # Discovery quarantine test/dev tools
 tools/discovery*.py
 tools/test-*.py
+!tools/test-refresh-discovery-quality.py
+!tools/test-full-recrawl-closeout.py
 !tools/test-adopt-provider-exchange-candidate.py
 !tools/test-build-exact-provider-image.py
 !tools/test-provider-cutover-verify.py

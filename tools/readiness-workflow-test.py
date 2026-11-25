@@ -43,7 +43,7 @@ class ReadinessWorkflowTests(unittest.TestCase):
 
                 class Handler(BaseHTTPRequestHandler):
                     def do_GET(self):
-                        requests.append(("GET", self.path))
+                        requests.append(("GET", self.path, self.headers.get("NHS-Synthetic-Test")))
                         self.send_response(status)
                         self.end_headers()
                         self.wfile.write(body if isinstance(body, bytes) else json.dumps(body).encode())
@@ -69,7 +69,7 @@ class ReadinessWorkflowTests(unittest.TestCase):
                         server.shutdown()
                         thread.join(timeout=2)
                     self.assertEqual(result.returncode == 0, succeeds, result.stderr)
-                    self.assertEqual(requests, [("GET", "/api/v1/site/nothumansearch.ai")])
+                    self.assertEqual(requests, [("GET", "/api/v1/site/nothumansearch.ai", "deploy-smoke")])
 
     def test_external_actions_are_immutable(self):
         refs = re.findall(r"^\s+- uses: (\S+)", WORKFLOW.read_text(), re.MULTILINE)
