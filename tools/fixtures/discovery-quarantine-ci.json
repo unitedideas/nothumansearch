@@ -46,5 +46,63 @@
     "schema_only": 1,
     "zero_score": 4
   },
-  "source": "tools/fixtures/discovery-quarantine-ci.json"
+  "source": "tools/fixtures/discovery-quarantine-ci.json",
+  "cleanup_review_gate": {
+    "status": "active",
+    "cohorts": {
+      "category_other_low_signal": {
+        "decision": "aggregate_review_only",
+        "public_search": false,
+        "rows": 7,
+        "score_fix_targeting": false
+      },
+      "llms_only": {
+        "decision": "audit_only",
+        "public_search": false,
+        "rows": 2,
+        "score_fix_targeting": false
+      },
+      "schema_only": {
+        "decision": "audit_only",
+        "public_search": false,
+        "rows": 1,
+        "score_fix_targeting": false
+      },
+      "zero_score": {
+        "decision": "audit_only",
+        "public_search": false,
+        "rows": 4,
+        "score_fix_targeting": false
+      }
+    },
+    "public_search_effect": "none; AgentFirstFilter remains required",
+    "score_fix_effect": "none; HasHardAgentSignal remains required"
+  },
+  "seed_refresh_report": {
+    "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl",
+    "cohorts": {
+      "category_other_low_signal": 7,
+      "llms_only": 2,
+      "schema_only": 1,
+      "zero_score": 4
+    },
+    "hard_signal_rows": 3,
+    "passive_only_rows": 8,
+    "passive_only_share": 0.7273,
+    "sample_rows": 11,
+    "source": "sanitized aggregate CI fixture",
+    "threshold": {
+      "handoff_required": true,
+      "name": "low_signal_rows_exceed_hard_signal_rows",
+      "status": "review"
+    }
+  },
+  "business_local_handoff": {
+    "required": true,
+    "kind": "bounded_aggregate_review",
+    "reason": "low_signal_rows_exceed_hard_signal_rows",
+    "scope": "review aggregate seed-refresh cohorts only; do not trigger broad crawl",
+    "public": false,
+    "domain_output": false
+  }
 }
