@@ -47,13 +47,14 @@
         .container { max-width:800px; margin:0 auto; padding:0 20px; }
         a { color:var(--accent); text-decoration:none; }
         a:hover { text-decoration:underline; }
+        a:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 
         header { padding:24px 0; }
         .back { color:var(--text-muted); font-size:14px; }
         .back:hover { color:var(--accent); }
 
         .site-header { display:flex; gap:20px; align-items:flex-start; margin:24px 0; }
-        .site-header img { width:48px; height:48px; border-radius:8px; object-fit:contain; padding:3px; background:var(--border); }
+        .site-header img { width:48px; height:48px; border-radius:8px; object-fit:contain; padding:3px; background:var(--border); flex-shrink:0; }
         .site-header-fallback {
             width:48px; height:48px; border-radius:8px;
             display:flex; align-items:center; justify-content:center;
@@ -62,8 +63,11 @@
             font-family:'IBM Plex Mono',monospace; text-transform:uppercase;
             flex-shrink:0;
         }
-        .site-header h1 { font-size:28px; font-weight:700; }
-        .site-header .domain { color:var(--text-muted); font-family:'IBM Plex Mono',monospace; font-size:14px; }
+        .site-header > div:last-child { min-width:0; }
+        .site-header h1 { font-size:28px; font-weight:700; overflow-wrap:anywhere; }
+        .site-header .domain { color:var(--text-muted); font-family:'IBM Plex Mono',monospace; font-size:14px; overflow-wrap:anywhere; }
+        .site-actions { margin-top:16px; }
+        .visit-link { display:inline-flex; align-items:center; min-height:44px; padding:10px 18px; border-radius:6px; background:var(--accent); color:var(--bg); font-size:14px; font-weight:600; }
 
         .score-box {
             display:inline-flex; align-items:center; gap:12px;
@@ -107,7 +111,7 @@
         }
 
         footer { padding:32px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
-        .footer-text { color:var(--text-muted); font-size:13px; }
+        .footer-text { color:var(--text-muted); font-size:13px; overflow-wrap:anywhere; }
     </style>
 </head>
 <body>
@@ -125,8 +129,9 @@
             {{end}}
             <div>
                 <h1>{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</h1>
-                <div class="domain"><a href="{{.URL}}" target="_blank" rel="noopener">{{.Domain}}</a></div>
+                <div class="domain">{{.Domain}}</div>
                 {{if .Description}}<p style="color:var(--text-muted);margin-top:8px;font-size:14px;line-height:1.5;">{{displayText .Description}}</p>{{end}}
+                {{if .URL}}<div class="site-actions"><a class="visit-link" href="{{.URL}}" target="_blank" rel="noopener" aria-label="Visit {{.Domain}} website">Visit website &#x2197;</a></div>{{end}}
             </div>
         </div>
 
@@ -145,20 +150,25 @@
             </div>
         </div>
 
-        {{if and (lt .AgenticScore 70) (hasHardAgentSignal .)}}
-        <div style="margin:20px 0;padding:16px 20px;background:var(--surface);border:1px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-            <div style="flex:1 1 300px;min-width:0;">
-                <div style="font-weight:600;font-size:15px;margin-bottom:4px;">Raise this score to 95+</div>
-                <div style="color:var(--text-muted);font-size:13px;line-height:1.5;">We ship the 6-file GEO uplift as a pull request against your repo. Flat fee, turnaround under 72 hours.</div>
-            </div>
-            <a href="/fix/{{.Domain}}" style="display:inline-block;background:var(--accent);color:var(--bg);padding:10px 20px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:0.02em;white-space:nowrap;">Fix this for $199 &rarr;</a>
-        </div>
-        {{end}}
-
         {{if .Tags}}<div style="margin:16px 0;display:flex;gap:6px;flex-wrap:wrap;">
             <span style="padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--accent);">{{.Category}}</span>
             {{range .Tags}}<span style="padding:4px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--text-muted);">{{.}}</span>{{end}}
         </div>{{end}}
+
+        {{if .LLMsTxtContent}}
+        <div class="section">
+            <h2>Saved llms.txt</h2>
+            <p style="color:var(--text-muted);font-size:14px;line-height:1.5;margin-bottom:12px;">Saved during the last crawl. Check the website for current setup and pricing.</p>
+            <div class="content-box">{{.LLMsTxtContent}}</div>
+        </div>
+        {{end}}
+
+        {{if .OpenAPISummary}}
+        <div class="section">
+            <h2>Saved OpenAPI preview</h2>
+            <div class="content-box">{{.OpenAPISummary}}</div>
+        </div>
+        {{end}}
 
         <div class="signals">
             <h2 style="font-size:18px;font-weight:600;margin-bottom:12px;">Agentic Signals</h2>
@@ -200,6 +210,17 @@
             </div>
         </div>
 
+        <section class="section" aria-labelledby="site-owner-heading">
+            <h2 id="site-owner-heading">For site owners</h2>
+        {{if and (lt .AgenticScore 70) (hasHardAgentSignal .)}}
+        <div style="margin:20px 0;padding:16px 20px;background:var(--surface);border:1px solid var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="flex:1 1 300px;min-width:0;">
+                <div style="font-weight:600;font-size:15px;margin-bottom:4px;">Raise this score to 95+</div>
+                <div style="color:var(--text-muted);font-size:13px;line-height:1.5;">We ship the 6-file GEO uplift as a pull request against your repo. Flat fee, turnaround under 72 hours.</div>
+            </div>
+            <a href="/fix/{{.Domain}}" style="display:inline-block;background:var(--accent);color:var(--bg);padding:10px 20px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:13px;text-decoration:none;letter-spacing:0.02em;white-space:nowrap;">Fix this for $199 &rarr;</a>
+        </div>
+        {{end}}
         <div class="section">
             <h2>Embed this badge</h2>
             <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px;">Show off your agentic readiness &mdash; the badge auto-updates when your score changes.</p>
@@ -216,6 +237,7 @@
                 <pre id="embedSnippet" class="content-box" style="max-height:none;white-space:pre-wrap;word-break:break-all;margin:0;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.5;"></pre>
             </div>
         </div>
+        </section>
         <script>
         (function() {
             const dom = {{.Domain}};
@@ -250,19 +272,6 @@
         })();
         </script>
 
-        {{if .LLMsTxtContent}}
-        <div class="section">
-            <h2>llms.txt Content</h2>
-            <div class="content-box">{{.LLMsTxtContent}}</div>
-        </div>
-        {{end}}
-
-        {{if .OpenAPISummary}}
-        <div class="section">
-            <h2>OpenAPI Spec (preview)</h2>
-            <div class="content-box">{{.OpenAPISummary}}</div>
-        </div>
-        {{end}}
     </div>
 
     <footer>
@@ -274,7 +283,7 @@
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <a href="https://8bitconcepts.com/case-studies.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:transparent;color:#d97757;padding:8px 14px;border:1px solid rgba(217,119,87,0.35);border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Case studies</a>
-                <a href="https://8bitconcepts.com/work-with-us.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:#d97757;color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Work with us &rarr;</a>
+                <a href="https://8bitconcepts.com/work-with-us.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:#d97757;color:var(--bg);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Work with us &rarr;</a>
             </div>
         </div>
         <div class="footer-research" style="margin:16px 0 0;padding:12px 0 0;border-top:1px solid var(--border);font-size:13px;">
