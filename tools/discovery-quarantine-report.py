@@ -106,7 +106,38 @@ def build_quarantine_report(artifact: dict[str, Any]) -> dict[str, Any]:
     elif low_signal_rows > hard_signal_rows or other_low_signal > other_hard_signal:
         planner_priority = "quarantine_first"
 
-    seed_refresh_report = artifact.get("seed_refresh_report", {})
+    cohort_counts = {
+        name: int(sample_breakdown[name])
+        for name in ("category_other_low_signal", "llms_only", "schema_only", "zero_score")
+    }
+    cleanup_review_gate = artifact.get("cleanup_review_gate", {
+        "status": "active" if active else "clear",
+        "cohorts": {
+            name: {
+                "rows": rows,
+                "decision": "aggregate_review_only" if name == "category_other_low_signal" else "audit_only",
+                "public_search": False,
+                "score_fix_targeting": False,
+            }
+            for name, rows in cohort_counts.items()
+        },
+    })
+    sample_rows = int(counts["sample_rows"])
+    review_required = quality_gate.get("status") == "review"
+    seed_refresh_report = artifact.get("seed_refresh_report", {
+        "source": "harness/discovery-quality-latest.json",
+        "cohorts": cohort_counts,
+        "sample_rows": sample_rows,
+        "hard_signal_rows": hard_signal_rows,
+        "passive_only_rows": low_signal_rows,
+        "passive_only_share": round(low_signal_rows / sample_rows, 4) if sample_rows else 0,
+        "threshold": {
+            "name": quality_gate.get("trigger", "none"),
+            "status": quality_gate.get("status", "clear"),
+            "handoff_required": review_required,
+        },
+        "bounded_action": "write business-local aggregate handoff row; do not trigger broad crawl" if review_required else "none",
+    })
     handoff_required = (
         seed_refresh_report.get("threshold", {}).get("handoff_required") is True
     )
@@ -136,7 +167,7 @@ def build_quarantine_report(artifact: dict[str, Any]) -> dict[str, Any]:
             "category_other_low_signal": other_low_signal,
             "category_other_hard_agent_signal": other_hard_signal,
         },
-        "cleanup_review_gate": artifact.get("cleanup_review_gate", {}),
+        "cleanup_review_gate": cleanup_review_gate,
         "hard_signal_other_review": artifact.get("hard_signal_other_review", {}),
         "seed_refresh_report": seed_refresh_report,
         "public_guards": {

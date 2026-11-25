@@ -154,6 +154,13 @@ def write_repo(
 
 
 class DiscoveryQualityGateTest(unittest.TestCase):
+    def test_committed_ci_fixture_passes_actual_repository_gate(self):
+        root = MODULE_PATH.parent.parent
+        report = gate.run_gate(
+            MODULE_PATH.parent / "fixtures/discovery-quarantine-ci.json", root
+        )
+        self.assertTrue(report["quarantine"]["active"])
+
     def test_gate_accepts_aggregate_artifact_and_hard_signal_filters(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

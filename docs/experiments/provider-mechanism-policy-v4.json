@@ -1,0 +1,17 @@
+{
+  "name": "developer-tools-policy-v4",
+  "demand_topic": "developer-tools",
+  "max_cost_per_activation_cents": 10000,
+  "max_median_days_to_charge": 14,
+  "min_charged_events": 5,
+  "min_charged_provider_companies_per_mechanism": 3,
+  "min_offer_returns_per_mechanism": 20,
+  "min_paid_settlements_per_mechanism": 1,
+  "max_reversal_rate": 0.2,
+  "min_processing_net_margin_rate": 0.5,
+  "min_processing_net_revenue_per_1000_offer_returns_cents": 1000,
+  "min_processing_net_lead_per_1000_offer_returns_cents": 1146,
+  "min_processing_net_lead_rate": 0.2,
+  "selection_confidence_level": 0.95,
+  "max_processor_net_cents_per_offer": 20000
+}

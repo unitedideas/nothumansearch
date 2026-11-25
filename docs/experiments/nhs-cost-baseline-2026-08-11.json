@@ -1,0 +1,21 @@
+{
+  "contract": "nhs-fixed-cost-baseline-v1",
+  "scope": "not-human-search-only",
+  "currency": "usd",
+  "period_start": "2026-07-12",
+  "period_end": "2026-08-11",
+  "period_days": 31,
+  "observed_cost_cents": 1157,
+  "applications": [
+    {"app": "nothumansearch", "observed_cost_cents": 441},
+    {"app": "nothumansearch-db", "observed_cost_cents": 716}
+  ],
+  "source": "fly-cost-explorer-per-app",
+  "source_is_final_invoice": false,
+  "contains_other_apps": false,
+  "includes_owner_labor": false,
+  "includes_support": false,
+  "includes_fraud_losses": false,
+  "includes_tax": false,
+  "commercial_proof": false
+}

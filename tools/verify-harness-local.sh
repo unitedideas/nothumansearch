@@ -4,6 +4,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+  tools/readiness-workflow-test.py \
   tools/test-discovery-quality-report.py \
   tools/test-discovery-quarantine-report.py \
   tools/test-refresh-discovery-quality.py \

@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	mailer "github.com/unitedideas/nothumansearch/internal/email"
 	"github.com/unitedideas/nothumansearch/internal/models"
 	"github.com/unitedideas/nothumansearch/internal/notify"
 
@@ -38,12 +39,23 @@ import (
 )
 
 const fixPriceCents = 19900
+
+// reportPriceCents is the self-serve "full report" tier (cheaper, no manual
+// fulfillment — delivers the already-auto-generated per-site report on success).
+// PRE-STAGED, NOT LIVE: the number is the owner's 4pm 2026-06-02 decision.
+// $29 is the OWNER-BRIEF recommendation; owner sets the final value before deploy.
+const reportPriceCents = 2900
+
 const fixTargetScore = 95
 
 type FixHandler struct {
 	DB            *sql.DB
 	BaseURL       string
 	WebhookSecret string
+	// ProviderSettlement is set only in the separately enabled provider-pilot
+	// mode. It receives an already signature-verified Stripe event and cannot
+	// create revenue from a redirect or an internal provider ledger entry.
+	ProviderSettlement *ProviderSettlementHandler
 	// PreviewEnabled gates the per-site "here's exactly what we'd ship for YOUR
 	// domain" block on the intake form (env NHS_FIX_PREVIEW=1). Reversible kill:
 	// unset the env var + redeploy → reverts to the generic deliverables list.
@@ -137,6 +149,138 @@ func normalizeFixPaymentMode(mode string) string {
 	}
 }
 
+var fixAttributionKeys = []string{"qc", "utm_source", "utm_medium", "utm_campaign"}
+
+func fixMetadataValue(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 500 {
+		return value[:500]
+	}
+	return value
+}
+
+func fixAttributionFromRequest(r *http.Request) map[string]string {
+	values := map[string]string{}
+	for _, key := range fixAttributionKeys {
+		if value := fixMetadataValue(r.FormValue(key)); value != "" {
+			values[key] = value
+		}
+	}
+	return values
+}
+
+func fixAttributionFromAgenticRequest(req struct {
+	QC          string
+	UTMSource   string
+	UTMMedium   string
+	UTMCampaign string
+	Metadata    map[string]interface{}
+}) map[string]string {
+	values := map[string]string{
+		"qc":           fixMetadataValue(req.QC),
+		"utm_source":   fixMetadataValue(req.UTMSource),
+		"utm_medium":   fixMetadataValue(req.UTMMedium),
+		"utm_campaign": fixMetadataValue(req.UTMCampaign),
+	}
+	for _, key := range fixAttributionKeys {
+		if values[key] != "" || req.Metadata == nil {
+			continue
+		}
+		if raw, ok := req.Metadata[key].(string); ok {
+			values[key] = fixMetadataValue(raw)
+		}
+	}
+	for key, value := range values {
+		if value == "" {
+			delete(values, key)
+		}
+	}
+	return values
+}
+
+func fixProductIDForTier(tier string) string {
+	if tier == "report" {
+		return "nhs_geo_fix_report"
+	}
+	return "nhs_geo_fix_my_score"
+}
+
+func fixCheckoutMetadata(source, host, email string, jobID int64, repoURL, tier string, priceCents int, attribution map[string]string) map[string]string {
+	metadata := map[string]string{
+		"tenant":       "nothumansearch",
+		"product":      "nhs_fix_my_score",
+		"product_id":   fixProductIDForTier(tier),
+		"source":       source,
+		"tier":         tier,
+		"host":         host,
+		"email":        email,
+		"email_domain": emailDomain(email),
+		"job_id":       strconv.FormatInt(jobID, 10),
+		"amount_cents": strconv.Itoa(priceCents),
+	}
+	if repoURL != "" {
+		metadata["repo_url"] = repoURL
+	}
+	for _, key := range fixAttributionKeys {
+		if value := fixMetadataValue(attribution[key]); value != "" {
+			metadata[key] = value
+		}
+	}
+	return metadata
+}
+
+func fixCampaignHiddenInputs(attribution map[string]string) string {
+	var b strings.Builder
+	for _, key := range fixAttributionKeys {
+		if value := fixMetadataValue(attribution[key]); value != "" {
+			fmt.Fprintf(&b, `<input type="hidden" name="%s" value="%s">`+"\n", key, html.EscapeString(value))
+		}
+	}
+	return b.String()
+}
+
+func (h *FixHandler) fixCancelURL(host, tier, email string, attribution map[string]string) string {
+	values := url.Values{}
+	if tier = fixMetadataValue(tier); tier != "" {
+		values.Set("tier", tier)
+	}
+	if email = fixMetadataValue(email); email != "" {
+		values.Set("email", email)
+	}
+	for _, key := range fixAttributionKeys {
+		if value := fixMetadataValue(attribution[key]); value != "" {
+			values.Set(key, value)
+		}
+	}
+	cancelURL := h.BaseURL + "/fix/" + url.PathEscape(host)
+	if encoded := values.Encode(); encoded != "" {
+		cancelURL += "?" + encoded
+	}
+	return cancelURL
+}
+
+func (h *FixHandler) checkoutConfigured() bool {
+	return strings.TrimSpace(gostripe.Key) != ""
+}
+
+func (h *FixHandler) webhookConfigured() bool {
+	return strings.TrimSpace(h.WebhookSecret) != ""
+}
+
+func (h *FixHandler) commerceReady() bool {
+	return h.checkoutConfigured() && h.webhookConfigured()
+}
+
+func (h *FixHandler) commerceStatus() string {
+	if !h.checkoutConfigured() {
+		return "lead_capture"
+	}
+	if !h.webhookConfigured() {
+		return "checkout_without_webhook"
+	}
+	return "live_checkout"
+}
+
 func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 	writeFixJSON(w, http.StatusOK, map[string]interface{}{
 		"seller": map[string]interface{}{
@@ -148,8 +292,12 @@ func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 		"version":  "2026-05-01",
 		"currency": "USD",
 		"agentic_payments": map[string]interface{}{
-			"ready":           true,
-			"supported_modes": []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
+			"ready":               h.commerceReady(),
+			"catalog_ready":       true,
+			"checkout_configured": h.checkoutConfigured(),
+			"webhook_configured":  h.webhookConfigured(),
+			"status":              h.commerceStatus(),
+			"supported_modes":     []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
 			"unsupported_modes": map[string]string{
 				"stripe_acp": "Stripe Agentic Commerce Protocol is private-preview gated for this seller surface.",
 				"x402":       "No Stripe machine payments / x402 endpoint is deployed for Not Human Search.",
@@ -166,7 +314,8 @@ func (h *FixHandler) CommerceManifest(w http.ResponseWriter, r *http.Request) {
 				"api_activation": h.BaseURL + "/api/v1/api-keys/activate",
 			},
 		},
-		"products": h.commerceProducts(),
+		"manual_invoice_fallback": !h.checkoutConfigured(),
+		"products":                h.commerceProducts(),
 	})
 }
 
@@ -196,7 +345,11 @@ func (h *FixHandler) AgentJSON(w http.ResponseWriter, r *http.Request) {
 			"checkout":                  h.BaseURL + "/api/v1/checkout",
 			"api_subscribe":             h.BaseURL + "/api/v1/api-keys/subscribe",
 			"payment_modes":             []string{"stripe_checkout", "stripe_link", "link", "stripe_spt"},
-			"agentic_payments_ready":    true,
+			"catalog_ready":             true,
+			"checkout_configured":       h.checkoutConfigured(),
+			"webhook_configured":        h.webhookConfigured(),
+			"agentic_payments_ready":    h.commerceReady(),
+			"payment_status":            h.commerceStatus(),
 			"unsupported_payment_modes": []string{"stripe_acp", "x402", "mpp"},
 			"private_preview_required":  []string{"stripe_acp", "x402"},
 		},
@@ -231,18 +384,23 @@ func (h *FixHandler) fixProduct() map[string]interface{} {
 func (h *FixHandler) apiProduct(plan models.APIPlan) map[string]interface{} {
 	return map[string]interface{}{
 		"id":          apiProductID(plan),
-		"name":        "Not Human Search API " + strings.Title(plan.Name),
-		"description": fmt.Sprintf("%d REST/MCP calls per month after the anonymous quota.", plan.MonthlyLimit),
+		"name":        "Not Human Search Priority API",
+		"description": fmt.Sprintf("%d priority-throughput REST/MCP calls per month. Baseline discovery remains free before, during, and after the allocation.", plan.MonthlyLimit),
 		"type":        "recurring_subscription",
 		"plan":        plan.Name,
 		"quota": map[string]interface{}{
 			"monthly_limit": plan.MonthlyLimit,
-			"unit":          "billable REST or MCP calls",
+			"unit":          "priority-throughput REST, MCP, or live-check calls",
+		},
+		"free_fallback": map[string]interface{}{
+			"search_access":     true,
+			"organic_rank_same": true,
+			"payment_wall":      false,
 		},
 		"price": map[string]interface{}{
 			"amount":   plan.PriceCents,
 			"currency": "USD",
-			"display":  fmt.Sprintf("$%d/mo", plan.PriceCents/100),
+			"display":  fmt.Sprintf("$%.2f/mo", float64(plan.PriceCents)/100),
 			"interval": "month",
 		},
 		"required_metadata": []string{"email", "plan"},
@@ -282,7 +440,8 @@ func apiPlanFromProductID(productID string) (models.APIPlan, bool) {
 	id = strings.TrimPrefix(id, "api_")
 	id = strings.TrimPrefix(id, "nhs_api_")
 	switch id {
-	case "starter", "pro", "scale":
+	case "unlimited", "starter", "pro", "scale":
+		// Legacy tier names still resolve (all collapse to the single plan).
 		return models.APIPlanFor(id), true
 	default:
 		return models.APIPlan{}, false
@@ -290,7 +449,7 @@ func apiPlanFromProductID(productID string) (models.APIPlan, bool) {
 }
 
 func scoreFixEligible(site *models.Site) bool {
-	return site != nil && site.HasHardAgentSignal() && site.AgenticScore < fixTargetScore
+	return site != nil && site.AgenticScore < fixTargetScore
 }
 
 func (h *FixHandler) CommerceCatalog(w http.ResponseWriter, r *http.Request) {
@@ -420,6 +579,9 @@ func (h *FixHandler) intakeForm(w http.ResponseWriter, r *http.Request, host str
 	if h.PreviewEnabled {
 		deliverables = fixPreviewBlock(site)
 	}
+	attribution := fixAttributionFromRequest(r)
+	campaignHiddenInputs := fixCampaignHiddenInputs(attribution)
+	prefillEmail := html.EscapeString(fixMetadataValue(r.URL.Query().Get("email")))
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `<!DOCTYPE html>
@@ -456,11 +618,12 @@ textarea { min-height: 80px; resize: vertical; }
     <h1>Fix the score for %s</h1>
     <div class="host">Currently: <span class="score">%d</span> <span style="color:#888;font-size:0.85rem;">&middot; target: 95+</span></div>
     %s
-    <p style="color:#ccc;line-height:1.6;margin-top:1rem;"><strong style="color:#fff;">Turnaround: under 72 hours.</strong> Delivered as a pull request against your repo. <strong style="color:var(--accent);">If your score doesn't hit 90+ after merge, full refund.</strong></p>
+    <p style="color:#ccc;line-height:1.6;margin-top:1rem;"><strong style="color:#fff;">Two ways to fix it:</strong> get the <strong style="color:var(--accent);">$29 report instantly on-screen</strong> — the exact files &amp; fixes to apply yourself, no email or repo needed — or have us do it for $199, delivered as a pull request within 72 hours. <strong style="color:var(--accent);">$199 tier: full refund if your score doesn't hit 90+.</strong></p>
     <form method="POST" action="/fix/%s">
-      <label for="email">Your email</label>
-      <input id="email" name="email" type="email" required placeholder="you@%s">
-      <div class="hint">Where we send the PR link and follow-up.</div>
+      %s
+      <label for="email">Your email <span style="color:#888;font-weight:400;">— optional for the instant report</span></label>
+      <input id="email" name="email" type="email" placeholder="you@%s" value="%s">
+      <div class="hint">Instant $29 report: optional (you get it on-screen right after checkout; Stripe emails your receipt). $199 done-for-you: required — it's where we send your PR link.</div>
 
       <label for="repo_url">Repo URL (optional)</label>
       <input id="repo_url" name="repo_url" type="url" placeholder="https://github.com/yourco/site">
@@ -470,17 +633,22 @@ textarea { min-height: 80px; resize: vertical; }
       <textarea id="notes" name="notes" placeholder="CMS in use, odd build pipeline, deadlines, etc."></textarea>
 
       <div class="price-row">
-        <span class="price">$199</span>
-        <span class="price-label">flat · one-time · 72hr turnaround</span>
+        <span class="price">$%d</span>
+        <span class="price-label">self-serve report · instant download · the exact files &amp; fixes to apply yourself</span>
       </div>
-      <button type="submit" class="btn">Pay $199 &rarr;</button>
+      <button type="submit" name="tier" value="report" class="btn">Get the $%d report instantly &rarr;</button>
+      <div class="price-row" style="margin-top:1.25rem;">
+        <span class="price">$199</span>
+        <span class="price-label">prefer it done for you? · one-time · 72hr turnaround · delivered as a PR</span>
+      </div>
+      <button type="submit" name="tier" value="managed" class="btn" style="background:transparent;border:1px solid var(--accent);color:var(--accent);">Have us do it — $199 &rarr;</button>
     </form>
     <a href="/site/%s" class="back">&larr; Back to score report</a>
   </div>
 </div>
 </body></html>`,
 		site.Domain, site.Domain, site.AgenticScore, deliverables,
-		site.Domain, site.Domain, site.Domain)
+		site.Domain, campaignHiddenInputs, site.Domain, prefillEmail, reportPriceCents/100, reportPriceCents/100, site.Domain)
 }
 
 func (h *FixHandler) scoreFixCompletePage(w http.ResponseWriter, site *models.Site) {
@@ -528,8 +696,27 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 	email := strings.TrimSpace(r.FormValue("email"))
 	repoURL := strings.TrimSpace(r.FormValue("repo_url"))
 	notes := strings.TrimSpace(r.FormValue("notes"))
-	if email == "" || !strings.Contains(email, "@") {
+	// tier selects the product: "managed" = $199 done-for-you (default, the
+	// anchor), "report" = self-serve auto-generated report (cheaper tier).
+	tier := strings.TrimSpace(r.FormValue("tier"))
+	if tier != "report" {
+		tier = "managed"
+	}
+	priceCents := fixPriceCents
+	if tier == "report" {
+		priceCents = reportPriceCents
+	}
+	attribution := fixAttributionFromRequest(r)
+	// Email is mandatory only for the managed (done-for-you) tier, where we
+	// email the PR link. The self-serve report is delivered on-screen
+	// (reportSuccessPage) and Stripe sends the receipt, so the cheap tier is
+	// not gated on email — that upfront field was pure friction (D-1220).
+	if tier == "managed" && (email == "" || !strings.Contains(email, "@")) {
 		http.Error(w, "valid email required", http.StatusBadRequest)
+		return
+	}
+	if email != "" && !strings.Contains(email, "@") {
+		http.Error(w, "invalid email", http.StatusBadRequest)
 		return
 	}
 	site, err := models.GetSiteByDomain(h.DB, host)
@@ -549,7 +736,7 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 	j := &models.GeoFixJob{
 		Host:       host,
 		Email:      email,
-		PriceCents: fixPriceCents,
+		PriceCents: priceCents,
 		Currency:   "usd",
 		Status:     "pending",
 	}
@@ -578,35 +765,46 @@ func (h *FixHandler) createCheckout(w http.ResponseWriter, r *http.Request, host
 		if _, err := h.DB.Exec(`UPDATE geo_fix_jobs SET status='lead', updated_at=NOW() WHERE id=$1`, j.ID); err != nil {
 			log.Printf("fix: mark lead: %v", err)
 		}
-		notify.DiscordAsync(fmt.Sprintf("📥 **NHS fix-my-score lead** — %s · %s · $%d (Stripe not configured — follow up manually)",
-			host, email, fixPriceCents/100))
+		notify.DiscordAsync(fmt.Sprintf("📥 **NHS fix-my-score lead** — %s · %s · $%d · %s (Stripe not configured — follow up manually)",
+			host, email, priceCents/100, tier))
 		http.Redirect(w, r, "/fix/success?id="+strconv.FormatInt(j.ID, 10)+"&lead=1", http.StatusSeeOther)
 		return
 	}
 
+	// Tier-specific product framing. "managed" = the $199 done-for-you anchor;
+	// "report" = the cheaper self-serve auto-generated report (no manual step).
+	productName := "NHS Agent-Readiness Uplift"
+	productDesc := fmt.Sprintf("Done-for-you GEO uplift PR for %s — target score %d+", host, fixTargetScore)
+	successURL := h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"
+	if tier == "report" {
+		productName = "NHS GEO Fix Report (self-serve)"
+		productDesc = fmt.Sprintf("Instant agent-readiness report for %s — the exact files + fixes to reach score %d+", host, fixTargetScore)
+		successURL = h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&tier=report&session_id={CHECKOUT_SESSION_ID}"
+	}
+
+	metadata := fixCheckoutMetadata("fix_form", host, email, j.ID, repoURL, tier, priceCents, attribution)
 	params := &gostripe.CheckoutSessionParams{
 		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
 				Currency: gostripe.String("usd"),
 				ProductData: &gostripe.CheckoutSessionLineItemPriceDataProductDataParams{
-					Name:        gostripe.String("NHS Agent-Readiness Uplift"),
-					Description: gostripe.String(fmt.Sprintf("Done-for-you GEO uplift PR for %s — target score 95+", host)),
+					Name:        gostripe.String(productName),
+					Description: gostripe.String(productDesc),
 				},
-				UnitAmount: gostripe.Int64(int64(fixPriceCents)),
+				UnitAmount: gostripe.Int64(int64(priceCents)),
 			},
 			Quantity: gostripe.Int64(1),
 		}},
-		Mode:          gostripe.String(string(gostripe.CheckoutSessionModePayment)),
-		SuccessURL:    gostripe.String(h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:     gostripe.String(h.BaseURL + "/fix/" + host),
-		CustomerEmail: gostripe.String(email),
-		Metadata: map[string]string{
-			"product":  "nhs_fix_my_score",
-			"host":     host,
-			"email":    email,
-			"job_id":   strconv.FormatInt(j.ID, 10),
-			"repo_url": repoURL,
-		},
+		Mode:              gostripe.String(string(gostripe.CheckoutSessionModePayment)),
+		SuccessURL:        gostripe.String(successURL),
+		CancelURL:         gostripe.String(h.fixCancelURL(host, tier, email, attribution)),
+		Metadata:          metadata,
+		PaymentIntentData: &gostripe.CheckoutSessionPaymentIntentDataParams{Metadata: metadata},
+	}
+	// Only prefill the customer email when we actually have one — passing an
+	// empty string would 400 the Stripe API. Stripe collects it otherwise.
+	if email != "" {
+		params.CustomerEmail = gostripe.String(email)
 	}
 	s, err := session.New(params)
 	if err != nil {
@@ -633,6 +831,10 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		Email       string                 `json:"email"`
 		RepoURL     string                 `json:"repo_url"`
 		Notes       string                 `json:"notes"`
+		QC          string                 `json:"qc"`
+		UTMSource   string                 `json:"utm_source"`
+		UTMMedium   string                 `json:"utm_medium"`
+		UTMCampaign string                 `json:"utm_campaign"`
 		Metadata    map[string]interface{} `json:"metadata"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&req); err != nil {
@@ -699,6 +901,13 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 	email := strings.TrimSpace(req.Email)
 	repoURL := strings.TrimSpace(req.RepoURL)
 	notes := strings.TrimSpace(req.Notes)
+	attribution := fixAttributionFromAgenticRequest(struct {
+		QC          string
+		UTMSource   string
+		UTMMedium   string
+		UTMCampaign string
+		Metadata    map[string]interface{}
+	}{req.QC, req.UTMSource, req.UTMMedium, req.UTMCampaign, req.Metadata})
 	if host == "" {
 		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing host", "required_metadata": []string{"host", "email"}})
 		return
@@ -754,7 +963,7 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		"mode":         mode,
 	})
 	if mode == "stripe_acp_spt" {
-		if err := h.settleFixWithSPT(w, j, strings.TrimSpace(req.SPT), strings.TrimSpace(req.BuyerEmail)); err != nil {
+		if err := h.settleFixWithSPT(w, j, strings.TrimSpace(req.SPT), strings.TrimSpace(req.BuyerEmail), attribution); err != nil {
 			log.Printf("fix: spt settlement: %v", err)
 		}
 		return
@@ -777,6 +986,7 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	metadata := fixCheckoutMetadata("agentic_checkout", host, email, j.ID, repoURL, "managed", fixPriceCents, attribution)
 	params := &gostripe.CheckoutSessionParams{
 		LineItems: []*gostripe.CheckoutSessionLineItemParams{{
 			PriceData: &gostripe.CheckoutSessionLineItemPriceDataParams{
@@ -789,17 +999,12 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 			},
 			Quantity: gostripe.Int64(1),
 		}},
-		Mode:          gostripe.String(string(gostripe.CheckoutSessionModePayment)),
-		SuccessURL:    gostripe.String(h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"),
-		CancelURL:     gostripe.String(h.BaseURL + "/fix/" + host),
-		CustomerEmail: gostripe.String(email),
-		Metadata: map[string]string{
-			"product":  "nhs_fix_my_score",
-			"host":     host,
-			"email":    email,
-			"job_id":   strconv.FormatInt(j.ID, 10),
-			"repo_url": repoURL,
-		},
+		Mode:              gostripe.String(string(gostripe.CheckoutSessionModePayment)),
+		SuccessURL:        gostripe.String(h.BaseURL + "/fix/success?id=" + strconv.FormatInt(j.ID, 10) + "&session_id={CHECKOUT_SESSION_ID}"),
+		CancelURL:         gostripe.String(h.fixCancelURL(host, "managed", email, attribution)),
+		CustomerEmail:     gostripe.String(email),
+		Metadata:          metadata,
+		PaymentIntentData: &gostripe.CheckoutSessionPaymentIntentDataParams{Metadata: metadata},
 	}
 	s, err := session.New(params)
 	if err != nil {
@@ -821,7 +1026,7 @@ func (h *FixHandler) AgenticCheckout(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *FixHandler) settleFixWithSPT(w http.ResponseWriter, j *models.GeoFixJob, spt, buyerEmail string) error {
+func (h *FixHandler) settleFixWithSPT(w http.ResponseWriter, j *models.GeoFixJob, spt, buyerEmail string, attribution map[string]string) error {
 	if spt == "" || !strings.HasPrefix(spt, "spt_") {
 		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "missing shared_payment_granted_token", "payment_mode": "stripe_spt"})
 		return nil
@@ -830,13 +1035,10 @@ func (h *FixHandler) settleFixWithSPT(w http.ResponseWriter, j *models.GeoFixJob
 		writeFixJSON(w, http.StatusBadRequest, map[string]interface{}{"error": "valid buyer_email required", "payment_mode": "stripe_spt"})
 		return nil
 	}
-	pi, err := confirmSharedPaymentToken(fixPriceCents, "usd", spt, "NHS Agent-Readiness Uplift", map[string]string{
-		"seller":      "nothumansearch",
-		"product":     "nhs_fix_my_score",
-		"host":        j.Host,
-		"job_id":      strconv.FormatInt(j.ID, 10),
-		"buyer_email": buyerEmail,
-	})
+	metadata := fixCheckoutMetadata("agentic_spt", j.Host, j.Email, j.ID, "", "managed", fixPriceCents, attribution)
+	metadata["seller"] = "nothumansearch"
+	metadata["buyer_email"] = buyerEmail
+	pi, err := confirmSharedPaymentToken(fixPriceCents, "usd", spt, "NHS Agent-Readiness Uplift", metadata)
 	if err != nil {
 		writeFixJSON(w, http.StatusPaymentRequired, map[string]interface{}{
 			"error":         "spt_settlement_failed",
@@ -946,6 +1148,21 @@ func confirmSharedPaymentToken(amount int, currency, spt, description string, me
 func (h *FixHandler) SuccessPage(w http.ResponseWriter, r *http.Request) {
 	lead := r.URL.Query().Get("lead") == "1"
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	// Self-serve "report" tier: deliver the already-auto-generated per-site
+	// report inline on success (no 72hr manual step). Falls through to the
+	// standard message if the job/site can't be resolved.
+	if !lead && r.URL.Query().Get("tier") == "report" {
+		if id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64); err == nil {
+			if job, err := models.GetGeoFixJob(h.DB, id); err == nil {
+				if site, err := models.GetSiteByDomain(h.DB, job.Host); err == nil {
+					h.reportSuccessPage(w, site)
+					return
+				}
+			}
+		}
+	}
+
 	title := "Payment received"
 	body := "We'll email you the pull request link within 72 hours. Usually within 24."
 	if lead {
@@ -967,6 +1184,54 @@ a { color:#d97757; text-decoration:none; }
 <p>%s</p>
 <a href="/" class="btn">Back to NHS</a>
 </div></body></html>`, title, title, body)
+}
+
+// reportSuccessPage renders the paid self-serve report inline using the same
+// auto-generated per-site block the preview uses (fixPreviewBlock). No manual
+// fulfillment — the buyer gets the exact files + fixes immediately.
+func (h *FixHandler) reportSuccessPage(w http.ResponseWriter, site *models.Site) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><title>Your GEO fix report for %s — NHS</title>
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root { --bg:#0d0d0e; --surface:#1a1a1b; --border:#2a2a2b; --text:#e0e0e0; --text-muted:#888; --accent:#d97757; }
+body { font-family:'Inter',-apple-system,sans-serif; background:var(--bg); color:var(--text); margin:0; padding:2rem 1rem; }
+.wrap { max-width:760px; margin:0 auto; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:2rem; }
+h1 { color:var(--accent); font-size:1.5rem; }
+a { color:var(--accent); text-decoration:none; }
+.btn { display:inline-block; background:var(--accent); color:#0d0d0e; padding:12px 24px; border-radius:8px; font-weight:700; margin-top:1.5rem; font-family:'IBM Plex Mono',monospace; }
+pre { background:#0d0d0e; border:1px solid var(--border); border-radius:8px; padding:1rem; overflow:auto; }
+</style></head>
+<body><div class="wrap"><div class="card">
+<h1>Payment received — your GEO fix report for %s</h1>
+<p style="color:var(--text-muted);">Apply the fixes below to raise %s toward score %d+. Want it done for you instead? The $199 done-for-you tier ships these as a PR.</p>
+%s
+<a href="/" class="btn">Back to NHS</a>
+</div></div></body></html>`,
+		site.Domain, site.Domain, site.Domain, fixTargetScore, fixPreviewBlock(site))
+}
+
+// alertRevenue notifies the operator when NHS earns money. Discord is not
+// configured on NHS (no DISCORD_BOT_TOKEN), so email via Resend is the reliable
+// channel. Recipient defaults to hello@8bitconcepts.com; set OPERATOR_ALERT_EMAIL
+// to route it elsewhere (e.g. a personal inbox).
+func alertRevenue(subject, body string) {
+	notify.DiscordAsync(subject + " — " + body) // no-op unless Discord is wired
+	to := os.Getenv("OPERATOR_ALERT_EMAIL")
+	if to == "" {
+		to = "hello@8bitconcepts.com"
+	}
+	client, err := mailer.NewClientFromEnv()
+	if err != nil {
+		log.Printf("alertRevenue: email unavailable (%v); would have sent: %s — %s", err, subject, body)
+		return
+	}
+	if _, err := client.Send(to, subject, "<p>"+html.EscapeString(body)+"</p>", body); err != nil {
+		log.Printf("alertRevenue: send to %s failed: %v", to, err)
+	}
 }
 
 // POST /webhook/stripe — Stripe events. Handles checkout.session.completed and
@@ -1001,7 +1266,64 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
+		if cs.Metadata["product"] == providerSettlementStripeProduct {
+			if h.ProviderSettlement == nil {
+				log.Printf("provider settlement webhook: handler unavailable")
+				http.Error(w, "provider settlement unavailable", http.StatusServiceUnavailable)
+				return
+			}
+			receipt, created, err := h.ProviderSettlement.RecordPaidCheckout(&cs, event.ID, time.Unix(event.Created, 0).UTC())
+			if err != nil {
+				log.Printf("provider settlement webhook: record payment: %v", err)
+				http.Error(w, "provider settlement could not be recorded", http.StatusInternalServerError)
+				return
+			}
+			if created {
+				alertRevenue("Provider action settlement paid",
+					fmt.Sprintf("Verified provider settlement receipt %s: $%.2f %s.", receipt.ID, float64(receipt.AmountCents)/100, strings.ToUpper(receipt.Currency)))
+				models.LogIntentEvent(h.DB, models.IntentEvent{
+					EventName:  "provider_settlement_paid",
+					EntityType: "provider_settlement_order",
+					EntityID:   receipt.OrderID,
+					Metadata: map[string]any{
+						"payment_receipt_id": receipt.ID,
+						"amount_cents":       receipt.AmountCents,
+						"currency":           receipt.Currency,
+					},
+				})
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		if cs.Metadata["product"] == "nhs_api_subscription" {
+			// Robust activation: mark the human account active even if the
+			// success-redirect (/api/v1/api-keys/activate, which also mints the
+			// API key) was never hit. The API key is created on that redirect.
+			email := cs.Metadata["email"]
+			if email == "" {
+				email = cs.CustomerEmail
+			}
+			customerID := ""
+			if cs.Customer != nil {
+				customerID = cs.Customer.ID
+			}
+			subID := ""
+			if cs.Subscription != nil {
+				subID = cs.Subscription.ID
+			}
+			if email != "" {
+				if _, err := models.SetAccountSubscription(h.DB, email, customerID, subID, cs.Metadata["plan"], "active"); err != nil {
+					log.Printf("fix webhook: account activate: %v", err)
+				}
+			}
+			alertRevenue("💰 New Not Human Search subscription — $9.99/mo",
+				fmt.Sprintf("%s subscribed to NHS at $9.99/mo. Stripe customer %s, subscription %s.", email, customerID, subID))
+			models.LogIntentEvent(h.DB, models.IntentEvent{
+				EventName:  "nhs_subscription_paid",
+				EntityType: "api_subscription",
+				EntityID:   subID,
+				Metadata:   map[string]any{"email_domain": emailDomain(email), "amount_cents": cs.AmountTotal},
+			})
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -1055,6 +1377,15 @@ func (h *FixHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := models.UpsertSubscriptionStatus(h.DB, customerID, sub.ID, string(sub.Status), sub.Metadata["plan"]); err != nil {
 			log.Printf("fix webhook: subscription status: %v", err)
+		}
+		// Keep the human account in lockstep with the API key: a cancellation or
+		// lapse here flips the website session's entitlement off too.
+		if email := sub.Metadata["email"]; email != "" {
+			if _, err := models.SetAccountSubscription(h.DB, email, customerID, sub.ID, sub.Metadata["plan"], string(sub.Status)); err != nil {
+				log.Printf("fix webhook: account status: %v", err)
+			}
+		} else if event.Type == "customer.subscription.deleted" {
+			_ = models.DeactivateAccountBySubscription(h.DB, sub.ID)
 		}
 	}
 

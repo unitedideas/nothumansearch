@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents? Agent-Readiness Search & Score{{end}}</title>
-    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Not Human Search scores any site 0–100 on 7 agentic signals — llms.txt, OpenAPI, MCP, Schema.org & more — and indexes 8,000+ agent-ready sites. Free instant score.{{end}}">
+    <meta name="description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check your site's agent-readiness score and search indexed services, APIs, and tools. Compare machine-readable signals before choosing a service.{{end}}">
     <meta property="og:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents? Agent-Readiness Search & Score{{end}}">
-    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Score any site 0–100 on 7 agentic signals (llms.txt, OpenAPI, MCP & more), and search 8,000+ agent-ready sites. Free instant score.{{end}}">
+    <meta property="og:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check agent-readiness signals and discover indexed services, APIs, and tools for your agents.{{end}}">
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <meta property="og:site_name" content="Not Human Search">
@@ -16,7 +16,7 @@
     <meta property="og:image:alt" content="Not Human Search — Google for AI Agents.">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{if .PageTitle}}{{.PageTitle}}{{else}}Not Human Search — Is Your Site Visible to AI Agents?{{end}}">
-    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check if AI agents can find and use your site. Free agent-readiness score (0–100, 7 signals), plus search across 8,000+ agent-ready sites.{{end}}">
+    <meta name="twitter:description" content="{{if .PageDesc}}{{.PageDesc}}{{else}}Check your site's agent-readiness score and search indexed services, APIs, and tools.{{end}}">
     <meta name="twitter:image" content="https://nothumansearch.ai/static/img/{{if .OGImage}}{{.OGImage}}{{else}}og-default.png{{end}}">
     <link rel="canonical" href="{{if .Canonical}}{{.Canonical}}{{else}}https://nothumansearch.ai/{{end}}">
     <link rel="alternate" type="application/rss+xml" title="NHS — New Agent-Ready Sites" href="https://nothumansearch.ai/feed.xml">
@@ -117,7 +117,7 @@
             outline:none; transition:border-color 0.2s;
         }
         .search-box input:focus { border-color:var(--accent); }
-        .search-box input::placeholder { color:#555; }
+        .search-box input::placeholder { color:var(--text-muted); }
         .search-box button {
             min-height:54px; padding:0 22px; background:var(--accent); color:var(--bg);
             border:none; border-radius:6px; font-weight:600; font-size:14px;
@@ -159,7 +159,6 @@
             transition:border-color 0.2s; display:flex; gap:16px; align-items:flex-start;
         }
         .site-card:hover { border-color:var(--accent); }
-        .site-card.featured { border-left:3px solid var(--accent); }
 
         .site-favicon {
             width:32px; height:32px; border-radius:6px; flex-shrink:0;
@@ -222,19 +221,21 @@
         /* Footer */
         footer { padding:40px 0; text-align:center; border-top:1px solid var(--border); margin-top:40px; }
         footer a { color:var(--accent); text-decoration:none; }
+        footer a:hover { text-decoration:underline; }
+        footer a:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
         .footer-text { color:var(--text-muted); font-size:13px; }
 
         /* CTA */
         .cta-box {
             background:var(--surface); border:1px solid var(--border); border-radius:8px;
-            padding:24px; text-align:center; margin:32px 0;
+            padding:24px; text-align:center; margin:32px 0; overflow-wrap:anywhere;
         }
         .cta-box h3 { color:var(--accent); font-size:16px; margin-bottom:8px; }
         .cta-box p { color:var(--text-muted); font-size:14px; }
         .cta-box code {
             display:inline-block; background:var(--bg); padding:8px 16px;
             border-radius:4px; font-family:'IBM Plex Mono',monospace;
-            font-size:13px; color:var(--green); margin-top:12px;
+            font-size:13px; color:var(--green); margin-top:12px; max-width:100%; overflow-wrap:anywhere;
         }
         .primary-actions {
             max-width:640px; margin:-22px auto 32px; display:flex; justify-content:center;
@@ -269,6 +270,10 @@
 </head>
 <body>
     <div class="container">
+        <div class="authbar" style="display:flex;justify-content:flex-end;gap:14px;padding:10px 0;font-size:13px;">
+            {{if .AccountEmail}}<span style="color:var(--text-muted);">{{.AccountEmail}}</span><a href="/logout" style="color:var(--accent);text-decoration:none;">Log out</a>
+            {{else}}<a href="/login" style="color:var(--accent);text-decoration:none;">Account</a>{{end}}
+        </div>
         <header>
             <div class="logo"><img src="/static/img/logo.svg" width="38" height="38" alt="" aria-hidden="true" style="vertical-align:middle;margin-right:10px"><a href="/" style="color:inherit;text-decoration:none;">Not Human Search</a></div>
             {{if .Heading}}
@@ -276,8 +281,8 @@
             <p class="tagline">{{.Subheading}}</p>
             {{if eq .Mode "mcp-servers"}}<p class="tagline" style="font-size:13px;">Wire any of these into your agent with <code style="color:var(--green);">claude mcp add --transport http &lt;name&gt; &lt;url&gt;/mcp</code>.</p>{{end}}
             {{else}}
-            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Can AI agents find your site?</h1>
-            <p class="tagline">Not Human Search ranks the agentic web — and scores any site for agent-readiness in seconds. The Google for AI agents: find any service, API, or tool by how well it serves non-human users.</p>
+            <h1 style="font-size:28px;color:var(--text);margin:16px 0 8px;">Find services AI agents can actually use.</h1>
+            <p class="tagline">Search the agentic web for free. Compare services, APIs, and tools by machine-readable readiness. Organic rank is based on readiness, never payment.</p>
             {{end}}
         </header>
 
@@ -330,7 +335,7 @@
         <div class="results-header">{{.Total}} {{if .Heading}}entries in this directory{{else}}sites found{{if .Query}} for "{{.Query}}"{{end}}{{end}}</div>
 
         {{range .Sites}}
-        <div class="site-card {{if .IsFeatured}}featured{{end}}">
+		<div class="site-card">
             {{if .HasFavicon}}
             <img class="site-favicon" src="{{if .FaviconURL}}{{.FaviconURL}}{{else}}https://{{.Domain}}/favicon.ico{{end}}" alt="" loading="lazy"
                  onerror="this.outerHTML='<div class=\u0022site-favicon-fallback\u0022>{{initial .Domain}}</div>';">
@@ -338,8 +343,7 @@
             <div class="site-favicon-fallback">{{initial .Domain}}</div>
             {{end}}
             <div class="site-info">
-                <a href="/site/{{.Domain}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
-                {{if .IsFeatured}} <span style="color:var(--accent);font-size:11px;font-weight:600;">FEATURED</span>{{end}}
+				<a href="/site/{{.Domain}}{{if $.SearchID}}?search_id={{$.SearchID}}{{end}}" class="site-name">{{if .Name}}{{displayText .Name}}{{else}}{{.Domain}}{{end}}</a>
                 <div class="site-domain">{{.Domain}}</div>
                 {{if .Description}}<div class="site-desc">{{displayText .Description}}</div>{{end}}
                 <div class="site-badges">
@@ -400,11 +404,11 @@
             <h3>Use NHS via REST</h3>
             <p>Prefer plain HTTP? Hit the search endpoint directly.</p>
             <div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap;">
-                <div style="flex:1;min-width:280px;">
+                <div style="flex:1;min-width:min(280px,100%);">
                     <div style="color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Search API</div>
                     <code style="display:block;background:var(--bg);padding:12px 16px;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--green);line-height:1.6;white-space:pre-wrap;">curl "https://nothumansearch.ai/api/v1/search?q=payment+API"</code>
                 </div>
-                <div style="flex:1;min-width:280px;">
+                <div style="flex:1;min-width:min(280px,100%);">
                     <div style="color:var(--text-muted);font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Agent Docs</div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <a href="/llms.txt" style="display:inline-block;padding:8px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--accent);font-size:13px;font-family:'IBM Plex Mono',monospace;">llms.txt</a>
@@ -503,7 +507,8 @@
             <a href="/submit">Submit a Site</a> &middot;
             <a href="/monitor">Monitor your site</a> &middot;
             <a href="/status">Status</a> &middot;
-            <a href="/about">About</a>
+            <a href="/about">About</a> &middot;
+            <a href="https://glama.ai/mcp/connectors/ai.nothumansearch/search">Glama connector listing</a>
         </p>
         <p class="footer-text" style="margin-top:14px;font-size:12px;">
             <strong style="color:var(--text);">Also from the Foundry:</strong>
@@ -523,7 +528,7 @@
             </div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                 <a href="https://8bitconcepts.com/case-studies.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:transparent;color:#d97757;padding:8px 14px;border:1px solid rgba(217,119,87,0.35);border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Case studies</a>
-                <a href="https://8bitconcepts.com/work-with-us.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:#d97757;color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Work with us &rarr;</a>
+                <a href="https://8bitconcepts.com/work-with-us.html?utm_source=nothumansearch&amp;utm_medium=footer-consulting" target="_blank" rel="noopener" style="background:#d97757;color:var(--bg);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;white-space:nowrap;">Work with us &rarr;</a>
             </div>
         </div>
         <div class="footer-research" style="margin:16px 0;padding:12px 0;border-top:1px solid var(--border);font-size:13px;color:var(--text-muted);">
